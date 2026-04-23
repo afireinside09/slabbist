@@ -39,7 +39,7 @@ private struct RootView: View {
 
     var body: some View {
         if session.isSignedIn {
-            LotsListView()
+            RootTabView()
         } else {
             AuthView()
         }
