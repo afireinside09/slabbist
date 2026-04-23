@@ -43,11 +43,4 @@ enum AppColor {
     // Semantic
     static let positive        = Color(hex: 0x76D49D)
     static let negative        = Color(hex: 0xE0795B)
-
-    // --- Legacy aliases (removed in Task 21) ---
-    static let accent     = gold
-    static let success    = positive
-    static let warning    = gold
-    static let danger     = negative
-    static let surfaceAlt = elev
 }
