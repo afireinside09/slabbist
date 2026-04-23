@@ -9,6 +9,9 @@ struct RootTabView: View {
             Tab("Scan", systemImage: "viewfinder") {
                 ScanShortcutView()
             }
+            Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
+                MoversListView()
+            }
             Tab("More", systemImage: "ellipsis.circle") {
                 SettingsView()
             }

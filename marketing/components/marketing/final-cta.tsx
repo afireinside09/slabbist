@@ -46,11 +46,11 @@ export function FinalCta() {
             lineHeight: 1.55,
           }}
         >
-          Slabbist is on TestFlight today and headed for the App Store. No card, no setup call, no seat fees. Takes a minute to get running.
+          Slabbist is rolling out to stores, sellers, and buyers in cohorts. Drop your email and we'll ping you the moment yours opens. No card, no setup call, no seat fees.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
-            onClick={() => openAuth('signup')}
+            onClick={() => openAuth('waitlist')}
             style={{
               padding: '16px 30px',
               borderRadius: 999,
@@ -66,7 +66,7 @@ export function FinalCta() {
               boxShadow: '0 20px 50px oklch(0.82 0.13 78 / 0.27)',
             }}
           >
-            Get TestFlight access <Icon name="arrow" size={15} sw={2.2} />
+            Join the waitlist <Icon name="arrow" size={15} sw={2.2} />
           </button>
           <button
             style={{

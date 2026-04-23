@@ -1,4 +1,3 @@
-import { AuthProvider } from '@/components/marketing/auth-context';
 import { Nav } from '@/components/marketing/nav';
 import { Hero } from '@/components/marketing/hero';
 import { FeatureRow } from '@/components/marketing/feature-row';
@@ -9,7 +8,7 @@ import { Footer } from '@/components/marketing/footer';
 
 export default function Home() {
   return (
-    <AuthProvider>
+    <>
       <Nav />
       <Hero />
       <FeatureRow />
@@ -17,6 +16,6 @@ export default function Home() {
       <Pricing />
       <FinalCta />
       <Footer />
-    </AuthProvider>
+    </>
   );
 }

@@ -12,5 +12,6 @@ enum AppLog {
     static let ocr       = Logger(subsystem: subsystem, category: "ocr")
     static let lots      = Logger(subsystem: subsystem, category: "lots")
     static let scans     = Logger(subsystem: subsystem, category: "scans")
+    static let movers    = Logger(subsystem: subsystem, category: "movers")
     static let network   = Logger(subsystem: subsystem, category: "network")
 }

@@ -15,26 +15,38 @@ import { SLAB } from '@/lib/tokens';
 import { Icon, type IconName } from '@/components/icon';
 import { SlabLogo } from '@/components/slab-logo';
 
-export type AuthMode = 'login' | 'signup' | 'reset';
+export type AuthMode = 'login' | 'signup' | 'reset' | 'waitlist';
+export type WaitlistAudience = 'store' | 'collector';
 
 type AuthContextValue = {
-  openAuth: (mode: AuthMode) => void;
+  openAuth: (mode: AuthMode, audience?: WaitlistAudience) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<AuthMode | null>(null);
+type OpenState = { mode: AuthMode; audience?: WaitlistAudience } | null;
 
-  const openAuth = useCallback((next: AuthMode) => setMode(next), []);
-  const close = useCallback(() => setMode(null), []);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<OpenState>(null);
+
+  const openAuth = useCallback(
+    (next: AuthMode, audience?: WaitlistAudience) => setState({ mode: next, audience }),
+    [],
+  );
+  const close = useCallback(() => setState(null), []);
 
   const value = useMemo(() => ({ openAuth }), [openAuth]);
 
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {mode && <AuthModal initialMode={mode} onClose={close} />}
+      {state && (
+        <AuthModal
+          initialMode={state.mode}
+          initialAudience={state.audience}
+          onClose={close}
+        />
+      )}
     </AuthContext.Provider>
   );
 }
@@ -71,20 +83,29 @@ const linkBtn: React.CSSProperties = {
   fontWeight: 500,
 };
 
+const AUDIENCE_OPTIONS: { value: WaitlistAudience; label: string; sub: string }[] = [
+  { value: 'store', label: 'Store or vendor', sub: 'Scan and price at the counter' },
+  { value: 'collector', label: 'Collector', sub: 'Buy, sell, and track your slabs' },
+];
+
 function AuthModal({
   initialMode,
+  initialAudience,
   onClose,
 }: {
   initialMode: AuthMode;
+  initialAudience?: WaitlistAudience;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [storeName, setStoreName] = useState('');
+  const [audience, setAudience] = useState<WaitlistAudience>(initialAudience ?? 'store');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = React.useId();
 
@@ -137,19 +158,57 @@ function AuthModal({
     };
   }, [onClose]);
 
-  const submit = (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const submit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    if (mode !== 'waitlist') {
+      // Login / signup / reset still use the mocked flow — real auth is a separate project.
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setSuccess(true);
+      }, 1100);
+      return;
+    }
+
+    const normalized = email.trim().toLowerCase();
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: normalized, audience }),
+      });
+
+      if (res.ok) {
+        setSuccess(true);
+        return;
+      }
+
+      let message: string;
+      try {
+        const data = (await res.json()) as { error?: string };
+        message = data.error ?? `Signup failed (${res.status}).`;
+      } catch {
+        message = `Signup failed (${res.status}).`;
+      }
+      setErrorMsg(message);
+    } catch {
+      setErrorMsg("Couldn't reach the server. Check your connection and try again.");
+    } finally {
       setLoading(false);
-      setSuccess(true);
-    }, 1100);
+    }
   };
 
   const titles: Record<AuthMode, { t: string; s: string }> = {
     login: { t: 'Welcome back', s: 'Sign in to your Slabbist store.' },
     signup: { t: 'Create your store', s: 'Set up Slabbist in under a minute.' },
     reset: { t: 'Reset your password', s: "We'll email a reset link." },
+    waitlist: {
+      t: 'Join the waitlist',
+      s: 'Get a heads-up when Slabbist opens to your cohort.',
+    },
   };
   const { t, s } = titles[mode];
 
@@ -235,14 +294,159 @@ function AuthModal({
               </h2>
               <p style={{ fontSize: 13, color: SLAB.muted, margin: '0 0 28px' }}>{s}</p>
 
-              {mode !== 'reset' && (
+              {mode === 'waitlist' && (
+                <form
+                  onSubmit={submit}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        color: SLAB.dim,
+                        marginBottom: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      I'm joining as a
+                    </div>
+                    <div
+                      role="radiogroup"
+                      aria-label="Audience"
+                      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                    >
+                      {AUDIENCE_OPTIONS.map((opt) => {
+                        const active = audience === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => setAudience(opt.value)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '12px 14px',
+                              borderRadius: 12,
+                              background: active ? SLAB.elev2 : 'transparent',
+                              border:
+                                '1px solid ' +
+                                (active ? 'oklch(0.82 0.13 78 / 0.45)' : SLAB.hair),
+                              color: SLAB.text,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background 0.15s ease, border-color 0.15s ease',
+                            }}
+                          >
+                            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 14, fontWeight: 500 }}>{opt.label}</span>
+                              <span style={{ fontSize: 12, color: SLAB.muted }}>{opt.sub}</span>
+                            </span>
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: 999,
+                                border:
+                                  '1px solid ' +
+                                  (active ? SLAB.gold : SLAB.hairStrong),
+                                background: active ? SLAB.gold : 'transparent',
+                                flexShrink: 0,
+                              }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Field label="Email" icon="mail">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="you@example.com"
+                      style={inputStyle}
+                    />
+                  </Field>
+
+                  {errorMsg && (
+                    <div
+                      role="alert"
+                      style={{
+                        fontSize: 12,
+                        color: SLAB.neg,
+                        background: 'oklch(0.68 0.18 25 / 0.08)',
+                        border: '1px solid oklch(0.68 0.18 25 / 0.25)',
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    style={{
+                      marginTop: 4,
+                      padding: '14px 18px',
+                      borderRadius: 12,
+                      background: SLAB.gold,
+                      color: SLAB.ink,
+                      border: 'none',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: loading ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      opacity: loading ? 0.7 : 1,
+                    }}
+                  >
+                    {loading ? (
+                      <>
+                        <Spinner />
+                        Adding you…
+                      </>
+                    ) : (
+                      <>
+                        Join the waitlist
+                        <Icon name="arrow" size={14} sw={2.2} />
+                      </>
+                    )}
+                  </button>
+
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: SLAB.dim,
+                      textAlign: 'center',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    We email when your cohort opens. No spam, unsubscribe in one click.
+                  </div>
+                </form>
+              )}
+
+              {mode !== 'reset' && mode !== 'waitlist' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
                   <OAuthBtn label="Continue with Apple" icon={<AppleLogo />} />
                   <OAuthBtn label="Continue with Google" icon={<GoogleLogo />} />
                 </div>
               )}
 
-              {mode !== 'reset' && (
+              {mode !== 'reset' && mode !== 'waitlist' && (
                 <div
                   style={{
                     display: 'flex',
@@ -267,6 +471,7 @@ function AuthModal({
                 </div>
               )}
 
+              {mode !== 'waitlist' && (
               <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {mode === 'signup' && (
                   <Field label="Store name" icon="store">
@@ -397,6 +602,7 @@ function AuthModal({
                   </div>
                 )}
               </form>
+              )}
 
               <div
                 style={{
@@ -408,9 +614,9 @@ function AuthModal({
               >
                 {mode === 'login' && (
                   <>
-                    New to Slabbist?{' '}
-                    <button onClick={() => setMode('signup')} style={linkBtn}>
-                      Create a store
+                    No account yet?{' '}
+                    <button onClick={() => setMode('waitlist')} style={linkBtn}>
+                      Join the waitlist
                     </button>
                   </>
                 )}
@@ -426,6 +632,14 @@ function AuthModal({
                   <button onClick={() => setMode('login')} style={linkBtn}>
                     ← Back to sign in
                   </button>
+                )}
+                {mode === 'waitlist' && (
+                  <>
+                    Have an invite?{' '}
+                    <button onClick={() => setMode('login')} style={linkBtn}>
+                      Sign in
+                    </button>
+                  </>
                 )}
               </div>
             </>
@@ -560,6 +774,10 @@ function SuccessView({
     login: { t: 'Signed in', s: 'Opening your store…' },
     signup: { t: 'Store created', s: `We've sent a verification email to ${email || 'you'}.` },
     reset: { t: 'Check your inbox', s: `We've sent a reset link to ${email || 'your email'}.` },
+    waitlist: {
+      t: "You're on the list",
+      s: `We'll email ${email || 'you'} the moment your cohort opens.`,
+    },
   };
   const m = msgs[mode];
   return (

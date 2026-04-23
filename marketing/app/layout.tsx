@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/marketing/auth-context";
 import "./globals.css";
 
 const interTight = Inter_Tight({
@@ -37,7 +38,9 @@ export default function RootLayout({
       lang="en"
       className={`${interTight.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

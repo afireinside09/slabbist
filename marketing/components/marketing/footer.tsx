@@ -1,12 +1,43 @@
 import { SLAB } from '@/lib/tokens';
-import { Icon } from '@/components/icon';
 import { SlabLogo } from '@/components/slab-logo';
 
-const COLS = [
-  { h: 'Product', links: ['Overview', 'Bulk scan', 'Comp engine', 'Vendor DB', 'Changelog'] },
-  { h: 'Stores', links: ['For shops', 'For show vendors', 'For solo buyers', 'Customer stories', 'Onboarding'] },
-  { h: 'Company', links: ['About', 'Careers', 'Press', 'Contact', 'Brand kit'] },
-  { h: 'Legal', links: ['Privacy', 'Terms', 'Security', 'DMCA', 'Status'] },
+type Link = { label: string; href: string };
+type Col = { h: string; links: Link[] };
+
+const COLS: Col[] = [
+  {
+    h: 'Product',
+    links: [
+      { label: 'Features', href: '/features' },
+      { label: 'How it works', href: '/#how-it-works' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'Changelog', href: '/changelog' },
+    ],
+  },
+  {
+    h: "Who it's for",
+    links: [
+      { label: 'Card shops', href: '/for-shops' },
+      { label: 'Show vendors', href: '/for-vendors' },
+      { label: 'Collectors', href: '/for-collectors' },
+    ],
+  },
+  {
+    h: 'Company',
+    links: [
+      { label: 'About', href: '/about' },
+      { label: 'Press', href: '/press' },
+      { label: 'Contact', href: '/contact' },
+    ],
+  },
+  {
+    h: 'Legal',
+    links: [
+      { label: 'Privacy', href: '/privacy' },
+      { label: 'Terms', href: '/terms' },
+      { label: 'Security', href: '/security' },
+    ],
+  },
 ];
 
 export function Footer() {
@@ -60,11 +91,11 @@ export function Footer() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {c.links.map((l) => (
                   <a
-                    key={l}
-                    href="#"
+                    key={l.label}
+                    href={l.href}
                     style={{ fontSize: 13, color: SLAB.text, textDecoration: 'none' }}
                   >
-                    {l}
+                    {l.label}
                   </a>
                 ))}
               </div>
@@ -86,13 +117,10 @@ export function Footer() {
             © 2026 Slabbist Inc. · Not affiliated with The Pokémon Company, PSA, BGS, CGC, SGC, or TAG.
           </div>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', color: SLAB.muted }}>
-            <a href="#" style={{ color: SLAB.muted, display: 'flex' }} aria-label="GitHub">
-              <Icon name="github" size={16} />
-            </a>
-            <a href="#" style={{ color: SLAB.muted }}>
-              X
-            </a>
-            <a href="#" style={{ color: SLAB.muted, fontSize: 12 }}>
+            <a
+              href="mailto:hello@slabbist.com"
+              style={{ color: SLAB.muted, fontSize: 12, textDecoration: 'none' }}
+            >
               hello@slabbist.com
             </a>
           </div>

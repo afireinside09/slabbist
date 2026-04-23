@@ -7,10 +7,9 @@ import { SlabLogo } from '@/components/slab-logo';
 import { useAuth } from './auth-context';
 
 const NAV_LINKS = [
-  { label: 'Product', href: '#product' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Pricing', href: '#pricing' },
-  { label: 'Docs', href: '#docs' },
+  { label: 'Features', href: '/features' },
+  { label: 'How it works', href: '/#how-it-works' },
+  { label: 'Pricing', href: '/#pricing' },
 ];
 
 export function Nav() {
@@ -47,7 +46,7 @@ export function Nav() {
         }}
       >
         <a
-          href="#top"
+          href="/"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -135,7 +134,7 @@ export function Nav() {
             Sign in
           </button>
           <button
-            onClick={() => openAuth('signup')}
+            onClick={() => openAuth('waitlist')}
             style={{
               padding: '10px 20px',
               borderRadius: 999,
@@ -150,7 +149,7 @@ export function Nav() {
               gap: 6,
             }}
           >
-            Get started
+            Join waitlist
             <Icon name="arrow" size={13} sw={2} />
           </button>
         </div>

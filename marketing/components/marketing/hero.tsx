@@ -1,13 +1,27 @@
 'use client';
 
 import { SLAB } from '@/lib/tokens';
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { useAuth } from './auth-context';
 
-const STATS = [
-  { k: '30 slabs', v: 'a minute' },
-  { k: '14 sec', v: 'scan to offer' },
-  { k: '5 graders', v: 'PSA, BGS, CGC, SGC, TAG' },
+type Capability = { icon: IconName; title: string; body: string };
+
+const CAPABILITIES: Capability[] = [
+  {
+    icon: 'scan',
+    title: 'Slabs and raw, in one pass',
+    body: 'Cert OCR reads PSA, BGS, CGC, SGC, and TAG labels. For raw cards, pick the set and number and the app matches the rest. Shoot them one at a time, or stack a pile in frame.',
+  },
+  {
+    icon: 'chart',
+    title: 'Comps from real sales',
+    body: 'Graded prices are medians of recent eBay sold listings. Raw prices come from TCGplayer. Every number links back to the sales behind it, with a confidence score and 7, 30, and 90 day velocity.',
+  },
+  {
+    icon: 'shield',
+    title: 'Runs anywhere you buy',
+    body: 'Use it at the shop counter, the show booth, or on the road. The queue keeps working when venue Wi-Fi drops, and comps fill in when it returns. Buy prices stay locked to owners and hidden from associates.',
+  },
 ];
 
 export function Hero() {
@@ -66,9 +80,9 @@ export function Hero() {
               textTransform: 'uppercase',
             }}
           >
-            Beta
+            Early
           </span>
-          Live on TestFlight now
+          Waitlist is open — iOS launch imminent
           <Icon name="arrow" size={12} sw={2} color={SLAB.gold} />
         </div>
 
@@ -119,7 +133,7 @@ export function Hero() {
           }}
         >
           <button
-            onClick={() => openAuth('signup')}
+            onClick={() => openAuth('waitlist')}
             style={{
               padding: '16px 28px',
               borderRadius: 999,
@@ -135,7 +149,7 @@ export function Hero() {
               boxShadow: '0 14px 40px oklch(1 0 0 / 0.08)',
             }}
           >
-            Get TestFlight access
+            Join the waitlist
             <Icon name="arrow" size={15} sw={2.2} />
           </button>
           <a
@@ -176,74 +190,75 @@ export function Hero() {
                 textTransform: 'uppercase',
                 color: SLAB.dim,
                 fontWeight: 500,
-                marginBottom: 20,
+                marginBottom: 24,
               }}
             >
-              What you get
+              What the app does
             </div>
 
-            <div
+            <ul
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                columnGap: 22,
-                rowGap: 22,
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 22,
                 maxWidth: 560,
               }}
             >
-              {STATS.map((s) => (
-                <div
-                  key={s.k}
+              {CAPABILITIES.map((c) => (
+                <li
+                  key={c.title}
                   style={{
-                    padding: '6px 0',
+                    display: 'grid',
+                    gridTemplateColumns: '36px 1fr',
+                    gap: 16,
+                    alignItems: 'start',
                   }}
                 >
                   <div
                     style={{
-                      fontFamily: SLAB.serif,
-                      fontSize: 42,
-                      fontWeight: 400,
-                      letterSpacing: -1.2,
-                      lineHeight: 1,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: SLAB.elev,
+                      border: '1px solid ' + SLAB.hair,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: SLAB.gold,
+                      marginTop: 2,
                     }}
                   >
-                    {s.k}
+                    <Icon name={c.icon} size={18} sw={1.7} />
                   </div>
-                  <div style={{ fontSize: 13, color: SLAB.muted, marginTop: 10, lineHeight: 1.45 }}>
-                    {s.v}
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: SLAB.serif,
+                        fontSize: 22,
+                        fontWeight: 400,
+                        letterSpacing: -0.5,
+                        lineHeight: 1.2,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {c.title}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: SLAB.muted,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {c.body}
+                    </div>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-
-            <div
-              style={{
-                marginTop: 40,
-                display: 'flex',
-                gap: 20,
-                alignItems: 'center',
-                fontSize: 13,
-                color: SLAB.muted,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 12,
-                  letterSpacing: 1.4,
-                  textTransform: 'uppercase',
-                  fontWeight: 500,
-                  color: SLAB.dim,
-                }}
-              >
-                Built for
-              </span>
-              <span>Card shops</span>
-              <span style={{ color: SLAB.hairStrong }}>·</span>
-              <span>Show vendors</span>
-              <span style={{ color: SLAB.hairStrong }}>·</span>
-              <span>Full-time buyers</span>
-            </div>
+            </ul>
           </div>
 
           <div style={{ animation: 'sbmRise 1s 0.3s ease backwards', position: 'relative' }}>

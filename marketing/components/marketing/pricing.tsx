@@ -2,7 +2,7 @@
 
 import { SLAB } from '@/lib/tokens';
 import { Icon, type IconName } from '@/components/icon';
-import { useAuth } from './auth-context';
+import { useAuth, type WaitlistAudience } from './auth-context';
 
 type Tier = {
   audience: string;
@@ -11,8 +11,9 @@ type Tier = {
   priceUnit: string;
   feat: string[];
   cta: string;
-  ctaMode: 'signup' | 'login';
+  waitlistAudience: WaitlistAudience;
   footnote: string;
+  fine?: string;
   featured?: boolean;
   icon: IconName;
 };
@@ -20,7 +21,7 @@ type Tier = {
 const TIERS: Tier[] = [
   {
     audience: 'Stores & vendors',
-    blurb: 'The scanner that runs the counter. Free on the App Store.',
+    blurb: 'The scanner that runs the counter. Free on the App Store at launch.',
     price: 'Free',
     priceUnit: 'on iOS',
     feat: [
@@ -29,43 +30,29 @@ const TIERS: Tier[] = [
       'Unlimited users, unlimited scans',
       'Offer sheets, vendor DB, buylist',
     ],
-    cta: 'Download on iOS',
-    ctaMode: 'signup',
+    cta: 'Join the store waitlist',
+    waitlistAudience: 'store',
     footnote: 'How we get paid: eBay and TCGplayer affiliate, and only if you follow a comp.',
     icon: 'scan',
   },
   {
-    audience: 'Sellers',
-    blurb: 'List a slab in minutes. No listing fees. No sold fees.',
-    price: 'Free',
-    priceUnit: 'to list',
-    feat: [
-      'Zero listing or closing fees',
-      'ID + cert verification before you go live',
-      'Escrowed payouts on delivery confirm',
-      'Reputation imports from eBay & PWCC',
-      'Buyer inspection window before payout',
-    ],
-    cta: 'Join the seller waitlist',
-    ctaMode: 'signup',
-    footnote: 'Marketplace rolling out in cohorts. Verified sellers go first.',
-    featured: true,
-    icon: 'store',
-  },
-  {
-    audience: 'Buyers',
-    blurb: 'Every slab cert-verified before it ever hits your feed.',
+    audience: 'Marketplace',
+    blurb: 'Buy cert-verified slabs. List your own with zero seller fees.',
     price: '1%',
-    priceUnit: 'at checkout',
+    priceUnit: 'buyer fee at checkout',
     feat: [
-      'The scanner and comps are always free',
+      'Zero listing, closing, or commission fees — sellers net the sale price after payment processing',
+      '1% applies only at marketplace checkout, paid by the buyer',
       'Every listing cross-checked with the grader DB',
       'Escrow + inspection window on every buy',
-      'No hidden spreads or junk fees',
+      'ID + cert verification before you go live',
+      'Reputation imports from eBay & PWCC',
     ],
-    cta: 'Join the buyer waitlist',
-    ctaMode: 'signup',
-    footnote: 'Compare to 20% elsewhere. Buyers should keep more of their money.',
+    cta: 'Join the collector waitlist',
+    waitlistAudience: 'collector',
+    footnote: 'Compare to 20% elsewhere. Collectors should keep more of their money.',
+    fine: 'Sales tax is calculated at checkout and, where we are required to act as marketplace facilitator, remitted on your behalf. Sellers remain responsible for their own income taxes.',
+    featured: true,
     icon: 'shield',
   },
 ];
@@ -217,7 +204,7 @@ export function Pricing() {
                 >
                   {t.price}
                 </span>
-                <span style={{ fontSize: 13, color: SLAB.muted, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 13, color: SLAB.muted, lineHeight: 1.3 }}>
                   {t.priceUnit}
                 </span>
               </div>
@@ -235,7 +222,7 @@ export function Pricing() {
               </div>
 
               <button
-                onClick={() => openAuth(t.ctaMode)}
+                onClick={() => openAuth('waitlist', t.waitlistAudience)}
                 style={{
                   padding: '14px 22px',
                   borderRadius: 999,
@@ -287,6 +274,22 @@ export function Pricing() {
                     <span style={{ textWrap: 'balance' }}>{f}</span>
                   </div>
                 ))}
+                {t.fine && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 16,
+                      borderTop: '1px dashed ' + SLAB.hair,
+                      fontSize: 11,
+                      color: SLAB.muted,
+                      lineHeight: 1.55,
+                      letterSpacing: 0.15,
+                      textWrap: 'pretty',
+                    }}
+                  >
+                    {t.fine}
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -103,15 +103,6 @@
 			);
 			sourceTree = "<group>";
 		};
-		B144A3E22F99D4D8002A2653 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				B144A3E02F99D4D8002A2653 /* Secrets.xcconfig */,
-				B144A3E12F99D4D8002A2653 /* Secrets.xcconfig.example */,
-			);
-			path = Config;
-			sourceTree = "<group>";
-		};
 		B144A3B12F99D4D7002A2653 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -120,6 +111,15 @@
 				B144A3C92F99D4D8002A2653 /* slabbistUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B144A3E22F99D4D8002A2653 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B144A3E02F99D4D8002A2653 /* Secrets.xcconfig */,
+				B144A3E12F99D4D8002A2653 /* Secrets.xcconfig.example */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
