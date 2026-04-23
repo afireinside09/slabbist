@@ -23,10 +23,20 @@ struct SupabaseRepositoryTests {
 
     @Test("concrete repositories declare the correct table names")
     func concreteTableNames() {
-        #expect(StoreRepository.tableName == "stores")
-        #expect(StoreMemberRepository.tableName == "store_members")
-        #expect(LotRepository.tableName == "lots")
-        #expect(ScanRepository.tableName == "scans")
+        #expect(SupabaseStoreRepository.tableName == "stores")
+        #expect(SupabaseStoreMemberRepository.tableName == "store_members")
+        #expect(SupabaseLotRepository.tableName == "lots")
+        #expect(SupabaseScanRepository.tableName == "scans")
+    }
+
+    @Test("AppRepositories.live builds a full bundle")
+    func appRepositoriesLive() {
+        let bundle = AppRepositories.live()
+        // Types are protocol-erased; existence check only.
+        _ = bundle.stores
+        _ = bundle.members
+        _ = bundle.lots
+        _ = bundle.scans
     }
 
     @Test("AuthService constructs against the shared Supabase client")

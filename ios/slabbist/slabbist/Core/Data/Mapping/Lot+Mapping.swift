@@ -6,7 +6,7 @@ extension LotDTO {
         let stamp: AnyJSON?
         if let data = model.transactionStamp {
             do {
-                stamp = try JSONDecoder().decode(AnyJSON.self, from: data)
+                stamp = try JSONCoders.decoder.decode(AnyJSON.self, from: data)
             } catch {
                 throw ModelMappingError.invalidJSON(field: "transactionStamp", underlying: error)
             }
@@ -77,7 +77,7 @@ extension Lot {
     private static func encodeStamp(_ stamp: AnyJSON?) throws -> Data? {
         guard let stamp else { return nil }
         do {
-            return try JSONEncoder().encode(stamp)
+            return try JSONCoders.encoder.encode(stamp)
         } catch {
             throw ModelMappingError.invalidJSON(field: "transactionStamp", underlying: error)
         }

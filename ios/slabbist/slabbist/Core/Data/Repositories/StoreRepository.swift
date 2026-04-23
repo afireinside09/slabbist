@@ -4,7 +4,7 @@ import Supabase
 /// Reads/writes the `stores` table. RLS restricts the result set to
 /// rows where the caller is a member; an unauthenticated session
 /// simply returns an empty list.
-nonisolated struct StoreRepository: Sendable {
+nonisolated struct SupabaseStoreRepository: StoreRepository, Sendable {
     static let tableName = "stores"
 
     private let base: SupabaseRepository<StoreDTO>
@@ -14,9 +14,9 @@ nonisolated struct StoreRepository: Sendable {
     }
 
     /// All stores the caller can see (by RLS: stores they are a member
-    /// of), newest first.
-    func listForCurrentUser() async throws -> [StoreDTO] {
-        try await base.findAll(orderBy: "created_at", ascending: false)
+    /// of), newest first. Bounded by `page` — `Page.default` is 50.
+    func listForCurrentUser(page: Page) async throws -> [StoreDTO] {
+        try await base.findAll(page: page, orderBy: "created_at", ascending: false)
     }
 
     func find(id: UUID) async throws -> StoreDTO? {
@@ -25,12 +25,16 @@ nonisolated struct StoreRepository: Sendable {
 
     /// Stores the given user owns (independent of membership RLS —
     /// primarily for admin / debugging flows).
-    func listOwnedBy(userId: UUID) async throws -> [StoreDTO] {
-        try await base.findWhere(column: "owner_user_id", equals: userId)
+    func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO] {
+        try await base.findWhere(column: "owner_user_id", equals: userId, page: page)
     }
 
     @discardableResult
-    func upsert(_ store: StoreDTO) async throws -> StoreDTO {
+    func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO {
+        try await base.upsertAndReturn(store)
+    }
+
+    func upsert(_ store: StoreDTO) async throws {
         try await base.upsert(store)
     }
 }

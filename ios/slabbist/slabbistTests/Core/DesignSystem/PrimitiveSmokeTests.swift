@@ -71,4 +71,14 @@ struct PrimitiveSmokeTests {
         let host = UIHostingController(rootView: Host())
         #expect(host.view != nil)
     }
+
+    @Test("StatStrip renders")
+    func statStripRenders() {
+        let host = UIHostingController(rootView: StatStrip(items: [
+            .init(label: "Cards", value: "12"),
+            .init(label: "Value", value: "$4.1k"),
+            .init(label: "Change", value: "+2.4%"),
+        ]))
+        #expect(host.view != nil)
+    }
 }

@@ -4,7 +4,7 @@ import Supabase
 /// Reads/writes the `store_members` table. Composite primary key
 /// `(store_id, user_id)` means we bypass the generic `find(id:)` /
 /// `delete(id:)` helpers and use `query()` to build exact filters.
-nonisolated struct StoreMemberRepository: Sendable {
+nonisolated struct SupabaseStoreMemberRepository: StoreMemberRepository, Sendable {
     static let tableName = "store_members"
 
     private let base: SupabaseRepository<StoreMemberDTO>
@@ -13,12 +13,12 @@ nonisolated struct StoreMemberRepository: Sendable {
         self.base = SupabaseRepository(tableName: Self.tableName, client: client)
     }
 
-    func listMembers(storeId: UUID) async throws -> [StoreMemberDTO] {
-        try await base.findWhere(column: "store_id", equals: storeId)
+    func listMembers(storeId: UUID, page: Page) async throws -> [StoreMemberDTO] {
+        try await base.findWhere(column: "store_id", equals: storeId, page: page)
     }
 
-    func listMemberships(userId: UUID) async throws -> [StoreMemberDTO] {
-        try await base.findWhere(column: "user_id", equals: userId)
+    func listMemberships(userId: UUID, page: Page) async throws -> [StoreMemberDTO] {
+        try await base.findWhere(column: "user_id", equals: userId, page: page)
     }
 
     func membership(storeId: UUID, userId: UUID) async throws -> StoreMemberDTO? {
@@ -36,15 +36,14 @@ nonisolated struct StoreMemberRepository: Sendable {
         }
     }
 
-    @discardableResult
-    func upsert(_ member: StoreMemberDTO) async throws -> StoreMemberDTO {
+    func upsert(_ member: StoreMemberDTO) async throws {
         try await base.upsert(member, onConflict: "store_id,user_id")
     }
 
     func remove(storeId: UUID, userId: UUID) async throws {
         do {
             _ = try await base.query()
-                .delete()
+                .delete(returning: .minimal)
                 .eq("store_id", value: storeId.uuidString)
                 .eq("user_id", value: userId.uuidString)
                 .execute()

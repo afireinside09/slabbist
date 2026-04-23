@@ -1,10 +1,10 @@
 import Foundation
 import Supabase
 
-/// Error surface exposed by our Supabase data layer. Wraps the concrete
-/// errors thrown by `supabase-swift` so call sites (view models,
-/// services, outbox worker) can `catch SupabaseError` instead of
-/// spelunking through Postgrest / GoTrue internals.
+/// Error surface exposed by our Supabase data layer. Wraps the
+/// concrete errors thrown by `supabase-swift` so call sites (view
+/// models, services, outbox worker) can `catch SupabaseError` instead
+/// of spelunking through Postgrest / GoTrue internals.
 ///
 /// The underlying SDK error is retained via `underlying` for logging
 /// and debugging.
@@ -36,34 +36,80 @@ nonisolated enum SupabaseError: Error, CustomStringConvertible {
         }
     }
 
-    /// Map an arbitrary error (typically a Postgrest / AuthError) to a
-    /// `SupabaseError`. Unknown shapes fall through to `.transport`.
+    /// Map an arbitrary error (typically a `PostgrestError` or
+    /// `AuthError`) to a `SupabaseError`. Unknown shapes fall through
+    /// to `.transport`. Idempotent — re-mapping a `SupabaseError`
+    /// returns itself.
     static func map(_ error: Error) -> SupabaseError {
         if let already = error as? SupabaseError { return already }
 
-        // Postgrest surfaces HTTP status codes in its error type.
         if let pg = error as? PostgrestError {
-            switch pg.code {
-            case "PGRST116":
-                return .notFound(table: "", id: nil)
-            case "23505":
-                return .constraintViolation(message: pg.message, underlying: pg)
-            case "42501":
-                return .forbidden(underlying: pg)
-            default:
-                return .transport(underlying: pg)
-            }
+            return mapPostgrest(pg)
         }
 
         if let auth = error as? AuthError {
-            // Any auth-shaped error where the session is missing / expired.
-            let message = auth.localizedDescription.lowercased()
-            if message.contains("not authenticated") || message.contains("missing session") {
-                return .unauthorized
-            }
-            return .transport(underlying: auth)
+            return mapAuth(auth)
         }
 
         return .transport(underlying: error)
+    }
+
+    // MARK: - Postgrest
+
+    private static func mapPostgrest(_ error: PostgrestError) -> SupabaseError {
+        switch error.code {
+        // PostgREST-level codes (PGRSTxxx).
+        case "PGRST116":
+            // "Results contain 0 rows" — thrown by `.single()` when
+            // the filter matched no rows.
+            return .notFound(table: "", id: nil)
+        case "PGRST301", "PGRST302":
+            // JWT expired / not authenticated.
+            return .unauthorized
+        case "PGRST303":
+            return .forbidden(underlying: error)
+
+        // Postgres SQLSTATE codes surfaced through PostgREST.
+        case "23505":
+            // unique_violation
+            return .constraintViolation(message: error.message, underlying: error)
+        case "23502":
+            // not_null_violation
+            return .constraintViolation(message: error.message, underlying: error)
+        case "23503":
+            // foreign_key_violation
+            return .constraintViolation(message: error.message, underlying: error)
+        case "23514":
+            // check_violation
+            return .constraintViolation(message: error.message, underlying: error)
+        case "42501":
+            // insufficient_privilege — RLS rejection
+            return .forbidden(underlying: error)
+
+        default:
+            return .transport(underlying: error)
+        }
+    }
+
+    // MARK: - Auth
+
+    private static func mapAuth(_ error: AuthError) -> SupabaseError {
+        switch error {
+        case .sessionMissing:
+            return .unauthorized
+        case let .api(_, errorCode, _, _):
+            switch errorCode {
+            case .noAuthorization, .badJWT, .invalidJWT,
+                 .sessionNotFound, .sessionExpired,
+                 .refreshTokenNotFound, .refreshTokenAlreadyUsed:
+                return .unauthorized
+            case .userNotFound, .identityNotFound:
+                return .notFound(table: "auth.users", id: nil)
+            default:
+                return .transport(underlying: error)
+            }
+        default:
+            return .transport(underlying: error)
+        }
     }
 }
