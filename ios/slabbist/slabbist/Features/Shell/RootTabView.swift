@@ -3,12 +3,15 @@ import SwiftUI
 struct RootTabView: View {
     var body: some View {
         TabView {
-            LotsListView()
-                .tabItem { Label("Lots", systemImage: "square.stack.3d.up") }
-            ScanShortcutView()
-                .tabItem { Label("Scan", systemImage: "viewfinder") }
-            SettingsView()
-                .tabItem { Label("More", systemImage: "ellipsis.circle") }
+            Tab("Lots", systemImage: "square.stack.3d.up") {
+                LotsListView()
+            }
+            Tab("Scan", systemImage: "viewfinder") {
+                ScanShortcutView()
+            }
+            Tab("More", systemImage: "ellipsis.circle") {
+                SettingsView()
+            }
         }
         .tint(AppColor.gold)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)

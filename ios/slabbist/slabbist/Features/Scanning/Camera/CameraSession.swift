@@ -11,6 +11,7 @@ final class CameraSession: NSObject {
 
     private(set) var authorization: Authorization = .notDetermined
     private(set) var isRunning: Bool = false
+    private(set) var isConfigured: Bool = false
 
     let captureSession = AVCaptureSession()
 
@@ -45,7 +46,12 @@ final class CameraSession: NSObject {
         }
     }
 
+    /// Idempotent — repeat calls (e.g. after a pop/push that re-fires
+    /// `onAppear`) short-circuit so the AVCaptureSession keeps its
+    /// existing input and output rather than throwing "cannot add
+    /// input" on re-entry.
     func configure() throws {
+        guard !isConfigured else { return }
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
@@ -67,6 +73,7 @@ final class CameraSession: NSObject {
             throw NSError(domain: "CameraSession", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot add video output"])
         }
         captureSession.addOutput(videoOutput)
+        isConfigured = true
     }
 
     func start() {

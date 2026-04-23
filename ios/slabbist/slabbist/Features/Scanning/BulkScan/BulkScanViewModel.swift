@@ -95,6 +95,11 @@ final class BulkScanViewModel {
             sortBy: [SortDescriptor(\Scan.createdAt, order: .reverse)]
         )
         descriptor.fetchLimit = 20
-        recentScans = (try? context.fetch(descriptor)) ?? []
+        do {
+            recentScans = try context.fetch(descriptor)
+        } catch {
+            AppLog.scans.error("refreshRecent fetch failed: \(error.localizedDescription, privacy: .public)")
+            recentScans = []
+        }
     }
 }

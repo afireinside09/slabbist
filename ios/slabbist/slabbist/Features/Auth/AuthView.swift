@@ -49,7 +49,7 @@ struct AuthView: View {
                         Text("Email").foregroundStyle(AppColor.dim))
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .foregroundStyle(AppColor.text)
                         .tint(AppColor.gold)
@@ -89,7 +89,7 @@ struct AuthView: View {
         }
 
         Button {
-            viewModel.mode = (viewModel.mode == .signIn) ? .signUp : .signIn
+            viewModel.toggleMode()
         } label: {
             Text(viewModel.mode == .signIn
                  ? "Don't have an account? Create one"

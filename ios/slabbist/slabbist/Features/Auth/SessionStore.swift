@@ -20,24 +20,17 @@ final class SessionStore {
         authTask?.cancel()
         let client = self.client
         authTask = Task { [weak self] in
+            // `emitLocalSessionAsInitialSession` means the stream fires
+            // `.initialSession` with the persisted session on subscribe, so
+            // we don't need a separate `client.auth.session` read to seed
+            // `userId`. Auto-refresh follows up with `.tokenRefreshed` /
+            // `.signedOut` if the initial session was expired.
             for await change in client.auth.authStateChanges {
-                // The opt-in `emitLocalSessionAsInitialSession` flag means the
-                // initial session may already be expired; auto-refresh will
-                // follow up with `.tokenRefreshed` or `.signedOut`.
                 if change.event == .initialSession,
                    change.session?.isExpired == true {
                     continue
                 }
-                await MainActor.run {
-                    self?.userId = change.session?.user.id
-                }
-            }
-        }
-
-        Task { [weak self] in
-            let session = try? await client.auth.session
-            await MainActor.run {
-                self?.userId = session?.user.id
+                self?.userId = change.session?.user.id
             }
         }
     }

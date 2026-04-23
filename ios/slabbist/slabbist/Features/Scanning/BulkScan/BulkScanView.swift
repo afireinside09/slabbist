@@ -5,20 +5,36 @@ import Vision
 import OSLog
 
 /// Holds scan-path state that must survive being captured by a `@Sendable`
-/// closure fired off the MainActor. We keep the recognizer and view model
-/// here so the sample-queue callback can hold a single reference and read
-/// them after hopping to MainActor, rather than trying to capture SwiftUI
-/// `@State` projections across isolation.
+/// closure fired off the MainActor. We keep the recognizer, view model,
+/// and the reusable Vision request here so the sample-queue callback can
+/// hold a single reference and read them after hopping to MainActor.
+///
+/// `@Observable` so SwiftUI re-renders `BulkScanView.body` when
+/// `viewModel` transitions from `nil` to a live instance on bootstrap.
 @MainActor
+@Observable
 final class BulkScanController {
     let recognizer = CertOCRRecognizer()
     var viewModel: BulkScanViewModel?
+
+    /// One reusable Vision request for the entire scan session. Allocating
+    /// a new `VNRecognizeTextRequest` on every frame at ~30 FPS dominates
+    /// the sample-queue budget; reuse drops per-frame cost to the request
+    /// reset plus the actual recognition pass.
+    @ObservationIgnored
+    let textRequest: VNRecognizeTextRequest = {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .fast
+        request.usesLanguageCorrection = false
+        return request
+    }()
 }
 
 struct BulkScanView: View {
     let lot: Lot
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var cameraSession = CameraSession()
     @State private var controller = BulkScanController()
@@ -29,10 +45,10 @@ struct BulkScanView: View {
             cameraArea
                 .ignoresSafeArea(edges: [.top, .horizontal])
                 .overlay(alignment: .center) {
-                    if lastCaptureFlash {
-                        Color.white.opacity(0.35)
-                            .allowsHitTesting(false)
-                    }
+                    Color.white
+                        .opacity(lastCaptureFlash ? 0.35 : 0)
+                        .allowsHitTesting(false)
+                        .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
                 }
 
             if let viewModel = controller.viewModel {
@@ -57,6 +73,23 @@ struct BulkScanView: View {
         }
         .onDisappear {
             cameraSession.stop()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Pause the capture stream when the app is backgrounded or
+            // inactive — keeps the camera LED off and stops burning
+            // battery on the OCR pipeline while the user is away.
+            switch newPhase {
+            case .active:
+                if cameraSession.authorization == .authorized,
+                   cameraSession.isConfigured,
+                   !cameraSession.isRunning {
+                    cameraSession.start()
+                }
+            case .inactive, .background:
+                cameraSession.stop()
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -124,13 +157,11 @@ struct BulkScanView: View {
             // primitives (`[String]` + `Double`) so the UI thread never sees
             // per-frame OCR work.
             cameraSession.setOnSampleBuffer { [weak controller] sampleBuffer in
+                guard let controller else { return }
                 guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-                let request = VNRecognizeTextRequest()
-                request.recognitionLevel = .accurate
-                request.usesLanguageCorrection = false
-
                 let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)
+                let request = controller.textRequest
                 do {
                     try handler.perform([request])
                 } catch {
@@ -152,7 +183,7 @@ struct BulkScanView: View {
                 // controller inside the hop.
                 let capturedTexts = texts
                 let capturedConfidence = maxConfidence
-                Task { @MainActor in
+                Task { @MainActor [weak controller] in
                     guard let controller else { return }
                     guard let cert = controller.recognizer.ingest(
                         textCandidates: capturedTexts,
@@ -160,9 +191,7 @@ struct BulkScanView: View {
                     ) else { return }
                     do {
                         try controller.viewModel?.record(candidate: cert)
-                        lastCaptureFlash = true
-                        try? await Task.sleep(for: .milliseconds(120))
-                        lastCaptureFlash = false
+                        triggerFlash()
                     } catch {
                         AppLog.scans.error("record capture failed: \(error.localizedDescription, privacy: .public)")
                     }
@@ -171,6 +200,18 @@ struct BulkScanView: View {
             cameraSession.start()
         } catch {
             AppLog.camera.error("camera configure failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Pulse the capture flash overlay. The animation on the overlay
+    /// handles the fade; we drive it edge-to-edge with `lastCaptureFlash`
+    /// and rely on `.animation(_:value:)` so overlapping triggers don't
+    /// race a manual `Task.sleep`.
+    private func triggerFlash() {
+        lastCaptureFlash = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(140))
+            lastCaptureFlash = false
         }
     }
 }
