@@ -33,9 +33,22 @@
 		B144A3C92F99D4D8002A2653 /* slabbistUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = slabbistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1B2C3D4E5F60001A2B3C4D5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B144A3AF2F99D4D7002A2653 /* slabbist */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B144A3B22F99D4D7002A2653 /* slabbist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1B2C3D4E5F60001A2B3C4D5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = slabbist;
 			sourceTree = "<group>";
 		};
@@ -402,6 +415,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = slabbist/Info.plist;
 				INFOPLIST_KEY_UIAppFonts = (
 					"InstrumentSerif-Regular.ttf",
 					"InstrumentSerif-Italic.ttf",
@@ -438,6 +452,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = slabbist/Info.plist;
 				INFOPLIST_KEY_UIAppFonts = (
 					"InstrumentSerif-Regular.ttf",
 					"InstrumentSerif-Italic.ttf",
