@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "errors": [],
+  "results": [
+    {
+      "productId": 500001,
+      "subTypeName": "Normal",
+      "lowPrice": 10.0,
+      "midPrice": 12.5,
+      "highPrice": 20.0,
+      "marketPrice": 12.3,
+      "directLowPrice": 11.5
+    },
+    {
+      "productId": 500001,
+      "subTypeName": "Holofoil",
+      "lowPrice": 15.0,
+      "midPrice": 18.0,
+      "highPrice": 25.0,
+      "marketPrice": 17.8,
+      "directLowPrice": 16.0
+    },
+    {
+      "productId": 500002,
+      "subTypeName": "Normal",
+      "lowPrice": 0.1,
+      "midPrice": 0.2,
+      "highPrice": 0.5,
+      "marketPrice": 0.18,
+      "directLowPrice": 0.15
+    }
+  ]
+}

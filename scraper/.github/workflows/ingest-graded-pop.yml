@@ -1,0 +1,21 @@
+name: Ingest graded (pop reports)
+on:
+  schedule: [{ cron: "0 12 * * 0" }]
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: tcgcsv } }
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PSA_API_KEY: ${{ secrets.PSA_API_KEY }}
+      BECKETT_OPG_KEY: ${{ secrets.BECKETT_OPG_KEY }}
+      TAG_API_KEY: ${{ secrets.TAG_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run cli run graded pop

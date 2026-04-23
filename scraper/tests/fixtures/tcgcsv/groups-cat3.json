@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "errors": [],
+  "results": [
+    {
+      "groupId": 3188,
+      "name": "SV04: Paradox Rift",
+      "abbreviation": "SV04",
+      "isSupplemental": false,
+      "publishedOn": "2023-11-03T00:00:00",
+      "modifiedOn": "2024-01-01T00:00:00",
+      "categoryId": 3
+    }
+  ]
+}

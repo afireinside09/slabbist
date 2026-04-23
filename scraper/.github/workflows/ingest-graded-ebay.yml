@@ -1,0 +1,23 @@
+name: Ingest graded (eBay sold)
+on:
+  schedule: [{ cron: "0 * * * *" }]
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: tcgcsv } }
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+      EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+      EBAY_DEV_ID: ${{ secrets.EBAY_DEV_ID }}
+      EBAY_MARKETPLACE_INSIGHTS_APPROVED: ${{ vars.EBAY_MARKETPLACE_INSIGHTS_APPROVED }}
+      EBAY_OAUTH_TOKEN: ${{ secrets.EBAY_OAUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run cli run graded ebay

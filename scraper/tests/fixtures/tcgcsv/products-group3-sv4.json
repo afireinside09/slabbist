@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "errors": [],
+  "results": [
+    {
+      "productId": 500001,
+      "name": "Charizard ex (125)",
+      "cleanName": "Charizard ex 125",
+      "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/500001_200w.jpg",
+      "categoryId": 3,
+      "groupId": 3188,
+      "url": "https://www.tcgplayer.com/product/500001",
+      "modifiedOn": "2024-05-01T00:00:00",
+      "imageCount": 1,
+      "extendedData": [
+        {
+          "name": "Number",
+          "displayName": "Number",
+          "value": "125/182"
+        },
+        {
+          "name": "Rarity",
+          "displayName": "Rarity",
+          "value": "Double Rare"
+        },
+        {
+          "name": "HP",
+          "displayName": "HP",
+          "value": "330"
+        },
+        {
+          "name": "Stage",
+          "displayName": "Stage",
+          "value": "Stage 2"
+        },
+        {
+          "name": "CardType",
+          "displayName": "Card Type",
+          "value": "Darkness"
+        }
+      ]
+    },
+    {
+      "productId": 500002,
+      "name": "Pikachu (80)",
+      "cleanName": "Pikachu 80",
+      "imageUrl": null,
+      "categoryId": 3,
+      "groupId": 3188,
+      "url": null,
+      "modifiedOn": "2024-05-01T00:00:00",
+      "imageCount": 0,
+      "extendedData": []
+    }
+  ]
+}

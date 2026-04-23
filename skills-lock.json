@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "figma": {
+      "source": "openai/skills",
+      "sourceType": "github",
+      "computedHash": "be357ea39dc912911c0da826a1638513e3544d7315dc5a206a0d7aec1bae9ed7"
+    }
+  }
+}

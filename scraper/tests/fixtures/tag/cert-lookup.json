@@ -1,0 +1,14 @@
+{
+  "cert": {
+    "certId": "TAG123456",
+    "grade": "10",
+    "game": "Pokémon",
+    "setName": "Sword & Shield Brilliant Stars",
+    "year": 2022,
+    "cardName": "Charizard VSTAR",
+    "cardNumber": "174",
+    "variant": "Rainbow Rare",
+    "language": "English",
+    "gradedOn": "2025-12-02"
+  }
+}

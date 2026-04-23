@@ -1,0 +1,13 @@
+{
+  "SpecID": 123456,
+  "Subject": "CHARIZARD-HOLO",
+  "CardNumber": "4",
+  "Brand": "POKEMON",
+  "Year": "1999",
+  "Variety": "SHADOWLESS",
+  "Pops": [
+    { "Grade": "10", "Population": 142 },
+    { "Grade": "9", "Population": 2201 },
+    { "Grade": "8", "Population": 4185 }
+  ]
+}
