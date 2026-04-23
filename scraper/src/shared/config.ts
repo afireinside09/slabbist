@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 export interface AppConfig {
-  supabase: { url: string; serviceRoleKey: string };
+  supabase: { url: string; secretKey: string };
   grading: {
     psaApiKey?: string | undefined;
     psaPopSpecIds: number[];
@@ -30,7 +30,7 @@ export function loadConfig(): AppConfig {
   return {
     supabase: {
       url: required("SUPABASE_URL"),
-      serviceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
+      secretKey: required("SUPABASE_SECRET_KEY"),
     },
     grading: {
       psaApiKey: process.env.PSA_API_KEY || undefined,

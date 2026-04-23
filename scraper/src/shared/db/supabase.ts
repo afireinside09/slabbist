@@ -7,7 +7,7 @@ let cached: SupabaseClient | null = null;
 export function getSupabase(): SupabaseClient {
   if (cached) return cached;
   const cfg = loadConfig();
-  cached = createClient(cfg.supabase.url, cfg.supabase.serviceRoleKey, {
+  cached = createClient(cfg.supabase.url, cfg.supabase.secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { "x-slabbist-service": "tcgcsv-ingest" } },
   });
