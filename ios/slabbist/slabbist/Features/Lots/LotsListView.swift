@@ -13,29 +13,34 @@ struct LotsListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if lots.isEmpty {
-                    emptyState
-                } else {
-                    List(lots) { lot in
-                        Button {
-                            selectedLot = lot
-                        } label: {
-                            row(for: lot)
+            SlabbedRoot {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xxl) {
+                        header
+
+                        PrimaryGoldButton(
+                            title: "New bulk scan",
+                            systemIcon: "viewfinder",
+                            trailingChevron: true
+                        ) {
+                            showingNewLot = true
                         }
+
+                        if lots.isEmpty {
+                            emptyStateCard
+                        } else {
+                            openLotsSection
+                        }
+
+                        Spacer(minLength: Spacing.xxxl)
                     }
+                    .padding(.horizontal, Spacing.xxl)
+                    .padding(.top, Spacing.l)
+                    .padding(.bottom, Spacing.xxxl)
                 }
             }
-            .navigationTitle("Lots")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingNewLot = true
-                    } label: {
-                        Label("New bulk scan", systemImage: "plus")
-                    }
-                }
-            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingNewLot) {
                 if let viewModel {
                     NewLotSheet { name in
@@ -55,52 +60,109 @@ struct LotsListView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: Spacing.m) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            Text("No lots yet").font(.title3.weight(.semibold))
-            Text("Start your first bulk scan to see it here.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("New bulk scan") { showingNewLot = true }
-                .buttonStyle(.borderedProminent)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            KickerLabel("Current lots")
+            Text(headerTitle).slabTitle()
+            if !lots.isEmpty {
+                Text(headerSubtitle)
+                    .font(SlabFont.mono(size: 13))
+                    .foregroundStyle(AppColor.muted)
+            }
         }
-        .padding(Spacing.xl)
+    }
+
+    private var headerTitle: String {
+        switch lots.count {
+        case 0:  return "No open lots"
+        case 1:  return "1 open lot"
+        default: return "\(lots.count) open lots"
+        }
+    }
+
+    private var headerSubtitle: String {
+        let lastUpdated = lots.map(\.updatedAt).max()
+        guard let lastUpdated else { return "" }
+        let rel = Self.relative.localizedString(for: lastUpdated, relativeTo: Date())
+        return "Updated \(rel)"
+    }
+
+    private var openLotsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Open lots")
+            SlabCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(lots.enumerated()), id: \.element.id) { index, lot in
+                        Button {
+                            selectedLot = lot
+                        } label: {
+                            row(for: lot)
+                        }
+                        .buttonStyle(.plain)
+                        if index < lots.count - 1 {
+                            SlabCardDivider()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func row(for lot: Lot) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(lot.name).font(.headline)
-            HStack {
-                Text(lot.status.rawValue.capitalized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(lot.createdAt, format: .dateTime.month().day().hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(lot.name).slabRowTitle()
+                Text(rowSubtitle(for: lot))
+                    .font(SlabFont.mono(size: 12))
+                    .foregroundStyle(AppColor.dim)
             }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColor.dim)
+        }
+        .padding(.horizontal, Spacing.l)
+        .padding(.vertical, Spacing.md)
+    }
+
+    private func rowSubtitle(for lot: Lot) -> String {
+        Self.relative.localizedString(for: lot.updatedAt, relativeTo: Date())
+    }
+
+    private var emptyStateCard: some View {
+        SlabCard {
+            VStack(spacing: Spacing.m) {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 48, weight: .regular))
+                    .foregroundStyle(AppColor.gold.opacity(0.75))
+                    .padding(.top, Spacing.l)
+                Text("No lots yet")
+                    .font(SlabFont.serif(size: 28))
+                    .tracking(-0.8)
+                    .foregroundStyle(AppColor.text)
+                Text("Start your first bulk scan to see it here.")
+                    .font(SlabFont.sans(size: 14))
+                    .foregroundStyle(AppColor.muted)
+                    .multilineTextAlignment(.center)
+                Spacer(minLength: Spacing.l)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Spacing.l)
+            .padding(.bottom, Spacing.l)
         }
     }
 
     private func bootstrapViewModel() {
         guard viewModel == nil else { return }
         guard let userId = session.userId else { return }
-
-        // Plan 1 MVP: single store per user. Fetch the first store the user owns.
         let ownerId = userId
         var descriptor = FetchDescriptor<Store>(
             predicate: #Predicate<Store> { $0.ownerUserId == ownerId }
         )
         descriptor.fetchLimit = 1
-
         if let store = try? context.fetch(descriptor).first {
             viewModel = LotsViewModel(context: context, currentUserId: userId, currentStoreId: store.id)
         } else {
-            // Store row hasn't synced yet. For Plan 1, fall back to a placeholder;
-            // Plan 2 introduces a store-fetch sync on session establishment.
             AppLog.lots.warning("no local Store for user \(userId, privacy: .public); view model deferred")
         }
     }
@@ -117,4 +179,10 @@ struct LotsListView: View {
             lots = []
         }
     }
+
+    private static let relative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f
+    }()
 }
