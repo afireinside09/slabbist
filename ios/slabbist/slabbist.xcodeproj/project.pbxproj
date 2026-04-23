@@ -34,7 +34,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A1B2C3D4E5F60001A2B3C4D5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		A1B2C3D4E5F60001A2B3C4D5 /* Exceptions for "slabbist" folder in "slabbist" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -47,7 +47,7 @@
 		B144A3B22F99D4D7002A2653 /* slabbist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A1B2C3D4E5F60001A2B3C4D5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				A1B2C3D4E5F60001A2B3C4D5 /* Exceptions for "slabbist" folder in "slabbist" target */,
 			);
 			path = slabbist;
 			sourceTree = "<group>";
@@ -416,11 +416,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = slabbist/Info.plist;
-				INFOPLIST_KEY_UIAppFonts = (
-					"InstrumentSerif-Regular.ttf",
-					"InstrumentSerif-Italic.ttf",
-				);
 				INFOPLIST_KEY_NSCameraUsageDescription = "Slabbist uses the camera to scan graded slab cert numbers.";
+				INFOPLIST_KEY_UIAppFonts = "InstrumentSerif-Regular.ttf InstrumentSerif-Italic.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -453,11 +450,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = slabbist/Info.plist;
-				INFOPLIST_KEY_UIAppFonts = (
-					"InstrumentSerif-Regular.ttf",
-					"InstrumentSerif-Italic.ttf",
-				);
 				INFOPLIST_KEY_NSCameraUsageDescription = "Slabbist uses the camera to scan graded slab cert numbers.";
+				INFOPLIST_KEY_UIAppFonts = "InstrumentSerif-Regular.ttf InstrumentSerif-Italic.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

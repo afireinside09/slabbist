@@ -23,4 +23,11 @@ struct PrimitiveSmokeTests {
             "InstrumentSerif-Italic.ttf not found — check Resources/Fonts/ files and INFOPLIST_KEY_UIAppFonts."
         )
     }
+
+    @Test("KickerLabel renders")
+    func kickerLabelRenders() {
+        let host = UIHostingController(rootView: KickerLabel("CURRENT LOTS"))
+        _ = host.view // forces layout; non-nil if view graph compiles
+        #expect(host.view != nil)
+    }
 }

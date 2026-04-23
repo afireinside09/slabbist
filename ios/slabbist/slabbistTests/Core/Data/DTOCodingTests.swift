@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import Supabase
 @testable import slabbist
 
 @Suite("DTO Coding")
@@ -70,13 +71,13 @@ struct DTOCodingTests {
             storeId: UUID(),
             createdByUserId: UUID(),
             name: "April drop",
-            notes: nil,
+            notes: "bulk intake",
             status: "open",
             vendorName: "Shop A",
             vendorContact: "a@b.c",
             offeredTotalCents: 12_345,
-            marginRuleId: nil,
-            transactionStamp: nil,
+            marginRuleId: UUID(),
+            transactionStamp: .string("pending"),
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
