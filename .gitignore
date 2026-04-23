@@ -22,3 +22,6 @@ Icon
 
 # iOS build-time secrets (populated from .envrc locally, from CI secrets in CI).
 ios/slabbist/Config/Secrets.xcconfig
+
+# Git worktrees (isolated workspaces for parallel feature work)
+.worktrees/
