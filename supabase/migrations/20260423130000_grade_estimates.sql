@@ -52,6 +52,10 @@ create index grade_estimates_purge_pending
   on grade_estimates (created_at)
   where images_purged_at is null;
 
+create index grade_estimates_scan_id
+  on grade_estimates (scan_id)
+  where scan_id is not null;
+
 alter table grade_estimates enable row level security;
 
 create policy grade_estimates_select_own
