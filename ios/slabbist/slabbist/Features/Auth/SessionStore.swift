@@ -21,6 +21,13 @@ final class SessionStore {
         let client = self.client
         authTask = Task { [weak self] in
             for await change in client.auth.authStateChanges {
+                // The opt-in `emitLocalSessionAsInitialSession` flag means the
+                // initial session may already be expired; auto-refresh will
+                // follow up with `.tokenRefreshed` or `.signedOut`.
+                if change.event == .initialSession,
+                   change.session?.isExpired == true {
+                    continue
+                }
                 await MainActor.run {
                     self?.userId = change.session?.user.id
                 }

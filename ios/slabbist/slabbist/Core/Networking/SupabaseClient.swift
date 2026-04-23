@@ -26,6 +26,9 @@ nonisolated final class AppSupabase: Sendable {
     /// `URLProtocol` interceptors.
     static func make(session: URLSession) -> SupabaseClient {
         let options = SupabaseClientOptions(
+            auth: SupabaseClientOptions.AuthOptions(
+                emitLocalSessionAsInitialSession: true
+            ),
             global: SupabaseClientOptions.GlobalOptions(session: session)
         )
         return SupabaseClient(
