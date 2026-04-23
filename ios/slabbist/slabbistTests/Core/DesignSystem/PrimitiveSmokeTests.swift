@@ -46,4 +46,12 @@ struct PrimitiveSmokeTests {
         )
         #expect(host.view != nil)
     }
+
+    @Test("SecondaryIconButton renders")
+    func secondaryIconButtonRenders() {
+        let host = UIHostingController(
+            rootView: SecondaryIconButton(systemIcon: "xmark", action: {})
+        )
+        #expect(host.view != nil)
+    }
 }
