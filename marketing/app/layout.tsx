@@ -22,9 +22,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Slabbist — The counter, rebuilt.",
+  title: "Slabbist · Price a stack of slabs faster than you can count them",
   description:
-    "Slabbist is the iOS app Pokémon hobby stores use to bulk-scan graded slabs, pull defensible comps, and close buys in seconds — at the counter or on the show floor.",
+    "Slabbist turns your iPhone into a bulk scanner for graded Pokémon. Real comps from recent eBay sales, offer sheets in a tap, free on iOS.",
 };
 
 export default function RootLayout({

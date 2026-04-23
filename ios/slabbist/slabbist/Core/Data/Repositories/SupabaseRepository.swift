@@ -247,7 +247,7 @@ private extension PostgrestResponse {
     /// Decode the response body into the requested type without going
     /// through the SDK's generic `.value` property (which requires the
     /// response's generic parameter to match).
-    func decoded<T: Decodable>() throws -> T {
-        try JSONCoders.decoder.decode(T.self, from: data)
+    func decoded<U: Decodable>() throws -> U {
+        try JSONCoders.decoder.decode(U.self, from: data)
     }
 }

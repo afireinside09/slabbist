@@ -4,18 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { SLAB } from '@/lib/tokens';
 
 const STEPS = [
-  { n: '01', t: 'Stack arrives', b: "Walk-in brings 30 slabs. You don't look at the price. You look at them." },
-  { n: '02', t: 'Sweep the stack', b: 'One-by-one in-hand, or continuous on a stand. Cert OCR locks as each slab clears the frame.' },
-  { n: '03', t: 'Queue runs silent', b: 'Comps resolve in the background. Pending slabs show a badge. No waiting on a spinner.' },
-  { n: '04', t: 'Review the lot', b: "Ready, Pending, Issues — grouped. Any comp you don't trust opens into the sold listings behind it." },
-  { n: '05', t: 'Offer sheet', b: 'Apply your margin rule, attach the vendor, print or email the sheet. Signature on an iPad if you need it.' },
+  { n: '01', t: 'Walk-in arrives', b: 'A seller drops thirty slabs on the counter. You look at the cards, not the calculator.' },
+  { n: '02', t: 'Sweep the stack', b: 'Scan each slab in hand, or set the phone on a stand and feed them through. The cert reads as the frame locks.' },
+  { n: '03', t: 'Queue runs quiet', b: 'Comps resolve in the background while you keep scanning. Slow ones show a small pending mark. No spinner, no blocking.' },
+  { n: '04', t: 'Review the lot', b: 'Ready, pending, and issues grouped on one screen. Tap any comp to open the actual eBay solds behind it.' },
+  { n: '05', t: 'Offer sheet', b: 'Apply your margin rule, attach a vendor, and print or email the sheet. Capture a signature on an iPad if the buy needs one.' },
 ];
 
 const METRICS = [
-  ['17×', 'Faster per lot vs. manual lookup'],
-  ['$0.82', 'Avg cost of a bad comp (they shrink it)'],
-  ['14 sec', 'Median scan → confident comp'],
-  ['99.2%', 'Cert OCR accuracy across 5 graders'],
+  ['30', 'Slabs scanned per minute, hands-on'],
+  ['5', 'Graders read (PSA, BGS, CGC, SGC, TAG)'],
+  ['0', 'Subscription fees'],
+  ['1%', 'Marketplace premium, when it opens'],
 ] as const;
 
 export function Workflow() {
@@ -91,7 +91,7 @@ export function Workflow() {
               marginBottom: 16,
             }}
           >
-            Designed with owners at three stores in Portland, San Diego and the Tampa show floor.
+            Built on the counter, not in a spreadsheet. Every step came from watching a real buy go wrong.
           </div>
         </div>
 

@@ -3,7 +3,6 @@ import { Nav } from '@/components/marketing/nav';
 import { Hero } from '@/components/marketing/hero';
 import { FeatureRow } from '@/components/marketing/feature-row';
 import { Workflow } from '@/components/marketing/workflow';
-import { Testimonials } from '@/components/marketing/testimonials';
 import { Pricing } from '@/components/marketing/pricing';
 import { FinalCta } from '@/components/marketing/final-cta';
 import { Footer } from '@/components/marketing/footer';
@@ -15,7 +14,6 @@ export default function Home() {
       <Hero />
       <FeatureRow />
       <Workflow />
-      <Testimonials />
       <Pricing />
       <FinalCta />
       <Footer />

@@ -51,8 +51,8 @@ export function FinalCta() {
             margin: '0 0 32px',
           }}
         >
-          Put your counter on the{' '}
-          <span style={{ fontStyle: 'italic', color: SLAB.gold }}>right side</span> of every buy.
+          Get it on your iPhone before your{' '}
+          <span style={{ fontStyle: 'italic', color: SLAB.gold }}>next show</span>.
         </h2>
         <p
           style={{
@@ -63,7 +63,7 @@ export function FinalCta() {
             lineHeight: 1.5,
           }}
         >
-          We&rsquo;re onboarding new stores in cohorts. Get a 30-minute setup call and your team rolling by next weekend.
+          Slabbist is on TestFlight today and headed for the App Store. No card, no setup call, no seat fees. Takes a minute to get running.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -83,7 +83,7 @@ export function FinalCta() {
               boxShadow: `0 20px 50px ${SLAB.gold}44`,
             }}
           >
-            Request early access <Icon name="arrow" size={15} sw={2.2} />
+            Get TestFlight access <Icon name="arrow" size={15} sw={2.2} />
           </button>
           <button
             style={{
@@ -97,7 +97,7 @@ export function FinalCta() {
               cursor: 'pointer',
             }}
           >
-            Book a demo
+            Book a 15-minute call
           </button>
         </div>
       </div>

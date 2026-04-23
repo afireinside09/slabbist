@@ -1,5 +1,6 @@
 import { SLAB } from '@/lib/tokens';
 import { Icon } from '@/components/icon';
+import { SlabLogo } from '@/components/slab-logo';
 
 const COLS = [
   { h: 'Product', links: ['Overview', 'Bulk scan', 'Comp engine', 'Vendor DB', 'Changelog'] },
@@ -28,24 +29,7 @@ export function Footer() {
         >
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-              <div
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  background: `linear-gradient(135deg, ${SLAB.gold}, ${SLAB.goldDim})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontFamily: SLAB.serif,
-                  fontStyle: 'italic',
-                  fontWeight: 600,
-                  color: SLAB.ink,
-                  fontSize: 17,
-                }}
-              >
-                S
-              </div>
+              <SlabLogo size={30} title="Slabbist" />
               <span style={{ fontWeight: 500, fontSize: 16 }}>Slabbist</span>
             </div>
             <div

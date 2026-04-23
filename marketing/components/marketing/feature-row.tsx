@@ -9,27 +9,27 @@ type Feat = { icon: IconName; title: string; blurb: string };
 const FEATS: Feat[] = [
   {
     icon: 'scan',
-    title: 'Cert OCR, all five graders',
+    title: 'Reads every major cert',
     blurb:
-      'PSA, BGS, CGC, SGC, TAG. Auto-detects the grader, reads the cert, falls back to a manual entry in one tap.',
+      'PSA, BGS, CGC, SGC, TAG. The app spots the grader and reads the number. If a slab is scratched up, you type it in instead. Either way you are moving on in a tap.',
   },
   {
     icon: 'layers',
-    title: 'Bulk scan, continuous capture',
+    title: 'Keep scanning, even offline',
     blurb:
-      'Rapid-fire 30 slabs in a minute. Queue runs offline. Results drop in live as comps resolve.',
+      'Thirty slabs a minute if you stack them right. The queue keeps running when the venue Wi-Fi drops out, and comps fill in as they come back.',
   },
   {
     icon: 'chart',
-    title: 'Defensible comps',
+    title: 'Comps you can show a seller',
     blurb:
-      'Blended median over recent eBay solds, with a confidence meter and 7/30/90-day velocity so you can explain every number.',
+      'Every price is a median of recent eBay sold listings, with a confidence score and 7, 30, and 90 day velocity. Tap any comp to open the actual sales behind it.',
   },
   {
     icon: 'shield',
-    title: 'Margin rules, per role',
+    title: 'Buy price only for staff',
     blurb:
-      'Owners see cost and margin. Associates see buy price only. Enforced in the database, not just the UI.',
+      'Owners see comp, cost, and margin. Associates see the buy number and nothing else. The rule is enforced in the database, so a screenshot cannot leak it.',
   },
 ];
 
@@ -78,7 +78,7 @@ export function FeatureRow() {
                 fontWeight: 500,
               }}
             >
-              The counter, rebuilt
+              What is inside
             </div>
             <h2
               style={{
@@ -91,7 +91,9 @@ export function FeatureRow() {
                 maxWidth: 520,
               }}
             >
-              Every scan earns its price.
+              Four things that
+              <br />
+              <span style={{ fontStyle: 'italic', color: SLAB.gold }}>actually</span> make it fast.
             </h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -909,7 +911,7 @@ function MarginRulesPanel() {
         }}
       >
         <Icon name="lock" size={12} />
-        Enforced at the database — not just the UI.
+        Enforced at the database, not just the UI.
       </div>
     </div>
   );

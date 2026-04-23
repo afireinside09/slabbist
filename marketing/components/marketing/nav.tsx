@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SLAB } from '@/lib/tokens';
 import { Icon } from '@/components/icon';
+import { SlabLogo } from '@/components/slab-logo';
 import { useAuth } from './auth-context';
 
 const NAV_LINKS = [
@@ -45,56 +46,47 @@ export function Nav() {
           justifyContent: 'space-between',
         }}
       >
-        <div
+        <a
+          href="#top"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            padding: scrolled ? '10px 18px' : '10px 18px 10px 10px',
+            gap: 14,
+            padding: scrolled ? '6px 20px 6px 8px' : '6px 20px 6px 6px',
             borderRadius: 999,
             background: scrolled ? 'rgba(14,14,18,0.7)' : 'transparent',
             backdropFilter: scrolled ? 'blur(18px) saturate(180%)' : 'none',
             WebkitBackdropFilter: scrolled ? 'blur(18px) saturate(180%)' : 'none',
             border: scrolled ? '1px solid ' + SLAB.hair : '1px solid transparent',
             transition: 'all 0.25s ease',
+            textDecoration: 'none',
+            color: SLAB.text,
           }}
         >
           <div
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              background: `linear-gradient(135deg, ${SLAB.gold}, ${SLAB.goldDim})`,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: SLAB.serif,
-              fontStyle: 'italic',
-              fontWeight: 600,
-              color: SLAB.ink,
-              fontSize: 17,
-              boxShadow: `0 0 14px ${SLAB.gold}44`,
+              filter: `drop-shadow(0 0 18px ${SLAB.gold}55)`,
             }}
           >
-            S
+            <SlabLogo size={52} title="Slabbist" />
           </div>
-          <span style={{ fontWeight: 500, letterSpacing: -0.3, fontSize: 16 }}>Slabbist</span>
+          <span style={{ fontWeight: 500, letterSpacing: -0.4, fontSize: 22 }}>Slabbist</span>
           <span
             style={{
-              fontSize: 9,
+              fontSize: 10,
               letterSpacing: 1.2,
               textTransform: 'uppercase',
-              padding: '2px 6px',
+              padding: '3px 8px',
               borderRadius: 4,
               color: SLAB.gold,
               border: `1px solid ${SLAB.gold}55`,
               fontWeight: 500,
-              marginLeft: 4,
             }}
           >
             Beta
           </span>
-        </div>
+        </a>
 
         <div
           style={{

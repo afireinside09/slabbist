@@ -31,7 +31,7 @@ const TIERS: Tier[] = [
     ],
     cta: 'Download on iOS',
     ctaMode: 'signup',
-    footnote: 'How we\'re paid: eBay & TCGplayer affiliate on the comps you follow.',
+    footnote: 'How we get paid: eBay and TCGplayer affiliate, and only if you follow a comp.',
     icon: 'scan',
   },
   {
@@ -58,7 +58,7 @@ const TIERS: Tier[] = [
     price: '1%',
     priceUnit: 'at checkout',
     feat: [
-      'The scanner and comps — always free',
+      'The scanner and comps are always free',
       'Every listing cross-checked with the grader DB',
       'Escrow + inspection window on every buy',
       'No hidden spreads or junk fees',
@@ -106,8 +106,8 @@ export function Pricing() {
               margin: '0 0 20px',
             }}
           >
-            Free today.{' '}
-            <span style={{ fontStyle: 'italic', color: SLAB.gold }}>Honestly</span> priced tomorrow.
+            Free now.{' '}
+            <span style={{ fontStyle: 'italic', color: SLAB.gold }}>Fair</span> later.
           </h2>
           <p
             style={{
@@ -118,7 +118,7 @@ export function Pricing() {
               lineHeight: 1.55,
             }}
           >
-            The app is free for stores, sellers, and buyers. We&rsquo;re paid by eBay and TCGplayer affiliate links on the comps you choose to follow — so we only make money when you do.
+            The app is free for stores, sellers, and buyers. We make money from eBay and TCGplayer affiliate links when you follow a comp through to a sale. So we only get paid when you do.
           </p>
         </div>
 
@@ -304,7 +304,7 @@ export function Pricing() {
             lineHeight: 1.6,
           }}
         >
-          No subscriptions. No seat fees. No paywalled features. If we ever need to charge for a specific feature, we&rsquo;ll tell you why — and it&rsquo;ll still be optional.
+          No subscriptions. No seat fees. No paywalled features. If we ever need to charge for something specific, we will say so up front, and it will still be optional.
         </div>
       </div>
     </section>

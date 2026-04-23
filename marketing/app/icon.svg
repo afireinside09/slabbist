@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="cap-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A1A1F"/>
+      <stop offset="1" stop-color="#08080A"/>
+    </linearGradient>
+    <linearGradient id="cap-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="oklch(0.82 0.13 78)"/>
+      <stop offset="1" stop-color="oklch(0.58 0.09 75)"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="44" fill="url(#cap-bg)"/>
+  <g stroke="url(#cap-gold)" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M 44 70 L 44 44 L 70 44"/>
+    <path d="M 130 44 L 156 44 L 156 70"/>
+    <path d="M 156 130 L 156 156 L 130 156"/>
+    <path d="M 70 156 L 44 156 L 44 130"/>
+  </g>
+  <text x="100" y="130" text-anchor="middle" font-family="Georgia, 'Instrument Serif', serif" font-style="italic" font-weight="400" font-size="104" fill="#F4F2ED" letter-spacing="-2">S</text>
+  <rect x="46" y="98" width="108" height="2" fill="url(#cap-gold)" opacity="0.5"/>
+</svg>

@@ -1,28 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { SLAB } from '@/lib/tokens';
 import { Icon } from '@/components/icon';
 import { useAuth } from './auth-context';
 
-export function Hero() {
-  const [count, setCount] = useState(0);
-  const [dollars, setDollars] = useState(0);
-  const { openAuth } = useAuth();
+const STATS = [
+  { k: '30 slabs', v: 'a minute' },
+  { k: '14 sec', v: 'scan to offer' },
+  { k: '5 graders', v: 'PSA, BGS, CGC, SGC, TAG' },
+];
 
-  useEffect(() => {
-    let raf = 0;
-    const start = performance.now();
-    const animate = (t: number) => {
-      const p = Math.min(1, (t - start) / 1600);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setCount(Math.floor(eased * 42));
-      setDollars(Math.floor(eased * 18430));
-      if (p < 1) raf = requestAnimationFrame(animate);
-    };
-    raf = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+export function Hero() {
+  const { openAuth } = useAuth();
 
   return (
     <section
@@ -92,9 +81,9 @@ export function Hero() {
               textTransform: 'uppercase',
             }}
           >
-            New
+            Beta
           </span>
-          Bulk-scan mode is live on TestFlight
+          Live on TestFlight now
           <Icon name="arrow" size={12} sw={2} color={SLAB.gold} />
         </div>
 
@@ -110,13 +99,13 @@ export function Hero() {
           }}
         >
           <span style={{ display: 'block', animation: 'sbmRise 0.8s 0.1s ease backwards' }}>
-            The buy counter,
+            Price a stack of slabs
           </span>
           <span style={{ display: 'block', animation: 'sbmRise 0.8s 0.2s ease backwards' }}>
-            <span style={{ fontStyle: 'italic', color: SLAB.gold }}>rebuilt</span> around
+            <span style={{ fontStyle: 'italic', color: SLAB.gold }}>faster</span> than you can
           </span>
           <span style={{ display: 'block', animation: 'sbmRise 0.8s 0.3s ease backwards' }}>
-            the slab in your hand.
+            count them.
           </span>
         </h1>
 
@@ -124,14 +113,14 @@ export function Hero() {
           style={{
             fontSize: 20,
             color: SLAB.muted,
-            lineHeight: 1.45,
+            lineHeight: 1.5,
             maxWidth: 560,
             margin: '32px 0 40px',
             letterSpacing: -0.2,
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
         >
-          Slabbist is the iOS app Pokémon hobby stores use to bulk-scan graded slabs, pull defensible comps, and close buys in seconds — at the counter or on the show floor.
+          Slabbist turns your iPhone into a bulk scanner for graded Pokémon. Real comps from recent sales. Offer sheets in a tap. Works at your counter and on the show floor.
         </p>
 
         <div
@@ -160,10 +149,11 @@ export function Hero() {
               boxShadow: '0 14px 40px rgba(255,255,255,0.08)',
             }}
           >
-            Request early access
+            Get TestFlight access
             <Icon name="arrow" size={15} sw={2.2} />
           </button>
-          <button
+          <a
+            href="#how-it-works"
             style={{
               padding: '16px 28px',
               borderRadius: 999,
@@ -176,11 +166,11 @@ export function Hero() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
+              textDecoration: 'none',
             }}
           >
-            <Icon name="store" size={16} />
-            For stores & vendors
-          </button>
+            See how it works
+          </a>
         </div>
 
         <div
@@ -200,48 +190,44 @@ export function Hero() {
                 textTransform: 'uppercase',
                 color: SLAB.dim,
                 fontWeight: 500,
-                marginBottom: 20,
+                marginBottom: 24,
               }}
             >
-              Live on the floor · right now
+              What you get
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, maxWidth: 480 }}>
-              <div style={{ borderRight: '1px solid ' + SLAB.hair, padding: '10px 24px 10px 0' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 0,
+                maxWidth: 560,
+              }}
+            >
+              {STATS.map((s, i) => (
                 <div
+                  key={s.k}
                   style={{
-                    fontFamily: SLAB.serif,
-                    fontSize: 56,
-                    fontWeight: 400,
-                    letterSpacing: -1.5,
-                    lineHeight: 1,
+                    padding: i === 0 ? '6px 22px 6px 0' : '6px 22px',
+                    borderLeft: i > 0 ? '1px solid ' + SLAB.hair : 'none',
                   }}
                 >
-                  {count}
+                  <div
+                    style={{
+                      fontFamily: SLAB.serif,
+                      fontSize: 42,
+                      fontWeight: 400,
+                      letterSpacing: -1.2,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {s.k}
+                  </div>
+                  <div style={{ fontSize: 12, color: SLAB.muted, marginTop: 10, lineHeight: 1.4 }}>
+                    {s.v}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: SLAB.muted, marginTop: 8 }}>
-                  Slabs comped in the last 60 seconds
-                </div>
-              </div>
-              <div style={{ padding: '10px 0 10px 24px' }}>
-                <div
-                  style={{
-                    fontFamily: SLAB.serif,
-                    fontSize: 56,
-                    fontWeight: 400,
-                    letterSpacing: -1.5,
-                    lineHeight: 1,
-                    display: 'flex',
-                    alignItems: 'baseline',
-                  }}
-                >
-                  <span style={{ fontSize: 32, opacity: 0.55, marginRight: 2 }}>$</span>
-                  {dollars.toLocaleString('en-US')}
-                </div>
-                <div style={{ fontSize: 12, color: SLAB.muted, marginTop: 8 }}>
-                  Offered to sellers today
-                </div>
-              </div>
+              ))}
             </div>
 
             <div
@@ -285,14 +271,9 @@ export function Hero() {
 const TALLY = [184, 642, 1284, 418, 2890];
 
 function PhoneHeroMock() {
-  const [n, setN] = useState(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setN((x) => (x + 1) % 7), 1400);
-    return () => clearInterval(t);
-  }, []);
-
-  const shown = Math.min(n, 5);
+  // Kept as a static composition (no animated tally) so the hero doesn't
+  // look like it's reporting fake live activity.
+  const shown = 4;
   const total = TALLY.slice(0, shown).reduce((a, b) => a + b, 0);
 
   return (
@@ -452,8 +433,7 @@ function PhoneHeroMock() {
                   letterSpacing: -0.8,
                   lineHeight: 1,
                   marginTop: 4,
-                  transition: 'color 0.3s',
-                  color: shown > 0 ? SLAB.gold : SLAB.text,
+                  color: SLAB.gold,
                 }}
               >
                 ${total.toLocaleString('en-US')}
@@ -485,7 +465,6 @@ function PhoneHeroMock() {
                   border:
                     '1px ' +
                     (i < shown ? 'solid ' + SLAB.hairStrong : 'dashed ' + SLAB.hair),
-                  animation: i === shown - 1 ? 'sbmPop 0.4s ease' : 'none',
                 }}
               />
             ))}

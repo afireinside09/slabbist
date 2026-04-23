@@ -49,9 +49,11 @@ struct QueryConstructionTests {
         // Heavy column must NOT be requested on the slim path.
         #expect(!query.contains("transaction_stamp"))
 
-        // Pagination goes through the Range header (Postgrest convention).
-        let range = request.value(forHTTPHeaderField: "Range") ?? ""
-        #expect(range == "50-74", "expected 50-74, got \(range)")
+        // Pagination: SDK translates range(from:to:) into offset + limit
+        // query params. For Page(limit: 25, offset: 50) that's
+        // offset=50&limit=25.
+        #expect(query.contains("offset=50"))
+        #expect(query.contains("limit=25"))
     }
 
     @Test("LotRepository.listItems applies status filter when provided")

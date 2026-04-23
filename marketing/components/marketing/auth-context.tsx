@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { SLAB } from '@/lib/tokens';
 import { Icon, type IconName } from '@/components/icon';
+import { SlabLogo } from '@/components/slab-logo';
 
 export type AuthMode = 'login' | 'signup' | 'reset';
 
@@ -189,24 +190,7 @@ function AuthModal({
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: `linear-gradient(135deg, ${SLAB.gold}, ${SLAB.goldDim})`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontFamily: SLAB.serif,
-                    fontStyle: 'italic',
-                    fontWeight: 600,
-                    color: SLAB.ink,
-                    fontSize: 18,
-                  }}
-                >
-                  S
-                </div>
+                <SlabLogo size={32} title="Slabbist" />
               </div>
 
               <h2
