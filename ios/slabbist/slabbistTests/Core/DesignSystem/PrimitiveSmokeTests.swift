@@ -18,6 +18,9 @@ struct PrimitiveSmokeTests {
     @Test("Instrument Serif Italic loads from bundle")
     func instrumentSerifItalicLoads() {
         let font = UIFont(name: "InstrumentSerif-Italic", size: 12)
-        #expect(font != nil)
+        #expect(
+            font != nil,
+            "InstrumentSerif-Italic.ttf not found — check Resources/Fonts/ files and INFOPLIST_KEY_UIAppFonts."
+        )
     }
 }
