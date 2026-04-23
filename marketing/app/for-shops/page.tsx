@@ -58,7 +58,7 @@ export default function ForShopsPage() {
         subtitle="You bought Slabbist to scan slabs. You get a counter that prices, offers, and closes a thirty-slab lot while your associate is still sorting them."
       />
       <AudienceBody
-        pain="A walk-in drops a thirty-slab stack. Your associate types cert numbers into eBay one-by-one while the seller waits, and you end up low-balling the climbers and over-paying the dogs."
+        pain="A walk-in drops a thirty-slab stack. Your associate is comping each slab on eBay and copy-pasting cert numbers into the PSA lookup to make sure they're real — while the seller waits. You end up low-balling the climbers and over-paying the dogs."
         shift="Slabs scan, comps resolve, margin applies. The offer sheet prints before the seller finishes their coffee."
         points={POINTS}
         ctaLabel="Join the store waitlist"
