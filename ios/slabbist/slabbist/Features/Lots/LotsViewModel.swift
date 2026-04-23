@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 @MainActor
@@ -12,6 +13,25 @@ final class LotsViewModel {
         self.context = context
         self.currentUserId = currentUserId
         self.currentStoreId = currentStoreId
+    }
+
+    /// Resolves the signed-in user's `Store` from the local model context
+    /// and returns a configured view model. Returns `nil` when the user
+    /// is signed out or their `Store` hasn't synced yet (e.g. fresh
+    /// signup waiting for the outbox worker). The call site decides
+    /// what to show while this is `nil`.
+    static func resolve(context: ModelContext, session: SessionStore) -> LotsViewModel? {
+        guard let userId = session.userId else { return nil }
+        let ownerId = userId
+        var descriptor = FetchDescriptor<Store>(
+            predicate: #Predicate<Store> { $0.ownerUserId == ownerId }
+        )
+        descriptor.fetchLimit = 1
+        guard let store = try? context.fetch(descriptor).first else {
+            AppLog.lots.warning("no local Store for user \(userId, privacy: .public); view model deferred")
+            return nil
+        }
+        return LotsViewModel(context: context, currentUserId: userId, currentStoreId: store.id)
     }
 
     @discardableResult
@@ -57,15 +77,18 @@ final class LotsViewModel {
 
     func listOpenLots() throws -> [Lot] {
         let storeId = currentStoreId
-        // SwiftData's #Predicate macro can't capture enum values directly.
-        // Fetch by store + sort, filter .open in-memory. With fetchLimit=200
-        // this is still bounded and fine for Plan 1's scale.
+        // SwiftData's `#Predicate` macro doesn't translate enum equality
+        // against a stored `LotStatus` property to SQL at fetch time
+        // (confirmed against iOS 26 SDK — the predicate returns zero rows
+        // when we include `$0.status == .open`). Fetch by store + sort,
+        // then filter `.open` in-memory. `fetchLimit = 200` keeps this
+        // bounded; a store with more lots than that at Plan 1 scale is
+        // unexpected, and we'd switch to keyset pagination anyway.
         var descriptor = FetchDescriptor<Lot>(
             predicate: #Predicate<Lot> { $0.storeId == storeId },
             sortBy: [SortDescriptor(\Lot.createdAt, order: .reverse)]
         )
         descriptor.fetchLimit = 200
-        let all = try context.fetch(descriptor)
-        return all.filter { $0.status == .open }
+        return try context.fetch(descriptor).filter { $0.status == .open }
     }
 }

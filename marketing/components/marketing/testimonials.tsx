@@ -25,19 +25,19 @@ export function Testimonials() {
   return (
     <section
       style={{
-        padding: '140px 0',
+        padding: 'clamp(84px, 11vw, 120px) 0',
         borderTop: '1px solid ' + SLAB.hair,
         position: 'relative',
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
-            fontSize: 11,
-            letterSpacing: 2.4,
+            fontSize: 12,
+            letterSpacing: 1.6,
             textTransform: 'uppercase',
             color: SLAB.gold,
-            marginBottom: 20,
+            marginBottom: 18,
             fontWeight: 500,
           }}
         >
@@ -50,18 +50,17 @@ export function Testimonials() {
             fontWeight: 400,
             letterSpacing: -1.5,
             lineHeight: 1.05,
-            margin: '0 0 70px',
+            margin: '0 0 56px',
             maxWidth: 700,
           }}
         >
-          Three stores. Two shows.{' '}
-          <span style={{ fontStyle: 'italic', color: SLAB.gold }}>One app.</span>
+          Three stores. Two shows. One app.
         </h2>
 
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: 20,
           }}
         >
@@ -115,11 +114,11 @@ export function Testimonials() {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{q.who}</div>
-                <div style={{ fontSize: 12, color: SLAB.muted }}>{q.role}</div>
+                <div style={{ fontSize: 13, color: SLAB.muted }}>{q.role}</div>
                 <div
                   style={{
-                    fontSize: 11,
-                    color: SLAB.dim,
+                    fontSize: 12,
+                    color: SLAB.muted,
                     marginTop: 4,
                     fontFamily: SLAB.mono,
                     letterSpacing: 0.3,

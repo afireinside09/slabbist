@@ -11,13 +11,14 @@ struct ScanQueueView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, Spacing.md)
         } else {
+            let visible = Array(scans.prefix(6))
             SlabCard {
                 VStack(spacing: 0) {
-                    ForEach(Array(scans.prefix(6).enumerated()), id: \.element.id) { index, scan in
-                        row(for: scan)
-                        if index < min(scans.count, 6) - 1 {
+                    ForEach(visible, id: \.id) { scan in
+                        if scan.id != visible.first?.id {
                             SlabCardDivider()
                         }
+                        row(for: scan)
                     }
                 }
             }

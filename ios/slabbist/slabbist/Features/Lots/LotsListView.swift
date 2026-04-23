@@ -92,16 +92,16 @@ struct LotsListView: View {
             KickerLabel("Open lots")
             SlabCard {
                 VStack(spacing: 0) {
-                    ForEach(Array(lots.enumerated()), id: \.element.id) { index, lot in
+                    ForEach(lots, id: \.id) { lot in
+                        if lot.id != lots.first?.id {
+                            SlabCardDivider()
+                        }
                         Button {
                             selectedLot = lot
                         } label: {
                             row(for: lot)
                         }
                         .buttonStyle(.plain)
-                        if index < lots.count - 1 {
-                            SlabCardDivider()
-                        }
                     }
                 }
             }
@@ -154,17 +154,7 @@ struct LotsListView: View {
 
     private func bootstrapViewModel() {
         guard viewModel == nil else { return }
-        guard let userId = session.userId else { return }
-        let ownerId = userId
-        var descriptor = FetchDescriptor<Store>(
-            predicate: #Predicate<Store> { $0.ownerUserId == ownerId }
-        )
-        descriptor.fetchLimit = 1
-        if let store = try? context.fetch(descriptor).first {
-            viewModel = LotsViewModel(context: context, currentUserId: userId, currentStoreId: store.id)
-        } else {
-            AppLog.lots.warning("no local Store for user \(userId, privacy: .public); view model deferred")
-        }
+        viewModel = LotsViewModel.resolve(context: context, session: session)
     }
 
     private func refresh() {

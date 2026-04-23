@@ -57,24 +57,31 @@ export function FeatureRow() {
   }, [visible]);
 
   return (
-    <section id="product" ref={ref} style={{ padding: '160px 0', position: 'relative' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px' }}>
+    <section
+      id="product"
+      ref={ref}
+      style={{
+        padding: 'clamp(84px, 11vw, 120px) 0',
+        position: 'relative',
+      }}
+    >
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 80,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 'clamp(48px, 6vw, 80px)',
             alignItems: 'center',
           }}
         >
           <div>
             <div
               style={{
-                fontSize: 11,
-                letterSpacing: 2.4,
+                fontSize: 12,
+                letterSpacing: 1.6,
                 textTransform: 'uppercase',
                 color: SLAB.gold,
-                marginBottom: 20,
+                marginBottom: 18,
                 fontWeight: 500,
               }}
             >
@@ -87,49 +94,58 @@ export function FeatureRow() {
                 fontWeight: 400,
                 letterSpacing: -1.5,
                 lineHeight: 1.05,
-                margin: '0 0 60px',
+                margin: '0 0 44px',
                 maxWidth: 520,
               }}
             >
-              Four things that
-              <br />
-              <span style={{ fontStyle: 'italic', color: SLAB.gold }}>actually</span> make it fast.
+              Four things that actually make it fast.
             </h2>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div
+              role="tablist"
+              aria-label="Slabbist feature highlights"
+              style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+            >
               {FEATS.map((f, i) => (
                 <button
                   key={f.title}
+                  role="tab"
+                  id={`feat-tab-${i}`}
+                  aria-selected={active === i}
+                  aria-controls={`feat-panel-${i}`}
+                  tabIndex={active === i ? 0 : -1}
                   onClick={() => setActive(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                      e.preventDefault();
+                      setActive((active + 1) % FEATS.length);
+                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      setActive((active - 1 + FEATS.length) % FEATS.length);
+                    } else if (e.key === 'Home') {
+                      e.preventDefault();
+                      setActive(0);
+                    } else if (e.key === 'End') {
+                      e.preventDefault();
+                      setActive(FEATS.length - 1);
+                    }
+                  }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '44px 1fr',
                     gap: 18,
-                    padding: '22px 24px',
+                    padding: '20px 22px',
                     borderRadius: 16,
                     textAlign: 'left',
                     background: active === i ? SLAB.elev : 'transparent',
                     border: '1px solid ' + (active === i ? SLAB.hairStrong : 'transparent'),
                     color: SLAB.text,
                     cursor: 'pointer',
-                    transition: 'all 0.3s',
+                    transition: 'background-color 0.3s ease, border-color 0.3s ease',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
                 >
-                  {active === i && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 24,
-                        bottom: 24,
-                        width: 2,
-                        background: SLAB.gold,
-                        borderRadius: 2,
-                      }}
-                    />
-                  )}
                   <div
                     style={{
                       width: 44,
@@ -143,7 +159,7 @@ export function FeatureRow() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: active === i ? SLAB.ink : SLAB.muted,
-                      transition: 'all 0.3s',
+                      transition: 'background 0.3s ease, color 0.3s ease',
                     }}
                   >
                     <Icon name={f.icon} size={20} sw={1.8} />
@@ -163,11 +179,11 @@ export function FeatureRow() {
                       style={{
                         fontSize: 14,
                         color: SLAB.muted,
-                        lineHeight: 1.5,
-                        maxHeight: active === i ? 100 : 0,
+                        lineHeight: 1.55,
+                        maxHeight: active === i ? 160 : 0,
                         opacity: active === i ? 1 : 0,
                         overflow: 'hidden',
-                        transition: 'all 0.35s ease',
+                        transition: 'max-height 0.35s ease, opacity 0.35s ease',
                       }}
                     >
                       {f.blurb}
@@ -178,7 +194,12 @@ export function FeatureRow() {
             </div>
           </div>
 
-          <div style={{ position: 'sticky', top: 100 }}>
+          <div
+            role="tabpanel"
+            id={`feat-panel-${active}`}
+            aria-labelledby={`feat-tab-${active}`}
+            style={{ position: 'sticky', top: 100 }}
+          >
             <FeatureMock step={active} />
           </div>
         </div>
@@ -198,24 +219,9 @@ function FeatureMock({ step }: { step: number }) {
         padding: 28,
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 40px 100px rgba(0,0,0,0.4)',
+        boxShadow: '0 40px 100px oklch(0 0 0 / 0.4)',
       }}
     >
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: -100,
-          right: -100,
-          width: 300,
-          height: 300,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${SLAB.gold}, transparent 60%)`,
-          opacity: 0.07,
-          filter: 'blur(40px)',
-        }}
-      />
-
       <div
         style={{
           position: 'absolute',
@@ -272,7 +278,7 @@ function CertOcrPanel() {
             left: '15%',
             right: '15%',
             padding: '6px 8px',
-            background: 'rgba(0,0,0,0.65)',
+            background: 'oklch(0 0 0 / 0.65)',
             borderRadius: 4,
             fontFamily: SLAB.mono,
             fontSize: 10,
@@ -295,7 +301,7 @@ function CertOcrPanel() {
             left: '25%',
             right: '25%',
             padding: 6,
-            background: 'rgba(0,0,0,0.65)',
+            background: 'oklch(0 0 0 / 0.65)',
             borderRadius: 4,
             fontFamily: SLAB.mono,
             fontSize: 10,
@@ -459,7 +465,7 @@ function BulkQueuePanel() {
                     right: 4,
                     height: 14,
                     borderRadius: 2,
-                    background: 'rgba(0,0,0,0.5)',
+                    background: 'oklch(0 0 0 / 0.5)',
                     fontSize: 7,
                     color: '#fff',
                     display: 'flex',
@@ -529,8 +535,8 @@ function BulkQueuePanel() {
               fontSize: 10,
               padding: '4px 8px',
               borderRadius: 999,
-              background: SLAB.gold + '22',
-              border: '1px solid ' + SLAB.gold + '55',
+              background: 'oklch(0.82 0.13 78 / 0.13)',
+              border: '1px solid oklch(0.82 0.13 78 / 0.33)',
               color: SLAB.gold,
             }}
           >
@@ -756,7 +762,7 @@ function MarginRulesPanel() {
           padding: 16,
           borderRadius: 14,
           background: 'linear-gradient(145deg, oklch(0.22 0.06 78), oklch(0.14 0.03 78))',
-          border: '1px solid ' + SLAB.gold + '44',
+          border: '1px solid oklch(0.82 0.13 78 / 0.27)',
         }}
       >
         <div

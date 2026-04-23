@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -84,17 +85,55 @@ function AuthModal({
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    const getFocusable = () => {
+      if (!dialogRef.current) return [] as HTMLElement[];
+      return Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
     };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusables = getFocusable();
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && activeEl === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && activeEl === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     window.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      const focusables = getFocusable();
+      focusables[0]?.focus();
+    }, 0);
+
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
     };
   }, [onClose]);
 
@@ -123,7 +162,7 @@ function AuthModal({
         position: 'fixed',
         inset: 0,
         zIndex: 200,
-        background: 'rgba(5,5,8,0.7)',
+        background: 'oklch(0.05 0.002 78 / 0.7)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
         display: 'flex',
@@ -134,33 +173,22 @@ function AuthModal({
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         style={{
           width: '100%',
           maxWidth: 440,
           borderRadius: 24,
           background: SLAB.elev,
           border: '1px solid ' + SLAB.hairStrong,
-          boxShadow: '0 60px 160px rgba(0,0,0,0.6)',
+          boxShadow: '0 60px 160px oklch(0 0 0 / 0.6)',
           animation: 'sbmRise 0.3s ease',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            top: -80,
-            right: -80,
-            width: 240,
-            height: 240,
-            borderRadius: '50%',
-            background: `radial-gradient(circle, ${SLAB.gold}, transparent 60%)`,
-            opacity: 0.12,
-            pointerEvents: 'none',
-          }}
-        />
-
         <button
           onClick={onClose}
           aria-label="Close"
@@ -186,7 +214,7 @@ function AuthModal({
 
         <div style={{ padding: 36, position: 'relative' }}>
           {success ? (
-            <SuccessView mode={mode} email={email} onClose={onClose} />
+            <SuccessView mode={mode} email={email} onClose={onClose} titleId={titleId} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
@@ -194,6 +222,7 @@ function AuthModal({
               </div>
 
               <h2
+                id={titleId}
                 style={{
                   fontFamily: SLAB.serif,
                   fontSize: 30,
@@ -453,10 +482,10 @@ function OAuthBtn({ label, icon }: { label: string; icon: ReactNode }) {
   return (
     <button
       type="button"
+      className="slab-oauth-btn"
       style={{
         padding: '12px 16px',
         borderRadius: 12,
-        background: SLAB.elev2,
         border: '1px solid ' + SLAB.hair,
         color: SLAB.text,
         fontSize: 13,
@@ -466,10 +495,7 @@ function OAuthBtn({ label, icon }: { label: string; icon: ReactNode }) {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 10,
-        transition: 'background 0.15s',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = SLAB.elev)}
-      onMouseLeave={(e) => (e.currentTarget.style.background = SLAB.elev2)}
     >
       {icon}
       {label}
@@ -523,10 +549,12 @@ function SuccessView({
   mode,
   email,
   onClose,
+  titleId,
 }: {
   mode: AuthMode;
   email: string;
   onClose: () => void;
+  titleId: string;
 }) {
   const msgs: Record<AuthMode, { t: string; s: string }> = {
     login: { t: 'Signed in', s: 'Opening your store…' },
@@ -547,13 +575,14 @@ function SuccessView({
           alignItems: 'center',
           justifyContent: 'center',
           color: SLAB.ink,
-          boxShadow: `0 0 40px ${SLAB.gold}66`,
+          boxShadow: '0 0 40px oklch(0.82 0.13 78 / 0.40)',
           animation: 'sbmPop 0.5s ease',
         }}
       >
         <Icon name="check" size={32} sw={3} />
       </div>
       <h2
+        id={titleId}
         style={{
           fontFamily: SLAB.serif,
           fontSize: 28,

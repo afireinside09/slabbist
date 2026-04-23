@@ -77,20 +77,20 @@ export function Pricing() {
     <section
       id="pricing"
       style={{
-        padding: '140px 0',
+        padding: 'clamp(84px, 11vw, 120px) 0',
         borderTop: '1px solid ' + SLAB.hair,
         position: 'relative',
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 60 }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 'clamp(40px, 5vw, 56px)' }}>
           <div
             style={{
-              fontSize: 11,
-              letterSpacing: 2.4,
+              fontSize: 12,
+              letterSpacing: 1.6,
               textTransform: 'uppercase',
               color: SLAB.gold,
-              marginBottom: 20,
+              marginBottom: 18,
               fontWeight: 500,
             }}
           >
@@ -106,8 +106,7 @@ export function Pricing() {
               margin: '0 0 20px',
             }}
           >
-            Free now.{' '}
-            <span style={{ fontStyle: 'italic', color: SLAB.gold }}>Fair</span> later.
+            Free now. Fair later.
           </h2>
           <p
             style={{
@@ -115,14 +114,14 @@ export function Pricing() {
               color: SLAB.muted,
               maxWidth: 620,
               margin: '0 auto',
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
           >
             The app is free for stores, sellers, and buyers. We make money from eBay and TCGplayer affiliate links when you follow a comp through to a sale. So we only get paid when you do.
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
           {TIERS.map((t) => (
             <div
               key={t.audience}
@@ -132,11 +131,11 @@ export function Pricing() {
                 background: t.featured
                   ? 'linear-gradient(145deg, oklch(0.22 0.06 78), oklch(0.12 0.03 78))'
                   : SLAB.elev,
-                border: '1px solid ' + (t.featured ? SLAB.gold + '55' : SLAB.hair),
+                border: '1px solid ' + (t.featured ? 'oklch(0.82 0.13 78 / 0.33)' : SLAB.hair),
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
-                boxShadow: t.featured ? `0 30px 80px ${SLAB.gold}22` : 'none',
+                boxShadow: t.featured ? '0 30px 80px oklch(0.82 0.13 78 / 0.13)' : 'none',
               }}
             >
               {t.featured && (
@@ -196,10 +195,10 @@ export function Pricing() {
               </div>
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
                   color: SLAB.muted,
-                  marginBottom: 28,
-                  lineHeight: 1.45,
+                  marginBottom: 24,
+                  lineHeight: 1.5,
                   minHeight: 40,
                 }}
               >
@@ -224,12 +223,12 @@ export function Pricing() {
               </div>
               <div
                 style={{
-                  fontSize: 11,
-                  color: SLAB.dim,
+                  fontSize: 12,
+                  color: SLAB.muted,
                   marginBottom: 28,
                   fontFamily: SLAB.mono,
                   letterSpacing: 0.3,
-                  lineHeight: 1.5,
+                  lineHeight: 1.55,
                 }}
               >
                 {t.footnote}
@@ -295,13 +294,13 @@ export function Pricing() {
 
         <div
           style={{
-            marginTop: 48,
+            marginTop: 40,
             textAlign: 'center',
-            fontSize: 12,
-            color: SLAB.dim,
-            maxWidth: 620,
-            margin: '48px auto 0',
-            lineHeight: 1.6,
+            fontSize: 13,
+            color: SLAB.muted,
+            maxWidth: 640,
+            margin: '40px auto 0',
+            lineHeight: 1.65,
           }}
         >
           No subscriptions. No seat fees. No paywalled features. If we ever need to charge for something specific, we will say so up front, and it will still be optional.

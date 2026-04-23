@@ -5,6 +5,31 @@
       "source": "openai/skills",
       "sourceType": "github",
       "computedHash": "be357ea39dc912911c0da826a1638513e3544d7315dc5a206a0d7aec1bae9ed7"
+    },
+    "mobile-ios-design": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "3902f919488d8ddc983e157bbcd5f16b739b84eeaab57002bf52b7f9601ed6ad"
+    },
+    "swift-concurrency": {
+      "source": "avdlee/swift-concurrency-agent-skill",
+      "sourceType": "github",
+      "computedHash": "f3f1bda772590c6ee32446c9eec59bb3ff6c38329e3c78fa949e6a859644a10b"
+    },
+    "swift-concurrency-pro": {
+      "source": "twostraws/swift-concurrency-agent-skill",
+      "sourceType": "github",
+      "computedHash": "dec65531b4bd37d15e6243dbb0d2d1f554b4f4087bcb2e8deb7273f570fa4069"
+    },
+    "swiftui-expert-skill": {
+      "source": "avdlee/swiftui-agent-skill",
+      "sourceType": "github",
+      "computedHash": "84aa533bdca25a02ce35738619121d203d55eb8ff2892535c150bd9ee85fda30"
+    },
+    "swiftui-pro": {
+      "source": "twostraws/swiftui-agent-skill",
+      "sourceType": "github",
+      "computedHash": "07033426e384295a4b49cf0b2ffdefd4098cae4af53fef16bc1f2d9281118c41"
     }
   }
 }

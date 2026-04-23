@@ -25,3 +25,4 @@ ios/slabbist/Config/Secrets.xcconfig
 
 # Git worktrees (isolated workspaces for parallel feature work)
 .worktrees/
+.agents

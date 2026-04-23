@@ -9,8 +9,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #08080A;
-  color: #F4F2ED;
+  background: oklch(0.08 0.004 78);
+  color: oklch(0.95 0.006 78);
   font-family: var(--font-sans), -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -18,7 +18,29 @@ html, body {
 body { overflow-x: hidden; }
 button { font-family: inherit; }
 a { color: inherit; }
-input:focus { border-color: rgba(255, 255, 255, 0.25) !important; }
+input:focus { border-color: oklch(1 0 0 / 0.25) !important; }
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid oklch(0.82 0.13 78);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+button:focus-visible, a:focus-visible {
+  outline-offset: 4px;
+}
+
+.slab-nav-link {
+  color: oklch(0.95 0.006 78 / 0.72);
+  transition: color 0.15s ease;
+}
+.slab-nav-link:hover { color: oklch(0.95 0.006 78); }
+
+.slab-oauth-btn {
+  background: oklch(0.21 0.007 78);
+  transition: background 0.15s ease;
+}
+.slab-oauth-btn:hover { background: oklch(0.17 0.006 78); }
 
 ::selection { background: oklch(0.82 0.13 78 / 0.4); color: #fff; }
 

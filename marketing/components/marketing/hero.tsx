@@ -17,8 +17,8 @@ export function Hero() {
     <section
       style={{
         position: 'relative',
-        paddingTop: 160,
-        paddingBottom: 80,
+        paddingTop: 'clamp(120px, 14vw, 148px)',
+        paddingBottom: 'clamp(56px, 8vw, 80px)',
         overflow: 'hidden',
       }}
     >
@@ -32,28 +32,13 @@ export function Hero() {
           height: 700,
           borderRadius: '50%',
           background: `radial-gradient(circle, ${SLAB.gold} 0%, transparent 55%)`,
-          opacity: 0.11,
+          opacity: 0.09,
           filter: 'blur(60px)',
           pointerEvents: 'none',
         }}
       />
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: 300,
-          left: '-15%',
-          width: 600,
-          height: 600,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, oklch(0.5 0.2 280) 0%, transparent 55%)`,
-          opacity: 0.16,
-          filter: 'blur(70px)',
-          pointerEvents: 'none',
-        }}
-      />
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', position: 'relative' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
         <div
           style={{
             display: 'inline-flex',
@@ -63,9 +48,9 @@ export function Hero() {
             borderRadius: 999,
             background: SLAB.elev,
             border: '1px solid ' + SLAB.hair,
-            fontSize: 12,
+            fontSize: 13,
             color: SLAB.muted,
-            marginBottom: 32,
+            marginBottom: 28,
             animation: 'sbmFade 0.8s ease backwards',
           }}
         >
@@ -112,10 +97,11 @@ export function Hero() {
         <p
           style={{
             fontSize: 20,
-            color: SLAB.muted,
-            lineHeight: 1.5,
+            color: SLAB.text,
+            opacity: 0.82,
+            lineHeight: 1.55,
             maxWidth: 560,
-            margin: '32px 0 40px',
+            margin: '28px 0 36px',
             letterSpacing: -0.2,
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
@@ -146,7 +132,7 @@ export function Hero() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              boxShadow: '0 14px 40px rgba(255,255,255,0.08)',
+              boxShadow: '0 14px 40px oklch(1 0 0 / 0.08)',
             }}
           >
             Get TestFlight access
@@ -176,21 +162,21 @@ export function Hero() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 420px',
-            gap: 60,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 'clamp(40px, 5vw, 60px)',
             alignItems: 'center',
-            marginTop: 40,
+            marginTop: 32,
           }}
         >
           <div style={{ animation: 'sbmRise 0.9s 0.6s ease backwards' }}>
             <div
               style={{
-                fontSize: 11,
-                letterSpacing: 2.4,
+                fontSize: 12,
+                letterSpacing: 1.6,
                 textTransform: 'uppercase',
                 color: SLAB.dim,
                 fontWeight: 500,
-                marginBottom: 24,
+                marginBottom: 20,
               }}
             >
               What you get
@@ -199,17 +185,17 @@ export function Hero() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 0,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                columnGap: 22,
+                rowGap: 22,
                 maxWidth: 560,
               }}
             >
-              {STATS.map((s, i) => (
+              {STATS.map((s) => (
                 <div
                   key={s.k}
                   style={{
-                    padding: i === 0 ? '6px 22px 6px 0' : '6px 22px',
-                    borderLeft: i > 0 ? '1px solid ' + SLAB.hair : 'none',
+                    padding: '6px 0',
                   }}
                 >
                   <div
@@ -223,7 +209,7 @@ export function Hero() {
                   >
                     {s.k}
                   </div>
-                  <div style={{ fontSize: 12, color: SLAB.muted, marginTop: 10, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 13, color: SLAB.muted, marginTop: 10, lineHeight: 1.45 }}>
                     {s.v}
                   </div>
                 </div>
@@ -232,21 +218,22 @@ export function Hero() {
 
             <div
               style={{
-                marginTop: 48,
+                marginTop: 40,
                 display: 'flex',
-                gap: 24,
+                gap: 20,
                 alignItems: 'center',
-                fontSize: 12,
-                color: SLAB.dim,
+                fontSize: 13,
+                color: SLAB.muted,
                 flexWrap: 'wrap',
               }}
             >
               <span
                 style={{
-                  fontSize: 11,
-                  letterSpacing: 2,
+                  fontSize: 12,
+                  letterSpacing: 1.4,
                   textTransform: 'uppercase',
                   fontWeight: 500,
+                  color: SLAB.dim,
                 }}
               >
                 Built for
@@ -284,11 +271,11 @@ function PhoneHeroMock() {
         margin: '0 auto',
         borderRadius: 48,
         position: 'relative',
-        background: '#000',
+        background: 'oklch(0.06 0.003 78)',
         padding: 10,
         boxShadow:
-          '0 60px 140px rgba(0,0,0,0.65), 0 0 0 1px #111, 0 0 0 6px #1a1a1d, 0 0 0 7px #2a2a2e',
-        transform: 'perspective(1800px) rotateY(-10deg) rotateX(4deg)',
+          '0 50px 120px oklch(0 0 0 / 0.55), 0 0 0 1px oklch(0.16 0.005 78), 0 0 0 6px oklch(0.21 0.006 78)',
+        transform: 'perspective(2200px) rotateY(-6deg)',
       }}
     >
       <div
@@ -297,7 +284,7 @@ function PhoneHeroMock() {
           height: '100%',
           borderRadius: 40,
           overflow: 'hidden',
-          background: 'radial-gradient(ellipse at 50% 30%, #1a1a1f, #050505)',
+          background: 'radial-gradient(ellipse at 50% 30%, oklch(0.14 0.005 78), oklch(0.05 0.002 78))',
           position: 'relative',
           fontFamily: SLAB.sans,
           color: SLAB.text,
@@ -312,7 +299,7 @@ function PhoneHeroMock() {
             width: 96,
             height: 28,
             borderRadius: 20,
-            background: '#000',
+            background: 'oklch(0.03 0 0)',
             zIndex: 50,
           }}
         />
@@ -365,7 +352,7 @@ function PhoneHeroMock() {
                 height: 2,
                 background: `linear-gradient(90deg, transparent, ${SLAB.gold}, transparent)`,
                 animation: 'sbmScanLine 2s linear infinite',
-                boxShadow: `0 0 14px ${SLAB.gold}`,
+                boxShadow: '0 0 14px oklch(0.82 0.13 78 / 0.8)',
               }}
             />
             <div
@@ -400,9 +387,9 @@ function PhoneHeroMock() {
             right: 12,
             borderRadius: 20,
             padding: 14,
-            background: 'rgba(14,14,18,0.78)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
+            background: 'oklch(0.13 0.005 78 / 0.88)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
             border: '1px solid ' + SLAB.hairStrong,
           }}
         >
@@ -417,10 +404,10 @@ function PhoneHeroMock() {
             <div>
               <div
                 style={{
-                  fontSize: 9,
-                  letterSpacing: 1.8,
+                  fontSize: 10,
+                  letterSpacing: 1.2,
                   textTransform: 'uppercase',
-                  color: SLAB.dim,
+                  color: SLAB.muted,
                   fontWeight: 500,
                 }}
               >
@@ -429,10 +416,10 @@ function PhoneHeroMock() {
               <div
                 style={{
                   fontFamily: SLAB.serif,
-                  fontSize: 30,
+                  fontSize: 32,
                   letterSpacing: -0.8,
                   lineHeight: 1,
-                  marginTop: 4,
+                  marginTop: 6,
                   color: SLAB.gold,
                 }}
               >
@@ -471,39 +458,6 @@ function PhoneHeroMock() {
           </div>
         </div>
 
-        <div
-          style={{
-            position: 'absolute',
-            top: 54,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '5px 10px',
-            borderRadius: 10,
-            background: 'rgba(14,14,18,0.78)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid ' + SLAB.hair,
-            fontSize: 9,
-            color: SLAB.muted,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: 3,
-              background: SLAB.pos,
-              boxShadow: `0 0 8px ${SLAB.pos}`,
-            }}
-          />
-          Bulk scan · Auto capture
-        </div>
       </div>
     </div>
   );

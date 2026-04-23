@@ -9,34 +9,17 @@ export function FinalCta() {
   return (
     <section
       style={{
-        padding: '140px 0 100px',
+        padding: 'clamp(80px, 10vw, 112px) 0 clamp(72px, 8vw, 88px)',
         position: 'relative',
         borderTop: '1px solid ' + SLAB.hair,
         overflow: 'hidden',
       }}
     >
       <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: '-30%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 900,
-          height: 900,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${SLAB.gold} 0%, transparent 60%)`,
-          opacity: 0.1,
-          filter: 'blur(60px)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      <div
         style={{
           maxWidth: 900,
           margin: '0 auto',
-          padding: '0 32px',
+          padding: '0 24px',
           textAlign: 'center',
           position: 'relative',
         }}
@@ -47,8 +30,8 @@ export function FinalCta() {
             fontSize: 'clamp(48px, 7vw, 88px)',
             fontWeight: 400,
             letterSpacing: -2,
-            lineHeight: 1,
-            margin: '0 0 32px',
+            lineHeight: 1.02,
+            margin: '0 0 28px',
           }}
         >
           Get it on your iPhone before your{' '}
@@ -58,9 +41,9 @@ export function FinalCta() {
           style={{
             fontSize: 18,
             color: SLAB.muted,
-            maxWidth: 560,
-            margin: '0 auto 40px',
-            lineHeight: 1.5,
+            maxWidth: 580,
+            margin: '0 auto 36px',
+            lineHeight: 1.55,
           }}
         >
           Slabbist is on TestFlight today and headed for the App Store. No card, no setup call, no seat fees. Takes a minute to get running.
@@ -80,7 +63,7 @@ export function FinalCta() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              boxShadow: `0 20px 50px ${SLAB.gold}44`,
+              boxShadow: '0 20px 50px oklch(0.82 0.13 78 / 0.27)',
             }}
           >
             Get TestFlight access <Icon name="arrow" size={15} sw={2.2} />

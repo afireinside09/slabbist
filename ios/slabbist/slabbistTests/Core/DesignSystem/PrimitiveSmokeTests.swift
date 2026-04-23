@@ -50,7 +50,7 @@ struct PrimitiveSmokeTests {
     @Test("SecondaryIconButton renders")
     func secondaryIconButtonRenders() {
         let host = UIHostingController(
-            rootView: SecondaryIconButton(systemIcon: "xmark", action: {})
+            rootView: SecondaryIconButton(systemIcon: "xmark", accessibilityLabel: "Close", action: {})
         )
         #expect(host.view != nil)
     }

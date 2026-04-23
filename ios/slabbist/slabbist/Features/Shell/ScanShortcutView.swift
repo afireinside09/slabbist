@@ -74,13 +74,8 @@ struct ScanShortcutView: View {
     }
 
     private func bootstrap() {
-        guard viewModel == nil, let userId = session.userId else { return }
-        let ownerId = userId
-        var desc = FetchDescriptor<Store>(predicate: #Predicate<Store> { $0.ownerUserId == ownerId })
-        desc.fetchLimit = 1
-        if let store = try? context.fetch(desc).first {
-            viewModel = LotsViewModel(context: context, currentUserId: userId, currentStoreId: store.id)
-        }
+        guard viewModel == nil else { return }
+        viewModel = LotsViewModel.resolve(context: context, session: session)
     }
 
     private func refresh() {

@@ -11,13 +11,6 @@ const STEPS = [
   { n: '05', t: 'Offer sheet', b: 'Apply your margin rule, attach a vendor, and print or email the sheet. Capture a signature on an iPad if the buy needs one.' },
 ];
 
-const METRICS = [
-  ['30', 'Slabs scanned per minute, hands-on'],
-  ['5', 'Graders read (PSA, BGS, CGC, SGC, TAG)'],
-  ['0', 'Subscription fees'],
-  ['1%', 'Marketplace premium, when it opens'],
-] as const;
-
 export function Workflow() {
   const ref = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -39,18 +32,18 @@ export function Workflow() {
       id="how-it-works"
       ref={ref}
       style={{
-        padding: '140px 0',
+        padding: 'clamp(84px, 11vw, 120px) 0',
         position: 'relative',
         borderTop: '1px solid ' + SLAB.hair,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'end',
-            marginBottom: 80,
+            marginBottom: 'clamp(48px, 6vw, 72px)',
             gap: 40,
             flexWrap: 'wrap',
           }}
@@ -58,11 +51,11 @@ export function Workflow() {
           <div>
             <div
               style={{
-                fontSize: 11,
-                letterSpacing: 2.4,
+                fontSize: 12,
+                letterSpacing: 1.6,
                 textTransform: 'uppercase',
                 color: SLAB.gold,
-                marginBottom: 20,
+                marginBottom: 18,
                 fontWeight: 500,
               }}
             >
@@ -79,16 +72,16 @@ export function Workflow() {
                 maxWidth: 600,
               }}
             >
-              From stack to signature{' '}
-              <span style={{ fontStyle: 'italic', color: SLAB.gold }}>in five moves.</span>
+              From stack to signature in five moves.
             </h2>
           </div>
           <div
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: SLAB.muted,
-              maxWidth: 280,
+              maxWidth: 320,
               marginBottom: 16,
+              lineHeight: 1.5,
             }}
           >
             Built on the counter, not in a spreadsheet. Every step came from watching a real buy go wrong.
@@ -98,19 +91,19 @@ export function Workflow() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: 2,
-            borderTop: '1px solid ' + SLAB.hair,
-            borderBottom: '1px solid ' + SLAB.hair,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 1,
+            background: SLAB.hair,
+            border: '1px solid ' + SLAB.hair,
           }}
         >
           {STEPS.map((s, i) => (
             <div
               key={s.n}
               style={{
-                padding: '40px 28px 48px',
+                padding: '32px 26px 40px',
                 position: 'relative',
-                borderRight: i < 4 ? '1px solid ' + SLAB.hair : 'none',
+                background: SLAB.ink,
                 animation: visible ? `sbmRise 0.7s ${i * 0.08}s ease backwards` : 'none',
                 opacity: visible ? 1 : 0,
               }}
@@ -118,10 +111,10 @@ export function Workflow() {
               <div
                 style={{
                   fontFamily: SLAB.mono,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: SLAB.gold,
-                  letterSpacing: 1.5,
-                  marginBottom: 24,
+                  letterSpacing: 1.2,
+                  marginBottom: 20,
                   fontWeight: 500,
                 }}
               >
@@ -130,55 +123,15 @@ export function Workflow() {
               <div
                 style={{
                   fontFamily: SLAB.serif,
-                  fontSize: 24,
+                  fontSize: 23,
                   letterSpacing: -0.5,
-                  marginBottom: 16,
+                  marginBottom: 14,
                   lineHeight: 1.2,
                 }}
               >
                 {s.t}
               </div>
-              <div style={{ fontSize: 13, color: SLAB.muted, lineHeight: 1.55 }}>{s.b}</div>
-            </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            marginTop: 60,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 1,
-            background: SLAB.hair,
-            border: '1px solid ' + SLAB.hair,
-            borderRadius: 20,
-            overflow: 'hidden',
-          }}
-        >
-          {METRICS.map(([v, l]) => (
-            <div key={l} style={{ padding: '36px 28px', background: SLAB.surface }}>
-              <div
-                style={{
-                  fontFamily: SLAB.serif,
-                  fontSize: 44,
-                  letterSpacing: -1,
-                  lineHeight: 1,
-                  color: SLAB.gold,
-                  marginBottom: 12,
-                }}
-              >
-                {v}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: SLAB.muted,
-                  maxWidth: 200,
-                  lineHeight: 1.5,
-                }}
-              >
-                {l}
-              </div>
+              <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>{s.b}</div>
             </div>
           ))}
         </div>

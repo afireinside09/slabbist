@@ -33,7 +33,7 @@ export function Nav() {
         right: 0,
         zIndex: 100,
         padding: scrolled ? '12px 0' : '22px 0',
-        transition: 'all 0.25s ease',
+        transition: 'padding 0.25s ease',
       }}
     >
       <div
@@ -54,11 +54,11 @@ export function Nav() {
             gap: 14,
             padding: scrolled ? '6px 20px 6px 8px' : '6px 20px 6px 6px',
             borderRadius: 999,
-            background: scrolled ? 'rgba(14,14,18,0.7)' : 'transparent',
-            backdropFilter: scrolled ? 'blur(18px) saturate(180%)' : 'none',
-            WebkitBackdropFilter: scrolled ? 'blur(18px) saturate(180%)' : 'none',
+            background: scrolled ? 'oklch(0.13 0.005 78 / 0.7)' : 'transparent',
+            backdropFilter: scrolled ? 'blur(12px) saturate(160%)' : 'none',
+            WebkitBackdropFilter: scrolled ? 'blur(12px) saturate(160%)' : 'none',
             border: scrolled ? '1px solid ' + SLAB.hair : '1px solid transparent',
-            transition: 'all 0.25s ease',
+            transition: 'padding 0.25s ease, background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease',
             textDecoration: 'none',
             color: SLAB.text,
           }}
@@ -66,7 +66,7 @@ export function Nav() {
           <div
             style={{
               display: 'flex',
-              filter: `drop-shadow(0 0 18px ${SLAB.gold}55)`,
+              filter: 'drop-shadow(0 0 18px oklch(0.82 0.13 78 / 0.33))',
             }}
           >
             <SlabLogo size={52} title="Slabbist" />
@@ -80,7 +80,7 @@ export function Nav() {
               padding: '3px 8px',
               borderRadius: 4,
               color: SLAB.gold,
-              border: `1px solid ${SLAB.gold}55`,
+              border: '1px solid oklch(0.82 0.13 78 / 0.33)',
               fontWeight: 500,
             }}
           >
@@ -93,9 +93,9 @@ export function Nav() {
             display: 'flex',
             gap: 4,
             padding: 4,
-            background: 'rgba(14,14,18,0.7)',
-            backdropFilter: 'blur(18px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+            background: 'oklch(0.13 0.005 78 / 0.7)',
+            backdropFilter: 'blur(12px) saturate(160%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(160%)',
             border: '1px solid ' + SLAB.hair,
             borderRadius: 999,
           }}
@@ -104,17 +104,14 @@ export function Nav() {
             <a
               key={l.label}
               href={l.href}
+              className="slab-nav-link"
               style={{
-                padding: '10px 18px',
-                fontSize: 13,
-                color: SLAB.muted,
+                padding: '12px 18px',
+                fontSize: 14,
                 textDecoration: 'none',
                 borderRadius: 999,
                 fontWeight: 500,
-                transition: 'color 0.15s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = SLAB.text)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = SLAB.muted)}
             >
               {l.label}
             </a>

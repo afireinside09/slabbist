@@ -14,17 +14,17 @@ export function Footer() {
     <footer
       style={{
         borderTop: '1px solid ' + SLAB.hair,
-        padding: '60px 0 40px',
+        padding: '56px 0 36px',
         background: SLAB.surface,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1.5fr repeat(4, 1fr)',
-            gap: 40,
-            marginBottom: 60,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 36,
+            marginBottom: 48,
           }}
         >
           <div>
@@ -34,7 +34,7 @@ export function Footer() {
             </div>
             <div
               style={{
-                fontSize: 13,
+                fontSize: 14,
                 color: SLAB.muted,
                 maxWidth: 260,
                 lineHeight: 1.55,
@@ -47,11 +47,11 @@ export function Footer() {
             <div key={c.h}>
               <div
                 style={{
-                  fontSize: 11,
-                  letterSpacing: 1.5,
+                  fontSize: 12,
+                  letterSpacing: 1.2,
                   textTransform: 'uppercase',
                   color: SLAB.dim,
-                  marginBottom: 18,
+                  marginBottom: 16,
                   fontWeight: 600,
                 }}
               >
@@ -82,7 +82,7 @@ export function Footer() {
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ fontSize: 12, color: SLAB.dim, fontFamily: SLAB.mono }}>
+          <div style={{ fontSize: 12, color: SLAB.muted, fontFamily: SLAB.mono, lineHeight: 1.5 }}>
             © 2026 Slabbist Inc. · Not affiliated with The Pokémon Company, PSA, BGS, CGC, SGC, or TAG.
           </div>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', color: SLAB.muted }}>
