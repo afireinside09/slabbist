@@ -38,4 +38,12 @@ struct PrimitiveSmokeTests {
         })
         #expect(host.view != nil)
     }
+
+    @Test("PrimaryGoldButton renders")
+    func primaryGoldButtonRenders() {
+        let host = UIHostingController(
+            rootView: PrimaryGoldButton(title: "Start scanning", action: {})
+        )
+        #expect(host.view != nil)
+    }
 }
