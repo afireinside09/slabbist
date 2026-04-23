@@ -1,9 +1,13 @@
 import Foundation
 import Supabase
 
-/// A single process-wide Supabase client. Holds the auth session and exposes
-/// the Postgrest + Auth surfaces we need app-wide.
-final class AppSupabase {
+/// A single process-wide Supabase client. Holds the auth session and
+/// exposes the Postgrest + Auth surfaces we need app-wide.
+///
+/// Marked `nonisolated` so the singleton can be resolved from any
+/// actor (repositories, services, background tasks) without having
+/// to hop to MainActor. The underlying `SupabaseClient` is `Sendable`.
+nonisolated final class AppSupabase: Sendable {
     static let shared = AppSupabase()
 
     let client: SupabaseClient
@@ -11,7 +15,7 @@ final class AppSupabase {
     private init() {
         self.client = SupabaseClient(
             supabaseURL: AppEnvironment.supabaseURL,
-            supabaseKey: AppEnvironment.supabaseAnonKey
+            supabaseKey: AppEnvironment.supabaseKey
         )
     }
 }
