@@ -1,3 +1,4 @@
+// @ts-nocheck — this file runs on Deno (Supabase Edge Functions). Local TS LSP can't resolve `Deno` or `https://` imports; runtime is correct.
 import { serviceRoleClient } from '../_shared/supabase.ts';
 
 const BATCH_SIZE = 500;
