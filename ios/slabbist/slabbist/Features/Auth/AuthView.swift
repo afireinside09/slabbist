@@ -91,10 +91,8 @@ struct AuthView: View {
 
     private var brand: some View {
         HStack(spacing: Spacing.s) {
-            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
-                .fill(LinearGradient(colors: [AppColor.gold, AppColor.goldDim],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 18, height: 18)
+            SlabbistLogo(size: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             Text("SLABBIST")
                 .font(SlabFont.sans(size: 14, weight: .medium))
                 .tracking(1.6)

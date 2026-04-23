@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Slabbist — Logo exploration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Cormorant+Garamond:ital,wght@1,300;1,400;1,500&family=Playfair+Display:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #08080A; color: #F4F2ED; font-family: "Inter Tight", -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 150; opacity: 0.03;
+    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  select, button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-presets="react">
+const INK = '#08080A';
+const CREAM = '#F4F2ED';
+const GOLD = 'oklch(0.82 0.13 78)';
+const GOLD_D = 'oklch(0.58 0.09 75)';
+const SERIF = '"Instrument Serif", Georgia, serif';
+const SANS = '"Inter Tight", -apple-system, sans-serif';
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
+const FANCY = '"Cormorant Garamond", "Playfair Display", Georgia, serif';
+
+/* ─── Logo marks ──────────────────────────────────────────────────────── */
+
+// 01 — The Slab
+// Simple graded-slab silhouette: SLABBIST wordmark across the top label,
+// a beautiful italic 10 centered on the card window.
+function SlabMark({ size = 200, bg, fg, accent }) {
+  const s = size;
+  return (
+    <svg width={s} height={s} viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id={`slabBg${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={bg.a}/><stop offset="1" stopColor={bg.b}/>
+        </linearGradient>
+        <linearGradient id={`slabGold${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={accent.a}/><stop offset="1" stopColor={accent.b}/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" rx="44" fill={`url(#slabBg${s})`}/>
+      {/* slab silhouette */}
+      <rect x="54" y="34" width="92" height="132" rx="6"
+        fill="none" stroke={`url(#slabGold${s})`} strokeWidth="3"/>
+      {/* gold label band with SLABBIST */}
+      <rect x="54" y="34" width="92" height="28" rx="6" fill={`url(#slabGold${s})`}/>
+      <rect x="54" y="56" width="92" height="6" fill={`url(#slabGold${s})`}/>
+      <text x="100" y="53" textAnchor="middle" fontFamily={MONO} fontWeight="700"
+        fontSize="10" letterSpacing="1.6" fill={INK}>SLABBIST</text>
+      {/* the 10 — hero glyph */}
+      <text x="100" y="138" textAnchor="middle" fontFamily={SERIF} fontStyle="italic"
+        fontWeight="400" fontSize="68" fill={`url(#slabGold${s})`} letterSpacing="-3">10</text>
+    </svg>
+  );
+}
+
+// 02 — Gemma
+// Italic S hero glyph with a small "10" grade badge tucked in the corner.
+// Reads as "gem-mint 10" — certified, top-of-pop, no loudness.
+function GemmaMark({ size = 200, bg, fg, accent }) {
+  const s = size;
+  return (
+    <svg width={s} height={s} viewBox="0 0 200 200">
+      <defs>
+        <radialGradient id={`gemmaBg${s}`} cx="0.5" cy="0.4" r="0.85">
+          <stop offset="0" stopColor={bg.a}/><stop offset="1" stopColor={bg.b}/>
+        </radialGradient>
+        <linearGradient id={`gemmaGold${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={accent.a}/><stop offset="1" stopColor={accent.b}/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" rx="44" fill={`url(#gemmaBg${s})`}/>
+      {/* hero italic S */}
+      <text x="100" y="148" textAnchor="middle" fontFamily={SERIF} fontStyle="italic"
+        fontWeight="400" fontSize="180" fill={fg} letterSpacing="-6">S</text>
+      {/* grade badge — top right */}
+      <g>
+        <circle cx="154" cy="48" r="22" fill={`url(#gemmaGold${s})`}
+          stroke={bg.b} strokeWidth="3"/>
+        <text x="154" y="56.5" textAnchor="middle" fontFamily={SERIF} fontStyle="italic"
+          fontWeight="400" fontSize="24" fill={INK} letterSpacing="-1.5">10</text>
+      </g>
+    </svg>
+  );
+}
+
+// 03 — The Ledger
+// Monogram wordmark: stacked 'sl' in a serif, conveying quiet confidence
+// like a trade-desk logo. Works beautifully small as favicon.
+function LedgerMark({ size = 200, bg, fg, accent }) {
+  const s = size;
+  return (
+    <svg width={s} height={s} viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id={`ledBg${s}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={bg.a}/><stop offset="1" stopColor={bg.b}/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" rx="44" fill={`url(#ledBg${s})`}/>
+      {/* hairline rules */}
+      <line x1="20" y1="38" x2="180" y2="38" stroke={accent.a} strokeWidth="1" opacity="0.5"/>
+      <line x1="20" y1="162" x2="180" y2="162" stroke={accent.a} strokeWidth="1" opacity="0.5"/>
+      {/* corner ticks */}
+      {[[20,38],[180,38],[20,162],[180,162]].map(([x,y],i) => (
+        <circle key={i} cx={x} cy={y} r="2" fill={accent.a}/>
+      ))}
+      {/* tiny index */}
+      <text x="30" y="30" fontFamily={MONO} fontSize="9" fill={fg} opacity="0.5" letterSpacing="1.5">EST · 2026</text>
+      <text x="170" y="30" textAnchor="end" fontFamily={MONO} fontSize="9" fill={fg} opacity="0.5" letterSpacing="1.5">№ 001</text>
+      {/* the monogram */}
+      <text x="100" y="122" textAnchor="middle" fontFamily={SERIF} fontStyle="italic"
+        fontWeight="400" fontSize="108" fill={fg} letterSpacing="-4">Sb</text>
+      {/* footer */}
+      <text x="100" y="180" textAnchor="middle" fontFamily={MONO} fontSize="8" fill={accent.a}
+        letterSpacing="3" fontWeight="600">SLABBIST</text>
+    </svg>
+  );
+}
+
+// 04 — Capture
+// An abstract reticle/corner-bracket glyph cradling an 'S' — scanner energy.
+// Most technical / "app"-feeling of the set.
+function CaptureMark({ size = 200, bg, fg, accent }) {
+  const s = size;
+  return (
+    <svg width={s} height={s} viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id={`capBg${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={bg.a}/><stop offset="1" stopColor={bg.b}/>
+        </linearGradient>
+        <linearGradient id={`capGold${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={accent.a}/><stop offset="1" stopColor={accent.b}/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" rx="44" fill={`url(#capBg${s})`}/>
+      {/* scan line — behind everything, with subtle glow */}
+      <rect x="36" y="97" width="128" height="6" rx="3" fill={`url(#capGold${s})`} opacity="0.12"/>
+      <rect x="36" y="99" width="128" height="2" rx="1" fill={`url(#capGold${s})`} opacity="0.45"/>
+      {/* four corner brackets — symmetric around (100,100) */}
+      <g stroke={`url(#capGold${s})`} strokeWidth="6" strokeLinecap="round" fill="none">
+        <path d="M 44 72 L 44 44 L 72 44"/>
+        <path d="M 128 44 L 156 44 L 156 72"/>
+        <path d="M 156 128 L 156 156 L 128 156"/>
+        <path d="M 72 156 L 44 156 L 44 128"/>
+      </g>
+      {/* fancy italic swash S, perfectly centered */}
+      <text x="100" y="100" textAnchor="middle" dominantBaseline="central"
+        fontFamily={FANCY} fontStyle="italic" fontWeight="400"
+        fontSize="128" fill={fg} letterSpacing="-3">S</text>
+    </svg>
+  );
+}
+
+// 05 — Prism
+// A bold geometric S carved into a diamond / gem — cutting-edge / grading-lab
+// metaphor. High-impact at icon sizes, legible at small sizes.
+function PrismMark({ size = 200, bg, fg, accent }) {
+  const s = size;
+  return (
+    <svg width={s} height={s} viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id={`prismBg${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={bg.a}/><stop offset="1" stopColor={bg.b}/>
+        </linearGradient>
+        <linearGradient id={`prismGoldA${s}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={accent.a}/><stop offset="1" stopColor={accent.b}/>
+        </linearGradient>
+        <linearGradient id={`prismGoldB${s}`} x1="1" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={accent.a}/><stop offset="1" stopColor={accent.b}/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" rx="44" fill={`url(#prismBg${s})`}/>
+      {/* diamond */}
+      <g transform="translate(100 100)">
+        <path d="M 0 -58 L 52 0 L 0 58 L -52 0 Z" fill="none" stroke={`url(#prismGoldA${s})`} strokeWidth="3"/>
+        {/* facet lines */}
+        <path d="M 0 -58 L 0 58 M -52 0 L 52 0" stroke={`url(#prismGoldB${s})`} strokeWidth="1" opacity="0.45"/>
+        {/* S inside */}
+        <text x="0" y="22" textAnchor="middle" fontFamily={SERIF} fontStyle="italic"
+          fontWeight="400" fontSize="76" fill={fg} letterSpacing="-2">S</text>
+      </g>
+    </svg>
+  );
+}
+
+/* ─── Palettes ─────────────────────────────────────────────────────────── */
+
+const PALETTES = {
+  'Obsidian & gold': {
+    bg: { a: '#1A1A1F', b: '#08080A' },
+    fg: CREAM,
+    accent: { a: GOLD, b: GOLD_D },
+  },
+  'Cream & ink': {
+    bg: { a: '#F4F2ED', b: '#E4DFD3' },
+    fg: INK,
+    accent: { a: GOLD_D, b: 'oklch(0.45 0.11 72)' },
+  },
+  'Gold foil': {
+    bg: { a: 'oklch(0.92 0.13 88)', b: GOLD },
+    fg: INK,
+    accent: { a: '#1A1A1F', b: '#08080A' },
+  },
+  'Monochrome': {
+    bg: { a: '#1A1A1F', b: '#08080A' },
+    fg: CREAM,
+    accent: { a: CREAM, b: 'rgba(244,242,237,0.5)' },
+  },
+  'Pressroom red': {
+    bg: { a: 'oklch(0.35 0.15 22)', b: 'oklch(0.18 0.1 22)' },
+    fg: CREAM,
+    accent: { a: GOLD, b: GOLD_D },
+  },
+};
+
+/* ─── Presentation ─────────────────────────────────────────────────────── */
+
+const MARKS = [
+  { name: 'The Slab', cmp: SlabMark, story: 'A simple graded-slab silhouette, SLABBIST across the top label, a beautiful italic 10 centered on the card — the perfect grade, quietly.' },
+  { name: 'Gemma', cmp: GemmaMark, story: 'A hero italic S with a small "10" grade badge tucked in the corner. Certified, top-of-pop, no loudness — reads as "gem-mint 10" at a glance.' },
+  { name: 'The Ledger', cmp: LedgerMark, story: 'Trade-desk monogram: Sb (Slabbist). Quiet, confident, timeless — like a watch-maker or an old auction house.' },
+  { name: 'Capture', cmp: CaptureMark, story: 'Four scanner brackets cradling a fancy swash-italic S — perfectly centered, a little more ornate. Tech-forward but elevated.' },
+  { name: 'Prism', cmp: PrismMark, story: 'A gem facet holding the S. Geometric, bold, legible at favicon size. The most brandable at icon scale.' },
+];
+
+function App() {
+  const [paletteName, setPaletteName] = React.useState('Obsidian & gold');
+  const palette = PALETTES[paletteName];
+
+  return (
+    <div style={{ padding: '64px 56px 120px', maxWidth: 1360, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 12, gap: 40 }}>
+        <div style={{ maxWidth: 720 }}>
+          <div style={{ fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', color: GOLD, marginBottom: 16, fontWeight: 500 }}>Brand exploration · v1</div>
+          <h1 style={{ fontFamily: SERIF, fontSize: 72, fontWeight: 400, letterSpacing: -2, lineHeight: 0.98, margin: 0 }}>
+            Five marks for <span style={{ fontStyle: 'italic', color: GOLD }}>Slabbist</span>.
+          </h1>
+          <p style={{ fontSize: 16, color: 'rgba(244,242,237,0.6)', lineHeight: 1.5, marginTop: 24, maxWidth: 560 }}>
+            Each mark is drawn with SVG, scales from favicon to App Store icon, and works across five palettes. Switch the palette to see how each one holds up — then tell me which direction to push further.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', maxWidth: 420, justifyContent: 'flex-end' }}>
+          {Object.keys(PALETTES).map(name => (
+            <button key={name} onClick={() => setPaletteName(name)} style={{
+              padding: '10px 16px', borderRadius: 999, cursor: 'pointer',
+              background: paletteName === name ? CREAM : 'transparent',
+              color: paletteName === name ? INK : CREAM,
+              border: '1px solid ' + (paletteName === name ? CREAM : 'rgba(255,255,255,0.14)'),
+              fontSize: 12, fontWeight: 500,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{
+                width: 14, height: 14, borderRadius: 3, display: 'inline-block',
+                background: `linear-gradient(135deg, ${PALETTES[name].bg.a}, ${PALETTES[name].bg.b})`,
+                border: '1px solid ' + (paletteName === name ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)'),
+              }}/>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 48, marginBottom: 48 }}/>
+
+      {/* Mark rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 24, overflow: 'hidden' }}>
+        {MARKS.map((m, i) => (
+          <MarkRow key={m.name} mark={m} index={i} palette={palette}/>
+        ))}
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 80, marginBottom: 40 }}/>
+
+      {/* Usage lab: pick one to test */}
+      <UsageLab palette={palette}/>
+    </div>
+  );
+}
+
+function MarkRow({ mark, index, palette }) {
+  const M = mark.cmp;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '64px 220px 1fr 280px', gap: 40, padding: '40px 40px', background: '#0E0E12', alignItems: 'center' }}>
+      <div style={{ fontFamily: MONO, fontSize: 12, color: 'rgba(244,242,237,0.38)', letterSpacing: 1 }}>
+        {String(index + 1).padStart(2, '0')}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 32, fontStyle: 'italic', letterSpacing: -0.6 }}>{mark.name}</div>
+        <div style={{ fontSize: 13, color: 'rgba(244,242,237,0.6)', lineHeight: 1.5 }}>{mark.story}</div>
+      </div>
+
+      {/* Size ladder */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+        <LogoFrame size={168} label="App Store"><M size={168} {...palette}/></LogoFrame>
+        <LogoFrame size={88} label="Home screen"><M size={88} {...palette}/></LogoFrame>
+        <LogoFrame size={48} label="Nav"><M size={48} {...palette}/></LogoFrame>
+        <LogoFrame size={32} label="Favicon"><M size={32} {...palette}/></LogoFrame>
+        <LogoFrame size={16} label="16px"><M size={16} {...palette}/></LogoFrame>
+      </div>
+
+      {/* Wordmark lockup */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 20px', borderRadius: 14, background: '#16161B', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <M size={44} {...palette}/>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontFamily: SERIF, fontSize: 22, letterSpacing: -0.6, lineHeight: 1 }}>Slabbist</div>
+          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 1.8, color: 'rgba(244,242,237,0.38)', marginTop: 4, textTransform: 'uppercase' }}>The counter, rebuilt</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogoFrame({ size, label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>
+      <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 1.2, color: 'rgba(244,242,237,0.38)', textTransform: 'uppercase' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ─── Usage Lab ─────────────────────────────────────────────────────────── */
+
+function UsageLab({ palette }) {
+  const [markIdx, setMarkIdx] = React.useState(1);
+  const M = MARKS[markIdx].cmp;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 32 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', color: GOLD, marginBottom: 14, fontWeight: 500 }}>In the wild</div>
+          <h2 style={{ fontFamily: SERIF, fontSize: 44, letterSpacing: -1.2, margin: 0, fontWeight: 400 }}>See it on the home screen, the browser tab, and the kiosk sign.</h2>
+        </div>
+        <div style={{ display: 'flex', gap: 6, padding: 4, background: '#0E0E12', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 999 }}>
+          {MARKS.map((m, i) => (
+            <button key={m.name} onClick={() => setMarkIdx(i)} style={{
+              padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
+              background: markIdx === i ? CREAM : 'transparent',
+              color: markIdx === i ? INK : 'rgba(244,242,237,0.6)',
+              border: 'none', fontSize: 12, fontWeight: 500,
+            }}>{m.name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        <HomeScreenMock M={M} palette={palette}/>
+        <BrowserMock M={M} palette={palette}/>
+        <KioskMock M={M} palette={palette}/>
+      </div>
+    </div>
+  );
+}
+
+function HomeScreenMock({ M, palette }) {
+  const otherIcons = [
+    { color: '#007AFF', glyph: '📞' },
+    { color: '#34C759', glyph: '📷' },
+    { color: '#FF9500', glyph: '🕓' },
+    { color: '#AF52DE', glyph: '♪' },
+  ];
+  return (
+    <div style={{ aspectRatio: '9/16', borderRadius: 40, padding: 10,
+      background: 'linear-gradient(180deg, #1a1a1d, #0a0a0d)',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px #2a2a2e',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ width: '100%', height: '100%', borderRadius: 32, overflow: 'hidden', position: 'relative',
+        background: `linear-gradient(180deg, oklch(0.45 0.18 250), oklch(0.25 0.14 280))`,
+      }}>
+        <div style={{ position: 'absolute', top: 9, left: '50%', transform: 'translateX(-50%)', width: 80, height: 22, borderRadius: 14, background: '#000' }}/>
+        <div style={{ padding: '50px 28px 20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 18 }}>
+          {/* Our app, first */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 60, height: 60, borderRadius: 14, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+              <M size={60} {...palette}/>
+            </div>
+            <div style={{ fontSize: 10, color: '#fff', fontWeight: 500 }}>Slabbist</div>
+          </div>
+          {Array.from({ length: 11 }).map((_, i) => {
+            const ic = otherIcons[i % otherIcons.length];
+            return (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 60, height: 60, borderRadius: 14, background: ic.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#fff',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                }}>{ic.glyph}</div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)' }}>App {i + 2}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)',
+        fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: 'rgba(244,242,237,0.38)', textTransform: 'uppercase',
+      }}>iOS home screen</div>
+    </div>
+  );
+}
+
+function BrowserMock({ M, palette }) {
+  return (
+    <div style={{ aspectRatio: '9/16', borderRadius: 20, background: '#1a1a1d',
+      border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.5)',
+    }}>
+      {/* traffic lights */}
+      <div style={{ padding: '12px 14px', display: 'flex', gap: 6, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FF5F57' }}/>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FEBC2E' }}/>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: '#28C840' }}/>
+      </div>
+      {/* tab bar */}
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ flex: 1, padding: '6px 8px', borderRadius: 6, background: '#2a2a2e',
+          display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: CREAM,
+        }}>
+          <div style={{ width: 14, height: 14, borderRadius: 3, overflow: 'hidden' }}><M size={14} {...palette}/></div>
+          <span style={{ flex: 1 }}>Slabbist — The counter</span>
+          <span style={{ color: 'rgba(244,242,237,0.38)' }}>×</span>
+        </div>
+        <div style={{ flex: 1, padding: '6px 8px', borderRadius: 6, opacity: 0.4, fontSize: 10, color: CREAM }}>New tab</div>
+      </div>
+      {/* body */}
+      <div style={{ flex: 1, background: '#0a0a0c', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, overflow: 'hidden' }}><M size={28} {...palette}/></div>
+          <span style={{ fontFamily: SERIF, fontSize: 16, letterSpacing: -0.3 }}>Slabbist</span>
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 26, lineHeight: 1.05, letterSpacing: -1 }}>
+          The buy counter,<br/>
+          <span style={{ fontStyle: 'italic', color: GOLD }}>rebuilt</span>.
+        </div>
+        <div style={{ fontSize: 11, color: 'rgba(244,242,237,0.6)', lineHeight: 1.5 }}>
+          Bulk-scan slabs, pull defensible comps, close buys with confidence.
+        </div>
+      </div>
+      <div style={{ position: 'relative', padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 1.8, color: 'rgba(244,242,237,0.38)', textTransform: 'uppercase', textAlign: 'center' }}>Favicon + tab</div>
+      </div>
+    </div>
+  );
+}
+
+function KioskMock({ M, palette }) {
+  return (
+    <div style={{ aspectRatio: '9/16', borderRadius: 20, overflow: 'hidden',
+      background: `linear-gradient(145deg, ${palette.bg.a}, ${palette.bg.b})`,
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.5)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32,
+      position: 'relative',
+    }}>
+      <div style={{ marginBottom: 24 }}><M size={132} {...palette}/></div>
+      <div style={{ fontFamily: SERIF, fontSize: 38, letterSpacing: -1, color: palette.fg, lineHeight: 1 }}>Slabbist</div>
+      <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: 2.4, color: palette.fg, opacity: 0.5,
+        marginTop: 14, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>
+        Authorized buying counter
+      </div>
+      <div style={{ position: 'absolute', bottom: 16, left: 0, right: 0, textAlign: 'center',
+        fontFamily: MONO, fontSize: 9, letterSpacing: 1.8, color: palette.fg, opacity: 0.38, textTransform: 'uppercase',
+      }}>Kiosk / signage</div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>
