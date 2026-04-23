@@ -8,36 +8,66 @@ struct NewLotSheet: View {
     let onCreate: (String) throws -> Void
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Lot name", text: $name)
-                        .textInputAutocapitalization(.words)
+        SlabbedRoot {
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                topBar
+                header
+                SlabCard {
+                    HStack(spacing: Spacing.m) {
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(AppColor.dim)
+                            .frame(width: 18)
+                        TextField("", text: $name,
+                                  prompt: Text("Lot name").foregroundStyle(AppColor.dim))
+                            .textInputAutocapitalization(.words)
+                            .foregroundStyle(AppColor.text)
+                            .tint(AppColor.gold)
+                    }
+                    .padding(.horizontal, Spacing.l)
+                    .padding(.vertical, Spacing.md)
                 }
                 if let error {
-                    Section {
-                        Text(error).foregroundStyle(AppColor.danger)
+                    Text(error)
+                        .font(SlabFont.sans(size: 13))
+                        .foregroundStyle(AppColor.negative)
+                }
+                Spacer()
+                PrimaryGoldButton(
+                    title: "Start scanning",
+                    isEnabled: !trimmedName.isEmpty
+                ) {
+                    do {
+                        try onCreate(trimmedName)
+                        dismiss()
+                    } catch {
+                        self.error = error.localizedDescription
                     }
                 }
             }
-            .navigationTitle("New bulk scan")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Start scanning") {
-                        do {
-                            try onCreate(name.trimmingCharacters(in: .whitespaces))
-                            dismiss()
-                        } catch {
-                            self.error = error.localizedDescription
-                        }
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
+            .padding(.horizontal, Spacing.xxl)
+            .padding(.top, Spacing.l)
+            .padding(.bottom, Spacing.xl)
         }
+    }
+
+    private var topBar: some View {
+        HStack {
+            SecondaryIconButton(systemIcon: "xmark", accessibilityLabel: "Cancel") {
+                dismiss()
+            }
+            Spacer()
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            KickerLabel("New lot")
+            Text("Start scanning").slabTitle()
+        }
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespaces)
     }
 
     private static func defaultName() -> String {
@@ -46,4 +76,8 @@ struct NewLotSheet: View {
         fmt.timeStyle = .short
         return "Bulk – \(fmt.string(from: Date()))"
     }
+}
+
+#Preview {
+    NewLotSheet { _ in }
 }
