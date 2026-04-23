@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Supabase
+import OSLog
 
 @Observable
 @MainActor
@@ -34,5 +35,19 @@ final class SessionStore {
         }
     }
 
+    /// Clears the Supabase auth session and resets local user state.
+    /// No-op (still returns cleanly) when the caller is already signed out.
+    func signOut() async {
+        let client = self.client
+        do {
+            try await client.auth.signOut()
+        } catch {
+            Self.log.warning("Supabase signOut failed: \(error.localizedDescription, privacy: .public)")
+        }
+        self.userId = nil
+    }
+
     var isSignedIn: Bool { userId != nil }
+
+    private static let log = Logger(subsystem: "com.slabbist.auth", category: "session")
 }
