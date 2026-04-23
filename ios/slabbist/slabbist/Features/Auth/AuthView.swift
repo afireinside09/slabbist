@@ -4,51 +4,113 @@ struct AuthView: View {
     @State private var viewModel = AuthViewModel()
 
     var body: some View {
-        VStack(spacing: Spacing.l) {
-            Text("Slabbist")
-                .font(.largeTitle.bold())
+        SlabbedRoot {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xxxl) {
+                    brand
 
-            Picker("Mode", selection: $viewModel.mode) {
-                Text("Sign In").tag(AuthViewModel.Mode.signIn)
-                Text("Sign Up").tag(AuthViewModel.Mode.signUp)
-            }
-            .pickerStyle(.segmented)
+                    VStack(alignment: .leading, spacing: Spacing.m) {
+                        KickerLabel(viewModel.mode == .signIn ? "Welcome back" : "Create account")
+                        Text("Slabbist").slabTitle()
+                        Text(subtitle)
+                            .font(SlabFont.sans(size: 15))
+                            .foregroundStyle(AppColor.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-            VStack(spacing: Spacing.m) {
-                TextField("Email", text: $viewModel.email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
+                    SlabCard {
+                        VStack(spacing: 0) {
+                            field(icon: "envelope") {
+                                TextField("", text: $viewModel.email, prompt:
+                                    Text("Email").foregroundStyle(AppColor.dim))
+                                    .textContentType(.emailAddress)
+                                    .keyboardType(.emailAddress)
+                                    .autocapitalization(.none)
+                                    .autocorrectionDisabled()
+                                    .foregroundStyle(AppColor.text)
+                                    .tint(AppColor.gold)
+                            }
+                            SlabCardDivider()
+                            field(icon: "lock") {
+                                SecureField("", text: $viewModel.password, prompt:
+                                    Text("Password").foregroundStyle(AppColor.dim))
+                                    .textContentType(viewModel.mode == .signIn ? .password : .newPassword)
+                                    .foregroundStyle(AppColor.text)
+                                    .tint(AppColor.gold)
+                            }
+                            if viewModel.mode == .signUp {
+                                SlabCardDivider()
+                                field(icon: "storefront") {
+                                    TextField("", text: $viewModel.storeName, prompt:
+                                        Text("Store name (optional)").foregroundStyle(AppColor.dim))
+                                        .foregroundStyle(AppColor.text)
+                                        .tint(AppColor.gold)
+                                }
+                            }
+                        }
+                    }
 
-                SecureField("Password", text: $viewModel.password)
-                    .textContentType(viewModel.mode == .signIn ? .password : .newPassword)
+                    if let error = viewModel.errorMessage {
+                        Text(error)
+                            .font(SlabFont.sans(size: 13))
+                            .foregroundStyle(AppColor.negative)
+                    }
 
-                if viewModel.mode == .signUp {
-                    TextField("Store name (optional)", text: $viewModel.storeName)
+                    PrimaryGoldButton(
+                        title: viewModel.mode == .signIn ? "Sign in" : "Create account",
+                        isLoading: viewModel.isSubmitting,
+                        isEnabled: !viewModel.email.isEmpty && !viewModel.password.isEmpty
+                    ) {
+                        Task { await viewModel.submit() }
+                    }
+
+                    Button {
+                        viewModel.mode = (viewModel.mode == .signIn) ? .signUp : .signIn
+                    } label: {
+                        Text(viewModel.mode == .signIn
+                             ? "Don't have an account? Create one"
+                             : "Already have an account? Sign in")
+                            .font(SlabFont.sans(size: 14))
+                            .foregroundStyle(AppColor.muted)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .padding(.horizontal, Spacing.xxl)
+                .padding(.top, Spacing.xxxl)
+                .padding(.bottom, Spacing.xxl)
             }
-            .textFieldStyle(.roundedBorder)
-
-            if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(.footnote)
-                    .foregroundStyle(AppColor.danger)
-            }
-
-            Button {
-                Task { await viewModel.submit() }
-            } label: {
-                if viewModel.isSubmitting {
-                    ProgressView()
-                } else {
-                    Text(viewModel.mode == .signIn ? "Sign in" : "Create account")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(viewModel.email.isEmpty || viewModel.password.isEmpty || viewModel.isSubmitting)
         }
-        .padding(Spacing.l)
+        .ambientGoldBlob(.topTrailing)
+    }
+
+    private var subtitle: String {
+        viewModel.mode == .signIn
+        ? "Sign in to your store to continue scanning."
+        : "Create your store to start bulk-scanning slabs."
+    }
+
+    private var brand: some View {
+        HStack(spacing: Spacing.s) {
+            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                .fill(LinearGradient(colors: [AppColor.gold, AppColor.goldDim],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 18, height: 18)
+            Text("SLABBIST")
+                .font(SlabFont.sans(size: 14, weight: .medium))
+                .tracking(1.6)
+                .foregroundStyle(AppColor.text)
+        }
+    }
+
+    private func field<Content: View>(icon: String, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: Spacing.m) {
+            Image(systemName: icon)
+                .foregroundStyle(AppColor.dim)
+                .frame(width: 18)
+            content()
+        }
+        .padding(.horizontal, Spacing.l)
+        .padding(.vertical, Spacing.md)
     }
 }
 
