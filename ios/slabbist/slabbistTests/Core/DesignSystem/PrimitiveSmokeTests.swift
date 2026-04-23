@@ -54,4 +54,21 @@ struct PrimitiveSmokeTests {
         )
         #expect(host.view != nil)
     }
+
+    @Test("PillToggle renders")
+    @MainActor
+    func pillToggleRenders() {
+        struct Host: View {
+            @State var selection: String = "a"
+            var body: some View {
+                PillToggle(
+                    selection: $selection,
+                    options: [("a", "One"), ("b", "Two")],
+                    style: .accent
+                )
+            }
+        }
+        let host = UIHostingController(rootView: Host())
+        #expect(host.view != nil)
+    }
 }

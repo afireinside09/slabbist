@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #08080A;
+  color: #F4F2ED;
+  font-family: var(--font-sans), -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+body { overflow-x: hidden; }
+button { font-family: inherit; }
+a { color: inherit; }
+input:focus { border-color: rgba(255, 255, 255, 0.25) !important; }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+::selection { background: oklch(0.82 0.13 78 / 0.4); color: #fff; }
+
+@keyframes sbmFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sbmRise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sbmScanLine { 0% { top: 6%; } 50% { top: 90%; } 100% { top: 6%; } }
+@keyframes sbmPop { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes sbmSpin { to { transform: rotate(360deg); } }
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 150;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
