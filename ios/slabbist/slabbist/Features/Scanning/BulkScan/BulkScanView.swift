@@ -25,8 +25,9 @@ struct BulkScanView: View {
     @State private var lastCaptureFlash = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             cameraArea
+                .ignoresSafeArea(edges: [.top, .horizontal])
                 .overlay(alignment: .center) {
                     if lastCaptureFlash {
                         Color.white.opacity(0.35)
@@ -35,16 +36,21 @@ struct BulkScanView: View {
                 }
 
             if let viewModel = controller.viewModel {
-                VStack(spacing: Spacing.s) {
+                VStack(alignment: .leading, spacing: Spacing.m) {
+                    summaryHeader(for: viewModel)
                     ScanQueueView(scans: viewModel.recentScans)
-                    summaryLine(for: viewModel)
                 }
-                .padding(.vertical, Spacing.s)
-                .background(AppColor.surface)
+                .padding(.horizontal, Spacing.xxl)
+                .padding(.vertical, Spacing.l)
+                .background(AppColor.ink.opacity(0.92))
             }
         }
+        .background(AppColor.ink)
         .navigationTitle(lot.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear {
             bootstrapViewModel()
             Task { await configureCamera() }
@@ -59,33 +65,48 @@ struct BulkScanView: View {
         switch cameraSession.authorization {
         case .authorized:
             CameraPreview(session: cameraSession.captureSession)
-                .ignoresSafeArea(edges: [])
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .denied, .restricted:
             VStack(spacing: Spacing.m) {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.dim)
                 Text("Camera access is required to scan slabs.")
+                    .font(SlabFont.sans(size: 15))
+                    .foregroundStyle(AppColor.muted)
                     .multilineTextAlignment(.center)
-                Button("Open Settings") {
+                    .padding(.horizontal, Spacing.xxl)
+                PrimaryGoldButton(title: "Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .padding(.horizontal, Spacing.xxl)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppColor.surfaceAlt)
+            .background(AppColor.ink)
         case .notDetermined:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView()
+                .tint(AppColor.gold)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColor.ink)
+        @unknown default:
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColor.ink)
         }
     }
 
-    private func summaryLine(for viewModel: BulkScanViewModel) -> some View {
-        Text("\(viewModel.recentScans.count) scanned")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+    private func summaryHeader(for viewModel: BulkScanViewModel) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            KickerLabel("Queue")
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                Text("\(viewModel.recentScans.count)").slabMetric()
+                Text("scanned")
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.muted)
+            }
+        }
     }
 
     private func bootstrapViewModel() {
