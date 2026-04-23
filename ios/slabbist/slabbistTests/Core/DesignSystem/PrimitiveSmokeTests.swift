@@ -30,4 +30,12 @@ struct PrimitiveSmokeTests {
         _ = host.view // forces layout; non-nil if view graph compiles
         #expect(host.view != nil)
     }
+
+    @Test("SlabCard renders with content")
+    func slabCardRenders() {
+        let host = UIHostingController(rootView: SlabCard {
+            Text("body")
+        })
+        #expect(host.view != nil)
+    }
 }
