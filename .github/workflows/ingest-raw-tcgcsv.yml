@@ -1,12 +1,12 @@
 name: Ingest raw (tcgcsv)
 on:
-  schedule: [{ cron: "0 6 * * *" }]
+  schedule: [{ cron: "30 20 * * *" }]
   workflow_dispatch:
 permissions: { contents: read }
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: tcgcsv } }
+    defaults: { run: { working-directory: scraper } }
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
