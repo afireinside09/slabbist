@@ -70,6 +70,9 @@ struct BulkScanView: View {
             }
         }
         .background(AppColor.ink)
+        .navigationDestination(for: Scan.self) { scan in
+            ScanDetailView(scan: scan)
+        }
         .navigationTitle(lot.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)

@@ -8,9 +8,11 @@ enum AppModelContainer {
             StoreMember.self,
             Lot.self,
             Scan.self,
-            OutboxItem.self
-            // Plan 2 adds: GradedCardIdentity, GradedCard
-            // Plan 3 adds: GradedMarketSnapshot
+            OutboxItem.self,
+            GradedCardIdentity.self,
+            GradedMarketSnapshot.self,
+            SoldListingMirror.self
+            // Plan 2 adds: GradedCard
         ])
         let config = ModelConfiguration("slabbist", schema: schema, isStoredInMemoryOnly: false)
         do {
@@ -24,7 +26,10 @@ enum AppModelContainer {
     static func inMemory() -> ModelContainer {
         let schema = Schema([
             Store.self, StoreMember.self, Lot.self,
-            Scan.self, OutboxItem.self
+            Scan.self, OutboxItem.self,
+            GradedCardIdentity.self,
+            GradedMarketSnapshot.self,
+            SoldListingMirror.self
         ])
         let config = ModelConfiguration("slabbist-tests", schema: schema, isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
