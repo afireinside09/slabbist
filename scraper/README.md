@@ -18,21 +18,31 @@ See the design spec: `docs/superpowers/specs/2026-04-22-tcgcsv-pokemon-graded-de
 ## CLI
 
     bun run cli run raw tcgcsv                    # daily tcgcsv refresh (cat 3 + 85)
-    bun run cli run graded ebay                   # hourly eBay sold listings
+    bun run cli run graded ebay                   # every 6h eBay sold listings (watchlist-driven)
     bun run cli run graded pop -s psa             # weekly pop report (one service)
     bun run cli run graded pop -s all             # weekly pop report (all services)
+    bun run cli seed popular-slabs                # seed graded_watchlist with top-200 popular slabs
 
 Flags:
 - `-c, --concurrency <n>`  — concurrent group requests (default 3; raw only)
 - `-d, --delay-ms <ms>`    — per-start delay between groups (default 200; raw only)
-- `-q, --queries <list>`   — comma-separated eBay queries (graded ebay only)
+- `-q, --queries <list>`   — comma-separated eBay queries (graded ebay only; omit to source queries from `graded_watchlist`)
+
+## Graded eBay watchlist
+
+The eBay sold-listings ingest scrapes a curated watchlist of popular slabs, not the whole catalog.
+
+- `graded_watchlist` holds `(identity_id, grading_service, grade)` rows with `source = seed | auto_promoted | manual`.
+- Seed the initial set from `src/graded/seeds/popular-slabs.json` (top-200) with `bun run cli seed popular-slabs`.
+- Every run calls `promote_scanned_slabs_to_watchlist(min_scans=5, window_days=7)`: any slab that was scanned by ≥5 distinct certs in the last 7 days (via iOS `scans` → `graded_cards`) gets auto-promoted.
+- Live on-demand lookups for arbitrary cards happen in the iOS app; this ingest only keeps the watchlist's price history fresh.
 
 ## Scheduled jobs (GitHub Actions)
 
 | Workflow                           | Cron             | What it runs                 |
 |------------------------------------|------------------|------------------------------|
 | `ingest-raw-tcgcsv.yml`            | `0 6 * * *`      | `run raw tcgcsv`             |
-| `ingest-graded-ebay.yml`           | `0 * * * *`      | `run graded ebay`            |
+| `ingest-graded-ebay.yml`           | `0 */6 * * *`    | `run graded ebay`            |
 | `ingest-graded-pop.yml`            | `0 12 * * 0`     | `run graded pop -s all`      |
 | `ci.yml`                           | push/PR          | `typecheck` + `test`         |
 

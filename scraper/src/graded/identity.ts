@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GradedCardIdentityInput } from "@/graded/models.js";
+import { throwIfError } from "@/shared/db/supabase.js";
 
 export interface NormalizedIdentityKey {
   game: "pokemon";
@@ -34,11 +35,13 @@ export async function findOrCreateIdentity(
   input: GradedCardIdentityInput,
 ): Promise<string> {
   const key = normalizeIdentityKey(input);
-  const { data } = await supabase
-    .from("graded_card_identities")
-    .select("id, set_name, card_name, card_number, variant, language")
-    .eq("game", key.game);
-  const list = (data ?? []) as Array<Record<string, unknown>>;
+  const res = await throwIfError(
+    supabase
+      .from("graded_card_identities")
+      .select("id, set_name, card_name, card_number, variant, language")
+      .eq("game", key.game),
+  );
+  const list = ((res as { data: unknown }).data ?? []) as Array<Record<string, unknown>>;
   for (const row of list) {
     const candidate = normalizeIdentityKey({
       game: "pokemon",
@@ -59,11 +62,13 @@ export async function findOrCreateIdentity(
     }
   }
   const id = crypto.randomUUID();
-  await supabase.from("graded_card_identities").insert({
-    id, game: input.game, language: input.language,
-    set_name: input.setName, set_code: input.setCode ?? null, year: input.year ?? null,
-    card_number: input.cardNumber ?? null, card_name: input.cardName,
-    variant: input.variant ?? null,
-  });
+  await throwIfError(
+    supabase.from("graded_card_identities").insert({
+      id, game: input.game, language: input.language,
+      set_name: input.setName, set_code: input.setCode ?? null, year: input.year ?? null,
+      card_number: input.cardNumber ?? null, card_name: input.cardName,
+      variant: input.variant ?? null,
+    }),
+  );
   return id;
 }

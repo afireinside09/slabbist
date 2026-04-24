@@ -7,6 +7,7 @@ import OSLog
 struct ScanShortcutView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(StoreHydrator.self) private var hydrator
 
     @State private var viewModel: LotsViewModel?
     @State private var resolvedLot: Lot?
@@ -28,8 +29,13 @@ struct ScanShortcutView: View {
                             title: "Start new lot",
                             systemIcon: "plus",
                             trailingChevron: true,
+                            isLoading: isHydrating,
+                            isEnabled: viewModel != nil,
                             action: { showingNewLot = true }
                         )
+                        if viewModel == nil {
+                            setupStatusCard
+                        }
                         if let lot = resolvedLot {
                             NavigationLink {
                                 BulkScanView(lot: lot)
@@ -66,20 +72,77 @@ struct ScanShortcutView: View {
                     }
                 }
             }
-            .onAppear {
-                bootstrap()
-                refresh()
+            .task(id: session.userId) {
+                await prepare()
             }
         }
     }
 
-    private func bootstrap() {
-        guard viewModel == nil else { return }
+    private var isHydrating: Bool {
+        if case .running = hydrator.state { return true }
+        return false
+    }
+
+    private var setupStatusCard: some View {
+        SlabCard {
+            HStack(spacing: Spacing.m) {
+                Image(systemName: statusIcon)
+                    .foregroundStyle(AppColor.dim)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(statusTitle)
+                        .font(SlabFont.sans(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColor.text)
+                    Text(statusDetail)
+                        .font(SlabFont.sans(size: 12))
+                        .foregroundStyle(AppColor.dim)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.md)
+        }
+    }
+
+    private var statusIcon: String {
+        switch hydrator.state {
+        case .failed: return "exclamationmark.triangle"
+        default: return "hourglass"
+        }
+    }
+
+    private var statusTitle: String {
+        switch hydrator.state {
+        case .failed: return "Couldn't reach your store"
+        default: return "Setting up your store…"
+        }
+    }
+
+    private var statusDetail: String {
+        switch hydrator.state {
+        case .failed(let message):
+            return message
+        default:
+            return "Pulling your account from the server. One moment."
+        }
+    }
+
+    private func prepare() async {
+        guard let userId = session.userId else {
+            viewModel = nil
+            resolvedLot = nil
+            return
+        }
+        await hydrator.hydrateIfNeeded(userId: userId)
         viewModel = LotsViewModel.resolve(context: context, session: session)
+        refresh()
     }
 
     private func refresh() {
-        guard let viewModel else { return }
+        guard let viewModel else {
+            resolvedLot = nil
+            return
+        }
         resolvedLot = (try? viewModel.listOpenLots())?.first
     }
 }

@@ -39,6 +39,9 @@ struct BulkScanView: View {
     @State private var cameraSession = CameraSession()
     @State private var controller = BulkScanController()
     @State private var lastCaptureFlash = false
+    #if targetEnvironment(simulator)
+    @State private var simulatorFixtureIndex = 0
+    #endif
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -51,14 +54,19 @@ struct BulkScanView: View {
                         .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
                 }
 
-            if let viewModel = controller.viewModel {
-                VStack(alignment: .leading, spacing: Spacing.m) {
-                    summaryHeader(for: viewModel)
-                    ScanQueueView(scans: viewModel.recentScans)
+            VStack(spacing: Spacing.m) {
+                #if targetEnvironment(simulator)
+                simulatorScanButton
+                #endif
+                if let viewModel = controller.viewModel {
+                    VStack(alignment: .leading, spacing: Spacing.m) {
+                        summaryHeader(for: viewModel)
+                        ScanQueueView(scans: viewModel.recentScans)
+                    }
+                    .padding(.horizontal, Spacing.xxl)
+                    .padding(.vertical, Spacing.l)
+                    .background(AppColor.ink.opacity(0.92))
                 }
-                .padding(.horizontal, Spacing.xxl)
-                .padding(.vertical, Spacing.l)
-                .background(AppColor.ink.opacity(0.92))
             }
         }
         .background(AppColor.ink)
@@ -69,7 +77,9 @@ struct BulkScanView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear {
             bootstrapViewModel()
+            #if !targetEnvironment(simulator)
             Task { await configureCamera() }
+            #endif
         }
         .onDisappear {
             cameraSession.stop()
@@ -95,6 +105,9 @@ struct BulkScanView: View {
 
     @ViewBuilder
     private var cameraArea: some View {
+        #if targetEnvironment(simulator)
+        simulatorPreviewPlaceholder
+        #else
         switch cameraSession.authorization {
         case .authorized:
             CameraPreview(session: cameraSession.captureSession)
@@ -128,7 +141,74 @@ struct BulkScanView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppColor.ink)
         }
+        #endif
     }
+
+    #if targetEnvironment(simulator)
+    private var simulatorPreviewPlaceholder: some View {
+        ZStack {
+            AppColor.ink
+            VStack(spacing: Spacing.m) {
+                Image(systemName: "camera.metering.center.weighted")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppColor.gold.opacity(0.7))
+                Text("Simulator mode")
+                    .font(SlabFont.sans(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColor.muted)
+                Text("The iOS Simulator has no camera. Tap \"Simulate scan\" below to feed a fixture cert through the pipeline.")
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.dim)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.xxl)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var simulatorScanButton: some View {
+        Button(action: fireSimulatedScan) {
+            Label("Simulate scan", systemImage: "wand.and.stars")
+                .font(SlabFont.sans(size: 14, weight: .semibold))
+                .foregroundStyle(AppColor.ink)
+                .padding(.horizontal, Spacing.l)
+                .padding(.vertical, Spacing.md)
+                .background(AppColor.gold, in: Capsule())
+                .shadow(color: AppColor.gold.opacity(0.25), radius: 12, y: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("simulate-scan")
+    }
+
+    private func fireSimulatedScan() {
+        let fixtures: [(grader: Grader, keyword: String)] = [
+            (.PSA, "PSA"), (.BGS, "BGS"), (.SGC, "SGC"), (.CGC, "CGC"),
+        ]
+        let pick = fixtures[simulatorFixtureIndex % fixtures.count]
+        simulatorFixtureIndex += 1
+
+        // Randomize cert digits so repeat taps don't trip local dedup.
+        let certNumber: String
+        switch pick.grader {
+        case .PSA: certNumber = String(Int.random(in: 10_000_000...99_999_999))
+        case .BGS, .CGC: certNumber = String(Int.random(in: 1_000_000_000...9_999_999_999))
+        case .SGC: certNumber = String(Int.random(in: 10_000_000...99_999_999))
+        case .TAG: certNumber = String(Int.random(in: 10_000_000...99_999_999))
+        }
+
+        let candidate = CertCandidate(
+            grader: pick.grader,
+            certNumber: certNumber,
+            confidence: 0.95,
+            rawText: "\(pick.keyword) \(certNumber) (simulator fixture)"
+        )
+        do {
+            try controller.viewModel?.record(candidate: candidate)
+            triggerFlash()
+        } catch {
+            AppLog.scans.error("simulated record failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    #endif
 
     private func summaryHeader(for viewModel: BulkScanViewModel) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {

@@ -6,6 +6,7 @@ import UIKit
 @main
 struct SlabbistApp: App {
     @State private var session = SessionStore()
+    @State private var hydrator = StoreHydrator()
 
     init() {
         Self.verifyCustomFontsLoaded()
@@ -15,6 +16,7 @@ struct SlabbistApp: App {
         WindowGroup {
             RootView()
                 .environment(session)
+                .environment(hydrator)
                 .onAppear { session.bootstrap() }
                 .preferredColorScheme(.dark)
         }

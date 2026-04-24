@@ -6,6 +6,7 @@ import { computeMarketAggregate } from "@/graded/aggregates.js";
 import { ebayFetchRecentSoldViaApi, ebayFetchRecentSoldViaScrape } from "@/graded/sources/ebay.js";
 import { throwIfError } from "@/shared/db/supabase.js";
 import { extractIdentityFromEbayTitle } from "@/graded/title-extractor.js";
+import { fetchActiveWatchlistQueries } from "@/graded/watchlist.js";
 
 export interface EbayIngestOptions {
   supabase: SupabaseClient;
@@ -17,7 +18,12 @@ export interface EbayIngestOptions {
 export interface EbayIngestResult {
   runId: string;
   status: "completed" | "failed";
-  stats: { salesInserted: number; aggregatesTouched: number };
+  stats: {
+    salesInserted: number;
+    aggregatesTouched: number;
+    queriesRun: number;
+    watchlistPromoted: number;
+  };
   errorMessage?: string;
 }
 
@@ -28,11 +34,34 @@ export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIn
   }));
 
   let salesInserted = 0;
+  let watchlistPromoted = 0;
   const touchedKeys = new Set<string>();
 
   try {
+    // Promote any (identity, grading_service, grade) with >=5 distinct
+    // iOS scans in the trailing 7 days onto the watchlist before we pick queries.
+    // Non-fatal: if the RPC is unavailable (e.g. test harness), we keep going.
+    try {
+      if (typeof opts.supabase.rpc === "function") {
+        const { data: promotedData, error: promoteErr } = await opts.supabase.rpc(
+          "promote_scanned_slabs_to_watchlist",
+          { min_scans: 5, window_days: 7 },
+        );
+        if (!promoteErr && typeof promotedData === "number") {
+          watchlistPromoted = promotedData;
+        }
+      }
+    } catch {
+      // best-effort; continue with whatever watchlist state exists
+    }
+
+    // Caller-supplied queries override the watchlist; otherwise drive from it.
+    const queries = opts.queries.length > 0
+      ? opts.queries
+      : await fetchActiveWatchlistQueries(opts.supabase);
+
     const allSales: GradedSale[] = [];
-    for (const q of opts.queries) {
+    for (const q of queries) {
       const batch = opts.marketplaceInsightsToken
         ? await ebayFetchRecentSoldViaApi(q, { token: opts.marketplaceInsightsToken, userAgent: opts.userAgent })
         : await ebayFetchRecentSoldViaScrape(q, { userAgent: opts.userAgent });
@@ -90,18 +119,28 @@ export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIn
       ));
     }
 
+    const stats = {
+      salesInserted,
+      aggregatesTouched: touchedKeys.size,
+      queriesRun: queries.length,
+      watchlistPromoted,
+    };
     await throwIfError(opts.supabase.from("graded_ingest_runs").update({
-      status: "completed", finished_at: new Date().toISOString(),
-      stats: { salesInserted, aggregatesTouched: touchedKeys.size },
+      status: "completed", finished_at: new Date().toISOString(), stats,
     }).eq("id", runId));
 
-    return { runId, status: "completed", stats: { salesInserted, aggregatesTouched: touchedKeys.size } };
+    return { runId, status: "completed", stats };
   } catch (e) {
     const msg = String((e as Error).message ?? e);
+    const stats = {
+      salesInserted,
+      aggregatesTouched: touchedKeys.size,
+      queriesRun: 0,
+      watchlistPromoted,
+    };
     await opts.supabase.from("graded_ingest_runs").update({
-      status: "failed", finished_at: new Date().toISOString(), error_message: msg,
-      stats: { salesInserted, aggregatesTouched: touchedKeys.size },
+      status: "failed", finished_at: new Date().toISOString(), error_message: msg, stats,
     }).eq("id", runId);
-    return { runId, status: "failed", stats: { salesInserted, aggregatesTouched: touchedKeys.size }, errorMessage: msg };
+    return { runId, status: "failed", stats, errorMessage: msg };
   }
 }

@@ -5,6 +5,7 @@ import OSLog
 struct LotsListView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(StoreHydrator.self) private var hydrator
 
     @State private var showingNewLot = false
     @State private var lots: [Lot] = []
@@ -21,12 +22,16 @@ struct LotsListView: View {
                         PrimaryGoldButton(
                             title: "New bulk scan",
                             systemIcon: "viewfinder",
-                            trailingChevron: true
+                            trailingChevron: true,
+                            isLoading: isHydrating,
+                            isEnabled: viewModel != nil
                         ) {
                             showingNewLot = true
                         }
 
-                        if lots.isEmpty {
+                        if viewModel == nil {
+                            setupStatusCard
+                        } else if lots.isEmpty {
                             emptyStateCard
                         } else {
                             openLotsSection
@@ -53,10 +58,44 @@ struct LotsListView: View {
             .navigationDestination(item: $selectedLot) { lot in
                 BulkScanView(lot: lot)
             }
-            .onAppear {
-                bootstrapViewModel()
-                refresh()
+            .task(id: session.userId) {
+                await prepare()
             }
+        }
+    }
+
+    private var isHydrating: Bool {
+        if case .running = hydrator.state { return true }
+        return false
+    }
+
+    private var setupStatusCard: some View {
+        SlabCard {
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                Text(hydrationStatusTitle)
+                    .font(SlabFont.sans(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColor.text)
+                Text(hydrationStatusDetail)
+                    .font(SlabFont.sans(size: 12))
+                    .foregroundStyle(AppColor.dim)
+            }
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var hydrationStatusTitle: String {
+        switch hydrator.state {
+        case .failed: return "Couldn't reach your store"
+        default: return "Setting up your store…"
+        }
+    }
+
+    private var hydrationStatusDetail: String {
+        switch hydrator.state {
+        case .failed(let message): return message
+        default: return "Pulling your account from the server. One moment."
         }
     }
 
@@ -152,9 +191,15 @@ struct LotsListView: View {
         }
     }
 
-    private func bootstrapViewModel() {
-        guard viewModel == nil else { return }
+    private func prepare() async {
+        guard let userId = session.userId else {
+            viewModel = nil
+            lots = []
+            return
+        }
+        await hydrator.hydrateIfNeeded(userId: userId)
         viewModel = LotsViewModel.resolve(context: context, session: session)
+        refresh()
     }
 
     private func refresh() {
