@@ -76,6 +76,22 @@ nonisolated protocol ScanRepository: Sendable {
     func delete(id: UUID) async throws
 }
 
+nonisolated protocol GradeEstimateRepository: Sendable {
+    func listForCurrentUser(page: Page, includeTotalCount: Bool) async throws -> PagedResult<GradeEstimateDTO>
+    func find(id: UUID) async throws -> GradeEstimateDTO?
+    func setStarred(id: UUID, starred: Bool) async throws
+    func delete(id: UUID) async throws
+
+    /// Invokes the `/grade-estimate` Edge Function and returns the persisted row.
+    func requestEstimate(
+        frontPath: String,
+        backPath: String,
+        centeringFront: CenteringRatios,
+        centeringBack: CenteringRatios,
+        includeOtherGraders: Bool
+    ) async throws -> GradeEstimateDTO
+}
+
 /// Convenience bundle — one repository per table, sharing a single
 /// `SupabaseClient`. View models take `AppRepositories` (or the
 /// individual protocols) via initializer injection; tests pass a
@@ -85,13 +101,15 @@ nonisolated struct AppRepositories: Sendable {
     var members: any StoreMemberRepository
     var lots: any LotRepository
     var scans: any ScanRepository
+    var gradeEstimates: any GradeEstimateRepository
 
     static func live(client: SupabaseClient = AppSupabase.shared.client) -> AppRepositories {
         AppRepositories(
             stores: SupabaseStoreRepository(client: client),
             members: SupabaseStoreMemberRepository(client: client),
             lots: SupabaseLotRepository(client: client),
-            scans: SupabaseScanRepository(client: client)
+            scans: SupabaseScanRepository(client: client),
+            gradeEstimates: SupabaseGradeEstimateRepository(client: client)
         )
     }
 }
