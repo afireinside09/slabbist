@@ -72,7 +72,7 @@ export function Workflow() {
                 maxWidth: 600,
               }}
             >
-              From stack to signature in five moves.
+              From stack to offer in five moves.
             </h2>
           </div>
           <div

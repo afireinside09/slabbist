@@ -117,8 +117,7 @@ button:focus-visible, a:focus-visible {
   .slab-nav-cta { padding: 9px 16px !important; font-size: 12px !important; }
 
   .slab-hero-section { padding-top: 92px !important; padding-bottom: 48px !important; }
-  .slab-hero-mock { width: 100% !important; max-width: 320px !important; transform: none !important; margin: 0 auto !important; }
-  .slab-hero-mock-outer { justify-self: center; }
+  .slab-hero-mock { max-width: calc(100vw - 40px) !important; transform: none !important; }
 
   .slab-hero-cta, .slab-finalcta-row { width: 100%; }
   .slab-hero-cta > *, .slab-finalcta-row > * { flex: 1 1 auto; justify-content: center; }

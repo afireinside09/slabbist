@@ -69,20 +69,6 @@ export function FinalCta() {
           >
             Join the waitlist <Icon name="arrow" size={15} sw={2.2} />
           </button>
-          <button
-            style={{
-              padding: '16px 30px',
-              borderRadius: 999,
-              background: 'transparent',
-              border: '1px solid ' + SLAB.hairStrong,
-              color: SLAB.text,
-              fontSize: 15,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            Book a 15-minute call
-          </button>
         </div>
       </div>
     </section>

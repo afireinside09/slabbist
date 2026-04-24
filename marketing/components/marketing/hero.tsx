@@ -106,8 +106,36 @@ export function Hero() {
           </span>
           <span style={{ display: 'block', animation: 'sbmRise 0.8s 0.3s ease backwards' }}>
             count them.
+            <span
+              aria-hidden
+              style={{
+                fontSize: '0.42em',
+                verticalAlign: 'super',
+                color: SLAB.gold,
+                fontStyle: 'normal',
+                marginLeft: 4,
+                fontWeight: 500,
+              }}
+            >
+              *
+            </span>
           </span>
         </h1>
+
+        <p
+          style={{
+            fontSize: 13,
+            color: SLAB.muted,
+            lineHeight: 1.5,
+            maxWidth: 560,
+            margin: '20px 0 20px',
+            letterSpacing: -0.1,
+            animation: 'sbmRise 0.8s 0.35s ease backwards',
+          }}
+        >
+          <span style={{ color: SLAB.gold, marginRight: 4 }}>*</span>
+          It's true. My momma told me so.
+        </p>
 
         <p
           style={{
@@ -116,7 +144,7 @@ export function Hero() {
             opacity: 0.82,
             lineHeight: 1.55,
             maxWidth: 560,
-            margin: '28px 0 36px',
+            margin: '0 0 36px',
             letterSpacing: -0.2,
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
