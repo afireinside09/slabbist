@@ -25,6 +25,7 @@ export function Nav() {
 
   return (
     <nav
+      className="slab-nav-wrap"
       style={{
         position: 'fixed',
         top: 0,
@@ -36,6 +37,7 @@ export function Nav() {
       }}
     >
       <div
+        className="slab-container"
         style={{
           maxWidth: 1180,
           margin: '0 auto',
@@ -43,10 +45,12 @@ export function Nav() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 12,
         }}
       >
         <a
           href="/"
+          className="slab-nav-brand"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -60,18 +64,21 @@ export function Nav() {
             transition: 'padding 0.25s ease, background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease',
             textDecoration: 'none',
             color: SLAB.text,
+            minWidth: 0,
           }}
         >
           <div
             style={{
               display: 'flex',
               filter: 'drop-shadow(0 0 18px oklch(0.82 0.13 78 / 0.33))',
+              flexShrink: 0,
             }}
           >
             <SlabLogo size={52} title="Slabbist" />
           </div>
-          <span style={{ fontWeight: 500, letterSpacing: -0.4, fontSize: 22 }}>Slabbist</span>
+          <span className="slab-nav-wordmark" style={{ fontWeight: 500, letterSpacing: -0.4, fontSize: 22 }}>Slabbist</span>
           <span
+            className="slab-nav-beta"
             style={{
               fontSize: 10,
               letterSpacing: 1.2,
@@ -88,6 +95,7 @@ export function Nav() {
         </a>
 
         <div
+          className="slab-nav-links"
           style={{
             display: 'flex',
             gap: 4,
@@ -117,9 +125,10 @@ export function Nav() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
           <button
             onClick={() => openAuth('login')}
+            className="slab-nav-signin"
             style={{
               padding: '10px 18px',
               borderRadius: 999,
@@ -135,6 +144,7 @@ export function Nav() {
           </button>
           <button
             onClick={() => openAuth('waitlist')}
+            className="slab-nav-cta"
             style={{
               padding: '10px 20px',
               borderRadius: 999,
@@ -147,6 +157,7 @@ export function Nav() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
+              whiteSpace: 'nowrap',
             }}
           >
             Join waitlist

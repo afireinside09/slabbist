@@ -61,7 +61,7 @@ export function PageHero({
           pointerEvents: 'none',
         }}
       />
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
         <div
           style={{
             fontSize: 12,
@@ -77,7 +77,7 @@ export function PageHero({
         <h1
           style={{
             fontFamily: SLAB.serif,
-            fontSize: 'clamp(44px, 6.5vw, 80px)',
+            fontSize: 'clamp(34px, 8vw, 80px)',
             fontWeight: 400,
             letterSpacing: -2,
             lineHeight: 1.02,
@@ -90,7 +90,7 @@ export function PageHero({
         {subtitle && (
           <p
             style={{
-              fontSize: 19,
+              fontSize: 'clamp(15px, 2.2vw, 19px)',
               color: SLAB.text,
               opacity: 0.82,
               lineHeight: 1.55,
@@ -123,7 +123,7 @@ export function Prose({ children }: { children: ReactNode }) {
           lineHeight: 1.7,
           color: SLAB.text,
         }}
-        className="slab-prose"
+        className="slab-prose slab-container"
       >
         {children}
       </div>

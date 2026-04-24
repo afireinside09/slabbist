@@ -25,6 +25,7 @@ export default function PressPage() {
         }}
       >
         <div
+          className="slab-container"
           style={{
             maxWidth: 1180,
             margin: '0 auto',
@@ -59,7 +60,7 @@ export default function PressPage() {
           borderTop: '1px solid ' + SLAB.hair,
         }}
       >
-        <div style={{ maxWidth: 820, margin: '0 auto', padding: '0 24px' }}>
+        <div className="slab-container" style={{ maxWidth: 820, margin: '0 auto', padding: '0 24px' }}>
           <h2
             style={{
               fontFamily: SLAB.serif,

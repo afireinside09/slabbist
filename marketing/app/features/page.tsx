@@ -191,7 +191,7 @@ function Section({
         borderTop: '1px solid ' + SLAB.hair,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'flex',
@@ -307,7 +307,7 @@ function IntegrationsSection() {
         borderTop: '1px solid ' + SLAB.hair,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             fontSize: 12,

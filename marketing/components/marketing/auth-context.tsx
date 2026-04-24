@@ -236,6 +236,7 @@ function AuthModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        className="slab-modal-scroll"
         style={{
           width: '100%',
           maxWidth: 440,
@@ -271,7 +272,7 @@ function AuthModal({
           <Icon name="x" size={16} />
         </button>
 
-        <div style={{ padding: 36, position: 'relative' }}>
+        <div className="slab-modal-inner" style={{ padding: 36, position: 'relative' }}>
           {success ? (
             <SuccessView mode={mode} email={email} onClose={onClose} titleId={titleId} />
           ) : (

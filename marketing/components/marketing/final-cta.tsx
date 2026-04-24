@@ -16,6 +16,7 @@ export function FinalCta() {
       }}
     >
       <div
+        className="slab-container"
         style={{
           maxWidth: 900,
           margin: '0 auto',
@@ -27,7 +28,7 @@ export function FinalCta() {
         <h2
           style={{
             fontFamily: SLAB.serif,
-            fontSize: 'clamp(48px, 7vw, 88px)',
+            fontSize: 'clamp(36px, 9vw, 88px)',
             fontWeight: 400,
             letterSpacing: -2,
             lineHeight: 1.02,
@@ -39,7 +40,7 @@ export function FinalCta() {
         </h2>
         <p
           style={{
-            fontSize: 18,
+            fontSize: 'clamp(15px, 2.2vw, 18px)',
             color: SLAB.muted,
             maxWidth: 580,
             margin: '0 auto 36px',
@@ -48,7 +49,7 @@ export function FinalCta() {
         >
           Slabbist is rolling out to stores, sellers, and buyers in cohorts. Drop your email and we'll ping you the moment yours opens. No card, no setup call, no seat fees.
         </p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div className="slab-finalcta-row" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => openAuth('waitlist')}
             style={{

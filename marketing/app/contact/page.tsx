@@ -63,6 +63,7 @@ export default function ContactPage() {
         }}
       >
         <div
+          className="slab-container"
           style={{
             maxWidth: 1180,
             margin: '0 auto',
@@ -132,6 +133,7 @@ export default function ContactPage() {
         </div>
 
         <div
+          className="slab-container"
           style={{
             maxWidth: 820,
             margin: '56px auto 0',

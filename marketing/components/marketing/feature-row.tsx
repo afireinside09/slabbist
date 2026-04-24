@@ -65,7 +65,7 @@ export function FeatureRow() {
         position: 'relative',
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'grid',
@@ -198,6 +198,7 @@ export function FeatureRow() {
             role="tabpanel"
             id={`feat-panel-${active}`}
             aria-labelledby={`feat-tab-${active}`}
+            className="slab-feature-panel"
             style={{ position: 'sticky', top: 100 }}
           >
             <FeatureMock step={active} />

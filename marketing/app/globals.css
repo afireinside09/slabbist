@@ -102,6 +102,38 @@ button:focus-visible, a:focus-visible {
 
 ::selection { background: oklch(0.82 0.13 78 / 0.4); color: #fff; }
 
+/* ---------------------------------------------------------------- */
+/* Responsive overrides. Every marketing component uses inline       */
+/* styles, so we lean on !important media-query rules against a few  */
+/* class hooks instead of rewriting each style prop.                 */
+/* ---------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .slab-container { padding-left: 16px !important; padding-right: 16px !important; }
+  .slab-nav-wrap { padding: 10px 0 !important; }
+  .slab-nav-brand .slab-nav-beta { display: none !important; }
+  .slab-nav-brand .slab-nav-wordmark { font-size: 18px !important; }
+  .slab-nav-links { display: none !important; }
+  .slab-nav-signin { display: none !important; }
+  .slab-nav-cta { padding: 9px 16px !important; font-size: 12px !important; }
+
+  .slab-hero-section { padding-top: 92px !important; padding-bottom: 48px !important; }
+  .slab-hero-mock { width: 100% !important; max-width: 320px !important; transform: none !important; margin: 0 auto !important; }
+  .slab-hero-mock-outer { justify-self: center; }
+
+  .slab-hero-cta, .slab-finalcta-row { width: 100%; }
+  .slab-hero-cta > *, .slab-finalcta-row > * { flex: 1 1 auto; justify-content: center; }
+
+  .slab-pricing-card { padding: 24px !important; }
+  .slab-card { padding: 20px !important; }
+  .slab-modal-inner { padding: 24px !important; }
+  .slab-modal-scroll { max-height: calc(100dvh - 40px) !important; overflow-y: auto !important; }
+  .slab-feature-panel { position: static !important; }
+}
+
+@media (max-width: 420px) {
+  .slab-hero-mock { transform: scale(0.88) !important; transform-origin: top center !important; margin-bottom: -40px !important; }
+}
+
 @keyframes sbmFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sbmRise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sbmScanLine { 0% { top: 6%; } 50% { top: 90%; } 100% { top: 6%; } }

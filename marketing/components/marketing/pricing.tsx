@@ -69,7 +69,7 @@ export function Pricing() {
         position: 'relative',
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(40px, 5vw, 56px)' }}>
           <div
             style={{
@@ -112,6 +112,7 @@ export function Pricing() {
           {TIERS.map((t) => (
             <div
               key={t.audience}
+              className="slab-pricing-card"
               style={{
                 padding: 36,
                 borderRadius: 24,
@@ -192,11 +193,11 @@ export function Pricing() {
                 {t.blurb}
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                 <span
                   style={{
                     fontFamily: SLAB.serif,
-                    fontSize: 64,
+                    fontSize: 'clamp(48px, 8vw, 64px)',
                     letterSpacing: -1.5,
                     lineHeight: 1,
                     color: t.featured ? SLAB.gold : SLAB.text,

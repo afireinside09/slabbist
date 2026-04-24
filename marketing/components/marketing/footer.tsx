@@ -49,7 +49,7 @@ export function Footer() {
         background: SLAB.surface,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
         <div
           style={{
             display: 'grid',

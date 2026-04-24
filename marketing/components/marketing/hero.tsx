@@ -29,6 +29,7 @@ export function Hero() {
 
   return (
     <section
+      className="slab-hero-section"
       style={{
         position: 'relative',
         paddingTop: 'clamp(120px, 14vw, 148px)',
@@ -52,7 +53,7 @@ export function Hero() {
         }}
       />
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
+      <div className="slab-container" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
         <div
           style={{
             display: 'inline-flex',
@@ -89,7 +90,7 @@ export function Hero() {
         <h1
           style={{
             fontFamily: SLAB.serif,
-            fontSize: 'clamp(52px, 8vw, 104px)',
+            fontSize: 'clamp(40px, 10vw, 104px)',
             fontWeight: 400,
             letterSpacing: -2.5,
             lineHeight: 0.98,
@@ -110,7 +111,7 @@ export function Hero() {
 
         <p
           style={{
-            fontSize: 20,
+            fontSize: 'clamp(16px, 2.4vw, 20px)',
             color: SLAB.text,
             opacity: 0.82,
             lineHeight: 1.55,
@@ -124,6 +125,7 @@ export function Hero() {
         </p>
 
         <div
+          className="slab-hero-cta"
           style={{
             display: 'flex',
             gap: 12,
@@ -261,7 +263,7 @@ export function Hero() {
             </ul>
           </div>
 
-          <div style={{ animation: 'sbmRise 1s 0.3s ease backwards', position: 'relative' }}>
+          <div className="slab-hero-mock-outer" style={{ animation: 'sbmRise 1s 0.3s ease backwards', position: 'relative' }}>
             <PhoneHeroMock />
           </div>
         </div>
@@ -280,6 +282,7 @@ function PhoneHeroMock() {
 
   return (
     <div
+      className="slab-hero-mock"
       style={{
         width: 320,
         height: 640,
