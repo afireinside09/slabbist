@@ -31,4 +31,10 @@ extension OutboxPayloads {
         let created_at: String
         let updated_at: String
     }
+
+    struct PriceCompJob: Codable {
+        let graded_card_identity_id: String
+        let grading_service: String
+        let grade: String
+    }
 }

@@ -18,7 +18,10 @@ struct ScanQueueView: View {
                         if scan.id != visible.first?.id {
                             SlabCardDivider()
                         }
-                        row(for: scan)
+                        NavigationLink(value: scan) {
+                            row(for: scan)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

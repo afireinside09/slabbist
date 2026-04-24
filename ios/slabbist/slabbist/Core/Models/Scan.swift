@@ -21,6 +21,8 @@ final class Scan {
     var grader: Grader
     var certNumber: String
     var grade: String?
+    // Populated by /cert-lookup in its own plan; enables /price-comp lookup.
+    var gradedCardIdentityId: UUID?
     var status: ScanStatus
     var ocrRawText: String?
     var ocrConfidence: Double?
@@ -36,6 +38,7 @@ final class Scan {
         userId: UUID,
         grader: Grader,
         certNumber: String,
+        gradedCardIdentityId: UUID? = nil,
         status: ScanStatus = .pendingValidation,
         ocrRawText: String? = nil,
         ocrConfidence: Double? = nil,
@@ -50,6 +53,7 @@ final class Scan {
         self.grader = grader
         self.certNumber = certNumber
         self.grade = nil
+        self.gradedCardIdentityId = nil
         self.status = status
         self.ocrRawText = ocrRawText
         self.ocrConfidence = ocrConfidence
