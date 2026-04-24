@@ -1,3 +1,5 @@
+// @ts-nocheck — runs on Deno. Local TS LSP can't resolve `std/*` imports or `.ts` relative paths that Deno accepts.
+
 import type { GradedCardIdentity, GradingService } from "../types.ts";
 
 export interface CascadeQuery {

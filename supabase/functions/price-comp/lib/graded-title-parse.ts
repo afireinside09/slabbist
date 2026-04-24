@@ -1,3 +1,5 @@
+// @ts-nocheck — runs on Deno. Local TS LSP can't resolve `std/*` imports or `.ts` relative paths that Deno accepts.
+
 // supabase/functions/price-comp/lib/graded-title-parse.ts
 // Vendored from scraper/src/graded/cert-parser.ts (2026-04-23).
 // Keep in sync if the scraper copy changes.

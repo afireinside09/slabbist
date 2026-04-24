@@ -1,3 +1,5 @@
+// @ts-nocheck — runs on Deno. Local TS LSP can't resolve `std/*` imports or `.ts` relative paths that Deno accepts.
+
 import { assertAlmostEquals, assertEquals } from "std/assert";
 import { describe, it } from "std/testing/bdd";
 import { sampleFactor, freshnessFactor, confidence } from "../stats/confidence.ts";
