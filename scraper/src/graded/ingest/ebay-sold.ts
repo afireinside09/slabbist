@@ -7,12 +7,14 @@ import { ebayFetchRecentSoldViaApi, ebayFetchRecentSoldViaScrape } from "@/grade
 import { throwIfError } from "@/shared/db/supabase.js";
 import { extractIdentityFromEbayTitle } from "@/graded/title-extractor.js";
 import { fetchActiveWatchlistQueries } from "@/graded/watchlist.js";
+import type { Logger } from "@/shared/logger.js";
 
 export interface EbayIngestOptions {
   supabase: SupabaseClient;
   userAgent: string;
   queries: string[];
   marketplaceInsightsToken?: string;
+  log?: Logger;
 }
 
 export interface EbayIngestResult {
@@ -28,7 +30,9 @@ export interface EbayIngestResult {
 }
 
 export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIngestResult> {
+  const log = opts.log;
   const runId = crypto.randomUUID();
+  log?.info("ebay ingest starting", { runId });
   await throwIfError(opts.supabase.from("graded_ingest_runs").insert({
     id: runId, source: "ebay", status: "running", started_at: new Date().toISOString(), stats: {},
   }));
@@ -54,21 +58,29 @@ export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIn
     } catch {
       // best-effort; continue with whatever watchlist state exists
     }
+    if (watchlistPromoted > 0) log?.info("watchlist promoted", { count: watchlistPromoted });
 
     // Caller-supplied queries override the watchlist; otherwise drive from it.
+    const querySource = opts.queries.length > 0 ? "cli" : "watchlist";
     const queries = opts.queries.length > 0
       ? opts.queries
       : await fetchActiveWatchlistQueries(opts.supabase);
+    log?.info("queries loaded", { count: queries.length, source: querySource });
 
     const allSales: GradedSale[] = [];
-    for (const q of queries) {
+    for (let i = 0; i < queries.length; i++) {
+      const q = queries[i]!;
+      log?.info("query fetching", { current: i + 1, total: queries.length, query: q });
       const batch = opts.marketplaceInsightsToken
         ? await ebayFetchRecentSoldViaApi(q, { token: opts.marketplaceInsightsToken, userAgent: opts.userAgent })
         : await ebayFetchRecentSoldViaScrape(q, { userAgent: opts.userAgent });
       allSales.push(...batch);
+      log?.info("query fetched", { current: i + 1, total: queries.length, sales: batch.length });
     }
 
-    for (const s of allSales) {
+    log?.info("upserting sales", { total: allSales.length });
+    for (let i = 0; i < allSales.length; i++) {
+      const s = allSales[i]!;
       const identity = extractIdentityFromEbayTitle(s.title, s.gradingService as GradingService, s.grade);
       const identityId = await findOrCreateIdentity(opts.supabase, identity);
       await throwIfError(opts.supabase.from("graded_market_sales").upsert(
@@ -93,8 +105,13 @@ export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIn
           { onConflict: "grading_service,cert_number" },
         ));
       }
+      if ((i + 1) % 25 === 0 || i + 1 === allSales.length) {
+        log?.info("sales upserted", { current: i + 1, total: allSales.length });
+      }
     }
 
+    log?.info("aggregates recomputing", { total: touchedKeys.size });
+    let aggIdx = 0;
     for (const key of touchedKeys) {
       const [identityId, service, grade] = key.split("|");
       const { data } = await opts.supabase
@@ -117,6 +134,10 @@ export async function runEbaySoldIngest(opts: EbayIngestOptions): Promise<EbayIn
         }],
         { onConflict: "identity_id,grading_service,grade" },
       ));
+      aggIdx += 1;
+      if (aggIdx % 10 === 0 || aggIdx === touchedKeys.size) {
+        log?.info("aggregates recomputed", { current: aggIdx, total: touchedKeys.size });
+      }
     }
 
     const stats = {

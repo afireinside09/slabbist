@@ -25,6 +25,7 @@ run.command("raw")
       userAgent: cfg.runtime.userAgent,
       concurrency: Number(o.concurrency),
       delayMs: Number(o.delayMs),
+      log,
     });
     for (const r of results) log.info("run complete", { ...r });
     if (results.some((r) => r.status === "failed")) process.exit(1);
@@ -48,6 +49,7 @@ run.command("graded")
         supabase: getSupabase(),
         userAgent: cfg.runtime.userAgent,
         queries,
+        log,
       };
       if (cfg.ebay.marketplaceInsightsApproved && process.env.EBAY_OAUTH_TOKEN) {
         ebaySoldOpts.marketplaceInsightsToken = process.env.EBAY_OAUTH_TOKEN;

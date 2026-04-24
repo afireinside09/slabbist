@@ -4,6 +4,7 @@ import { extractPokemonFields } from "@/raw/extractors.js";
 import { fetchGroups, fetchProducts, fetchPrices } from "@/raw/sources/tcgcsv.js";
 import { mapConcurrent } from "@/shared/concurrency.js";
 import { throwIfError } from "@/shared/db/supabase.js";
+import type { Logger } from "@/shared/logger.js";
 
 export interface IngestOptions {
   categoryId: number;
@@ -11,6 +12,7 @@ export interface IngestOptions {
   userAgent: string;
   concurrency?: number;
   delayMs?: number;
+  log?: Logger;
 }
 
 export interface IngestResult {
@@ -31,19 +33,21 @@ function chunk<T>(arr: readonly T[], n: number): T[][] {
 }
 
 export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<IngestResult> {
-  const { supabase, categoryId } = opts;
+  const { supabase, categoryId, log } = opts;
   const { userAgent } = opts;
   const concurrency = opts.concurrency ?? 3;
   const delayMs = opts.delayMs ?? 200;
+  const categoryName = categoryId === 3 ? "Pokemon" : categoryId === 85 ? "Pokemon Japan" : `cat-${categoryId}`;
 
   // Ensure the tcg_categories row exists (idempotent upsert of the category).
   await throwIfError(supabase.from("tcg_categories").upsert(
-    [{ category_id: categoryId, name: categoryId === 3 ? "Pokemon" : categoryId === 85 ? "Pokemon Japan" : `cat-${categoryId}`, modified_on: new Date().toISOString() }],
+    [{ category_id: categoryId, name: categoryName, modified_on: new Date().toISOString() }],
     { onConflict: "category_id" },
   ));
 
   // Open a run row.
   const runId = crypto.randomUUID();
+  log?.info("category starting", { categoryId, category: categoryName, runId });
   await throwIfError(supabase.from("tcg_scrape_runs").insert({
     id: runId, category_id: categoryId, status: "running",
     started_at: new Date().toISOString(),
@@ -55,6 +59,7 @@ export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<Inge
 
   try {
     const groups = await fetchGroups(categoryId, { userAgent });
+    log?.info("groups fetched", { categoryId, count: groups.length });
     await throwIfError(supabase.from("tcg_scrape_runs").update({ groups_total: groups.length }).eq("id", runId));
 
     await throwIfError(supabase.from("tcg_groups").upsert(
@@ -112,10 +117,20 @@ export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<Inge
         await throwIfError(supabase.from("tcg_scrape_runs").update({
           groups_done: groupsDone, products_upserted: productsUpserted, prices_upserted: pricesUpserted,
         }).eq("id", runId));
+        log?.info("group done", {
+          categoryId,
+          current: groupsDone,
+          total: groups.length,
+          group: group.name,
+          products: rows.length,
+          prices: priceRows.length,
+        });
       } catch (e) {
-        // Per-group failure: log via run row but continue.
+        const msg = String((e as Error).message ?? e);
+        log?.warn("group failed", { categoryId, group: group.name, groupId: group.groupId, error: msg });
+        // Per-group failure: record via run row but continue.
         await supabase.from("tcg_scrape_runs").update({
-          error_message: `group ${group.groupId}: ${String((e as Error).message ?? e)}`,
+          error_message: `group ${group.groupId}: ${msg}`,
         }).eq("id", runId);
       }
     }, { delayMs });
@@ -124,10 +139,14 @@ export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<Inge
       status: "completed", finished_at: new Date().toISOString(),
       groups_done: groupsDone, products_upserted: productsUpserted, prices_upserted: pricesUpserted,
     }).eq("id", runId));
+    log?.info("category complete", {
+      categoryId, category: categoryName, groupsDone, productsUpserted, pricesUpserted,
+    });
 
     return { scrapeRunId: runId, status: "completed", groupsDone, productsUpserted, pricesUpserted };
   } catch (e) {
     const msg = String((e as Error).message ?? e);
+    log?.error("category failed", { categoryId, category: categoryName, error: msg });
     await supabase.from("tcg_scrape_runs").update({
       status: "failed", finished_at: new Date().toISOString(), error_message: msg,
     }).eq("id", runId);
