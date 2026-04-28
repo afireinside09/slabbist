@@ -157,5 +157,15 @@ export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<Inge
 export async function ingestPokemonAllCategories(opts: Omit<IngestOptions, "categoryId">): Promise<IngestResult[]> {
   const out: IngestResult[] = [];
   for (const id of [3, 85]) out.push(await ingestTcgcsvForCategory({ ...opts, categoryId: id }));
+  // Refresh the movers materialized view once per full run so the iOS
+  // Movers tab reflects the snapshot just landed. Isolated failure here
+  // must not fail the ingest — ingest rows are already committed.
+  try {
+    const { error } = await opts.supabase.rpc("refresh_movers");
+    if (error) opts.log?.warn("refresh_movers failed", { error: error.message });
+    else opts.log?.info("movers refreshed");
+  } catch (e) {
+    opts.log?.warn("refresh_movers threw", { error: String((e as Error).message ?? e) });
+  }
   return out;
 }
