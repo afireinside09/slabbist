@@ -157,15 +157,25 @@ export async function ingestTcgcsvForCategory(opts: IngestOptions): Promise<Inge
 export async function ingestPokemonAllCategories(opts: Omit<IngestOptions, "categoryId">): Promise<IngestResult[]> {
   const out: IngestResult[] = [];
   for (const id of [3, 85]) out.push(await ingestTcgcsvForCategory({ ...opts, categoryId: id }));
-  // Refresh the movers materialized view once per full run so the iOS
-  // Movers tab reflects the snapshot just landed. Isolated failure here
-  // must not fail the ingest — ingest rows are already committed.
+  // Refresh per-set movers, then prune price history to the 90-day
+  // window the movers refresh anchors against. Order matters only as
+  // a safety preference: refresh first so a prune failure can't strand
+  // the iOS tab on a stale snapshot. Both calls are best-effort —
+  // ingest rows are already committed and must not be rolled back by
+  // a downstream RPC failure.
   try {
     const { error } = await opts.supabase.rpc("refresh_movers");
     if (error) opts.log?.warn("refresh_movers failed", { error: error.message });
     else opts.log?.info("movers refreshed");
   } catch (e) {
     opts.log?.warn("refresh_movers threw", { error: String((e as Error).message ?? e) });
+  }
+  try {
+    const { data, error } = await opts.supabase.rpc("prune_tcg_price_history");
+    if (error) opts.log?.warn("prune_tcg_price_history failed", { error: error.message });
+    else opts.log?.info("price history pruned", { deleted: typeof data === "number" ? data : null });
+  } catch (e) {
+    opts.log?.warn("prune_tcg_price_history threw", { error: String((e as Error).message ?? e) });
   }
   return out;
 }
