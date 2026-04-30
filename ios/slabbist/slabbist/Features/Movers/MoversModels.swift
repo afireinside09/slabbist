@@ -16,6 +16,38 @@ enum MoversLanguage: Int, CaseIterable, Identifiable, Sendable, Hashable {
     }
 }
 
+/// Top-level segmented control for the Movers screen. English and
+/// Japanese are language-scoped movers slates; eBay Listings is a
+/// flat browsing surface over `public.mover_ebay_listings`. Each tab
+/// keeps its own (setFilter, priceTier) state so switching tabs
+/// doesn't lose the user's place on the others.
+enum MoversTab: String, CaseIterable, Identifiable, Sendable, Hashable {
+    case english
+    case japanese
+    case ebayListings
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .english:      return "English"
+        case .japanese:     return "Japanese"
+        case .ebayListings: return "eBay Listings"
+        }
+    }
+
+    /// `nil` for `.ebayListings` — that tab isn't language-scoped.
+    var moversLanguage: MoversLanguage? {
+        switch self {
+        case .english:      return .english
+        case .japanese:     return .japanese
+        case .ebayListings: return nil
+        }
+    }
+
+    var isMovers: Bool { moversLanguage != nil }
+}
+
 /// Direction of the move — top gainers (largest positive %) or top
 /// losers (largest negative %). Raw value maps to the RPC parameter.
 enum MoversDirection: String, CaseIterable, Identifiable, Sendable, Hashable {

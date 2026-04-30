@@ -176,6 +176,55 @@ struct MoversViewModelTests {
         else { Issue.record("gainers should be .loaded([]), got \(vm.gainers)") }
     }
 
+    @Test("switching tabs preserves each tab's previous filter state")
+    func tabStateRoundTrips() async {
+        let repo = StubMoversRepository(
+            setsByLanguage: [
+                3: [
+                    MoversSetDTO(groupId: 1, groupName: "Set A", moversCount: 1),
+                    MoversSetDTO(groupId: 2, groupName: "Set B", moversCount: 1),
+                ],
+                85: [MoversSetDTO(groupId: 9, groupName: "JP Set", moversCount: 1)],
+            ],
+            setMoversByGroupTier: [
+                .init(groupId: 1, tier: "tier_5_25"):  [Self.row(id: 1, name: "A", pct: 5,  direction: "gainers")],
+                .init(groupId: 2, tier: "tier_5_25"):  [Self.row(id: 2, name: "B", pct: 6,  direction: "gainers")],
+                .init(groupId: 9, tier: "tier_25_50"): [Self.row(id: 9, name: "C", pct: 7,  direction: "gainers")],
+            ]
+        )
+        let vm = MoversViewModel(repository: repo)
+        // Land on English with a specific (set, tier).
+        vm.priceTier = .tier5_25
+        await vm.loadIfNeeded()
+        await vm.loadIfNeeded()
+        vm.setFilter = 2
+        await vm.loadIfNeeded()
+        #expect(vm.tab == .english)
+        #expect(vm.setFilter == 2)
+        #expect(vm.priceTier == .tier5_25)
+
+        // Hop to eBay Listings — slot for English saved, eBay defaults applied.
+        vm.switchTab(to: .ebayListings)
+        #expect(vm.tab == .ebayListings)
+        #expect(vm.setFilter == nil)
+        #expect(vm.priceTier == .under5)
+
+        // Browse on eBay tab.
+        vm.priceTier = .tier200Plus
+        vm.setFilter = nil
+
+        // Hop back to English — saved (Set B, $5–$25) restored.
+        vm.switchTab(to: .english)
+        #expect(vm.tab == .english)
+        #expect(vm.setFilter == 2)
+        #expect(vm.priceTier == .tier5_25)
+
+        // Hop back to eBay — saved (nil, $200+) restored.
+        vm.switchTab(to: .ebayListings)
+        #expect(vm.setFilter == nil)
+        #expect(vm.priceTier == .tier200Plus)
+    }
+
     // MARK: - Helpers
 
     static func row(id: Int, name: String, pct: Double, direction: String) -> MoverDTO {
@@ -268,6 +317,18 @@ final class StubMoversRepository: MoversRepository, @unchecked Sendable {
         productId: Int, subType: String, limit: Int
     ) async throws -> [MoverEbayListingDTO] {
         Issue.record("ebayListings should not be called from list flow")
+        return []
+    }
+
+    func ebayListingsSets() async throws -> [MoversSetDTO] {
+        Issue.record("ebayListingsSets is not exercised in this test fixture")
+        return []
+    }
+
+    func ebayListingsBrowse(
+        priceTier: MoversPriceTier?, groupId: Int?, limit: Int
+    ) async throws -> [EbayListingBrowseRowDTO] {
+        Issue.record("ebayListingsBrowse is not exercised in this test fixture")
         return []
     }
 }

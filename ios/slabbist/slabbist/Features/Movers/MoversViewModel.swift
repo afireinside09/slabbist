@@ -24,37 +24,80 @@ final class MoversViewModel {
         }
     }
 
+    /// Loading-state envelope for the eBay browse-list section.
+    enum EbayBrowseState: Equatable {
+        case idle
+        case loading
+        case loaded([EbayListingBrowseRowDTO])
+        case error(String)
+    }
+
+    /// Loading-state envelope for the eBay-mode set-rail RPC.
+    enum EbaySetsState: Equatable {
+        case idle
+        case loading
+        case loaded([MoversSetDTO])
+        case error(String)
+    }
+
+    // MARK: - Picker state
+
+    /// Top-level tab. Drives data fetching and set-rail source.
+    var tab: MoversTab = .english
+
+    // MARK: - Movers-mode state (English / Japanese)
+
+    /// The active language while a movers tab is selected. Stays in
+    /// sync with `tab` for `.english` / `.japanese`. When the user
+    /// is on `.ebayListings`, this is whatever it was last — the
+    /// movers fetch path doesn't run, so the value is dormant.
     var language: MoversLanguage = .english
     /// Selected set (group_id). `nil` only during the initial bootstrap
     /// before the sets list lands, or after a language switch when the
-    /// new language hasn't been bootstrapped yet. The view-model
-    /// auto-picks the newest available set the moment the sets list
-    /// resolves — there is no "All sets" UX.
+    /// new language hasn't been bootstrapped yet.
     var setFilter: Int?
-    /// Default `.under5` because the product wants users to enter the
-    /// tab on a concrete price band, not the noisy unfiltered view.
     var priceTier: MoversPriceTier = .under5
     var gainers: SectionState = .idle
     var losers: SectionState = .idle
 
-    /// Sets list per language. Always fetched with the server's
-    /// `'all'` tier so the rail shows every set that has any mover —
-    /// keeps the user's pick visible even when they're filtering a
-    /// sparse tier.
+    /// Sets list per language for movers mode. Tier-independent.
     var setsByLanguage: [MoversLanguage: [MoversSetDTO]] = [:]
     var setsLoadError: String?
 
     /// Timestamp of the latest successful fetch for the current
-    /// (language, set, tier) — drives the "updated Nm ago" subtitle.
+    /// (tab, set, tier) combo.
     var lastUpdatedAt: Date?
+
+    // MARK: - eBay browse state
+
+    /// Set rail source while `tab == .ebayListings`. Different RPC
+    /// than the movers set rail because we want only sets that have
+    /// at least one matched listing.
+    var ebaySetsState: EbaySetsState = .idle
+    /// Browse-list payload while `tab == .ebayListings`.
+    var ebayListingsState: EbayBrowseState = .idle
+
+    // MARK: - Per-tab snapshots
+
+    /// Each tab keeps its own (setFilter, priceTier) so switching
+    /// tabs doesn't lose the user's place. The active tab's values
+    /// live in `setFilter` / `priceTier` directly; inactive tabs'
+    /// values land here on switch and are restored when the user
+    /// comes back.
+    private struct TabSlot {
+        var setFilter: Int?
+        var priceTier: MoversPriceTier
+    }
+    private var savedSlots: [MoversTab: TabSlot] = [:]
+
+    // MARK: - Caches + concurrency
 
     private let repository: MoversRepository
     private let limit: Int
 
-    /// Cache key for per-set + tier fetches. group_id alone would be
-    /// unique across languages in TCGCSV, but keeping language in the
-    /// key makes the cache self-explanatory and hardens us against
-    /// any future cross-category id collision.
+    /// Movers-mode per-set cache. group_id alone would be unique
+    /// across languages in TCGCSV but keeping language in the key
+    /// makes the cache self-explanatory.
     private struct SetKey: Hashable {
         let language: MoversLanguage
         let groupId: Int
@@ -65,12 +108,21 @@ final class MoversViewModel {
     /// Tracks the most recently requested filter so a late response
     /// from a stale (language, set, tier) doesn't overwrite current
     /// state when the user toggles quickly.
-    private var inflightFingerprint: Fingerprint?
-    private struct Fingerprint: Equatable {
+    private var inflightFingerprint: MoversFingerprint?
+    private struct MoversFingerprint: Equatable {
         let language: MoversLanguage
         let groupId: Int
         let priceTier: MoversPriceTier
     }
+
+    /// eBay-browse cache. Keyed on (tier, groupId) so the user can
+    /// flip tiers/sets and not re-fetch when revisiting.
+    private struct EbayBrowseKey: Hashable {
+        let priceTier: MoversPriceTier
+        let groupId: Int?
+    }
+    private var ebayBrowseCache: [EbayBrowseKey: [EbayListingBrowseRowDTO]] = [:]
+    private var ebayInflight: EbayBrowseKey?
 
     init(
         repository: MoversRepository = SupabaseMoversRepository(),
@@ -80,16 +132,68 @@ final class MoversViewModel {
         self.limit = limit
     }
 
-    /// Load both sections for the current (language, setFilter, tier).
-    /// Two-phase:
-    ///   1. Make sure the language's sets list is loaded.
-    ///   2. If `setFilter` is nil (first load or post-language-switch),
-    ///      auto-pick the newest set and return — mutating `setFilter`
-    ///      retriggers the view's `.task(id:)`, which re-enters here
-    ///      with the populated filter and falls through to phase 3.
-    ///   3. Fetch the per-set movers (single round-trip; both
-    ///      directions arrive together).
+    // MARK: - Tab switching
+
+    /// Switch to a new tab, snapshotting the outgoing tab's filter
+    /// state and restoring the incoming tab's previously-saved slot
+    /// if any. First-time visits to a tab use the per-tab default
+    /// (no set filter for eBay browse, nil-bootstrap for movers).
+    func switchTab(to next: MoversTab) {
+        guard next != tab else { return }
+        savedSlots[tab] = TabSlot(setFilter: setFilter, priceTier: priceTier)
+        tab = next
+        if let lang = next.moversLanguage {
+            language = lang
+        }
+        if let restored = savedSlots[next] {
+            setFilter = restored.setFilter
+            priceTier = restored.priceTier
+        } else {
+            // First-time defaults per tab.
+            setFilter = nil
+            priceTier = .under5
+        }
+    }
+
+    // MARK: - Load orchestration
+
+    /// Single entry point used by the view's `.task(id:)`. Branches
+    /// to the movers- or eBay-mode load path based on the current tab.
     func loadIfNeeded() async {
+        switch tab {
+        case .english, .japanese:
+            await loadMoversIfNeeded()
+        case .ebayListings:
+            await loadEbayIfNeeded()
+        }
+    }
+
+    func refresh() async {
+        switch tab {
+        case .english, .japanese:
+            await refreshMovers()
+        case .ebayListings:
+            async let sets: Void = ensureEbaySetsLoaded(force: true)
+            async let list: Void = fetchEbayBrowse(force: true)
+            _ = await (sets, list)
+        }
+    }
+
+    /// Set rail source for the current tab. The view binds to this
+    /// directly so flipping tabs swaps the rail's contents.
+    var currentSets: [MoversSetDTO] {
+        switch tab {
+        case .english, .japanese:
+            return setsByLanguage[language] ?? []
+        case .ebayListings:
+            if case let .loaded(sets) = ebaySetsState { return sets }
+            return []
+        }
+    }
+
+    // MARK: - Movers mode
+
+    private func loadMoversIfNeeded() async {
         await ensureSetsLoaded(force: false)
 
         if setFilter == nil {
@@ -98,8 +202,7 @@ final class MoversViewModel {
                 return
             }
             // No sets in this language at all — flip to an explicit
-            // empty state so the section bodies render the empty
-            // copy instead of the perpetual skeleton shimmer.
+            // empty state.
             gainers = .loaded([])
             losers  = .loaded([])
             return
@@ -110,27 +213,17 @@ final class MoversViewModel {
         }
     }
 
-    /// Pull-to-refresh: always hits the network for both the sets
-    /// list (a new scrape may have introduced new sets) and the
-    /// current set's movers.
-    func refresh() async {
+    private func refreshMovers() async {
         await ensureSetsLoaded(force: true)
         if let groupId = setFilter {
             await fetchSetMovers(groupId: groupId, force: true)
         }
     }
 
-    /// Convenience for the view: sets list for the current language.
-    var currentSets: [MoversSetDTO] {
-        setsByLanguage[language] ?? []
-    }
-
-    // MARK: - Mover fetch
-
     private func fetchSetMovers(groupId: Int, force: Bool) async {
         let lang = language
         let tier = priceTier
-        let fp = Fingerprint(language: lang, groupId: groupId, priceTier: tier)
+        let fp = MoversFingerprint(language: lang, groupId: groupId, priceTier: tier)
         inflightFingerprint = fp
 
         let key = SetKey(language: lang, groupId: groupId, priceTier: tier)
@@ -161,10 +254,6 @@ final class MoversViewModel {
     }
 
     private func applySetRows(_ rows: [MoverDTO]) {
-        // Split a single payload into the two sections. Direction is
-        // populated by the per-set RPC; if absent (older payload or
-        // unexpected shape) we fall back to sign-of-pct_change so the
-        // UI never silently drops rows.
         var g: [MoverDTO] = []
         var l: [MoverDTO] = []
         for row in rows {
@@ -178,17 +267,11 @@ final class MoversViewModel {
         losers  = .loaded(l)
     }
 
-    // MARK: - Sets list
-
     private func ensureSetsLoaded(force: Bool) async {
         let lang = language
         if !force, setsByLanguage[lang] != nil { return }
 
         do {
-            // The sets-list RPC scans every tier server-side, so the
-            // rail is a navigational constant — your selected set
-            // stays visible even when the picked tier is sparse for
-            // that set.
             let sets = try await repository.sets(language: lang)
             guard language == lang else { return }
             setsByLanguage[lang] = sets
@@ -200,8 +283,6 @@ final class MoversViewModel {
             setsLoadError = error.localizedDescription
         }
     }
-
-    // MARK: - Helpers
 
     private func fetchSetMoversOutcome(
         groupId: Int,
@@ -221,12 +302,78 @@ final class MoversViewModel {
         }
     }
 
-    private func isCurrent(_ fp: Fingerprint) -> Bool {
-        language == fp.language && setFilter == fp.groupId && priceTier == fp.priceTier
+    private func isCurrent(_ fp: MoversFingerprint) -> Bool {
+        tab.isMovers
+            && language == fp.language
+            && setFilter == fp.groupId
+            && priceTier == fp.priceTier
     }
 
+    // MARK: - eBay browse mode
+
+    private func loadEbayIfNeeded() async {
+        async let sets: Void = ensureEbaySetsLoaded(force: false)
+        async let list: Void = fetchEbayBrowse(force: false)
+        _ = await (sets, list)
+    }
+
+    private func ensureEbaySetsLoaded(force: Bool) async {
+        if !force, case .loaded = ebaySetsState { return }
+        ebaySetsState = .loading
+        do {
+            let sets = try await repository.ebayListingsSets()
+            ebaySetsState = .loaded(sets)
+        } catch {
+            AppLog.movers.error(
+                "ebayListingsSets failed: \(error.localizedDescription, privacy: .public)"
+            )
+            ebaySetsState = .error(error.localizedDescription)
+        }
+    }
+
+    private func fetchEbayBrowse(force: Bool) async {
+        let key = EbayBrowseKey(priceTier: priceTier, groupId: setFilter)
+        ebayInflight = key
+
+        if !force, let cached = ebayBrowseCache[key] {
+            ebayListingsState = .loaded(cached)
+            return
+        }
+
+        ebayListingsState = .loading
+
+        do {
+            let rows = try await repository.ebayListingsBrowse(
+                priceTier: priceTier,
+                groupId: setFilter,
+                limit: 60
+            )
+            // Late-response guard — if the user changed filters
+            // while we were in flight, drop the result silently.
+            guard tab == .ebayListings, ebayInflight == key else { return }
+            ebayBrowseCache[key] = rows
+            ebayListingsState = .loaded(rows)
+            stampUpdatedIfAnyLoaded()
+        } catch {
+            guard tab == .ebayListings, ebayInflight == key else { return }
+            AppLog.movers.error(
+                "ebayListingsBrowse failed: \(error.localizedDescription, privacy: .public)"
+            )
+            ebayListingsState = .error(error.localizedDescription)
+        }
+
+        if ebayInflight == key { ebayInflight = nil }
+    }
+
+    // MARK: - Misc
+
     private func stampUpdatedIfAnyLoaded() {
-        if case .loaded = gainers { lastUpdatedAt = Date() }
-        else if case .loaded = losers { lastUpdatedAt = Date() }
+        switch tab {
+        case .english, .japanese:
+            if case .loaded = gainers { lastUpdatedAt = Date() }
+            else if case .loaded = losers { lastUpdatedAt = Date() }
+        case .ebayListings:
+            if case .loaded = ebayListingsState { lastUpdatedAt = Date() }
+        }
     }
 }

@@ -57,6 +57,18 @@ protocol MoversRepository: Sendable {
         subType: String,
         limit: Int
     ) async throws -> [MoverEbayListingDTO]
+
+    /// Sets that have at least one listing in `mover_ebay_listings`.
+    /// Drives the narrowed set rail on the eBay-Listings tab.
+    func ebayListingsSets() async throws -> [MoversSetDTO]
+
+    /// Flat browse-mode listings, optionally filtered. Both `priceTier`
+    /// and `groupId` are orthogonal — pass `nil` to skip a filter.
+    func ebayListingsBrowse(
+        priceTier: MoversPriceTier?,
+        groupId: Int?,
+        limit: Int
+    ) async throws -> [EbayListingBrowseRowDTO]
 }
 
 extension MoversRepository {
@@ -66,6 +78,13 @@ extension MoversRepository {
 
     func ebayListings(productId: Int, subType: String) async throws -> [MoverEbayListingDTO] {
         try await ebayListings(productId: productId, subType: subType, limit: 24)
+    }
+
+    func ebayListingsBrowse(
+        priceTier: MoversPriceTier?,
+        groupId: Int?
+    ) async throws -> [EbayListingBrowseRowDTO] {
+        try await ebayListingsBrowse(priceTier: priceTier, groupId: groupId, limit: 60)
     }
 }
 
@@ -176,10 +195,91 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
         let p_days: Int
     }
 
+    func ebayListingsSets() async throws -> [MoversSetDTO] {
+        do {
+            // Empty params object — RPC takes no arguments.
+            let response = try await client.rpc(
+                "get_ebay_listings_sets",
+                params: EmptyParams()
+            ).execute()
+            // get_ebay_listings_sets returns `listings_count` rather
+            // than `movers_count`. Decode through a thin shim and map
+            // into the existing MoversSetDTO so the iOS rail is
+            // schema-agnostic about which RPC fed it.
+            let rows = try JSONCoders.decoder.decode([EbayListingsSetRow].self, from: response.data)
+            return rows.map {
+                MoversSetDTO(
+                    groupId: $0.group_id,
+                    groupName: $0.group_name,
+                    moversCount: $0.listings_count,
+                    publishedOn: $0.published_on
+                )
+            }
+        } catch {
+            throw SupabaseError.map(error)
+        }
+    }
+
+    func ebayListingsBrowse(
+        priceTier: MoversPriceTier?,
+        groupId: Int?,
+        limit: Int = 60
+    ) async throws -> [EbayListingBrowseRowDTO] {
+        do {
+            let response = try await client.rpc(
+                "get_ebay_listings",
+                params: BrowseParams(
+                    p_price_tier: priceTier?.rawValue,
+                    p_group_id: groupId,
+                    p_limit: limit
+                )
+            ).execute()
+            return try JSONCoders.decoder.decode([EbayListingBrowseRowDTO].self, from: response.data)
+        } catch {
+            throw SupabaseError.map(error)
+        }
+    }
+
     private struct ListingsParams: Encodable, Sendable {
         let p_product_id: Int
         let p_sub_type_name: String
         let p_limit: Int
+    }
+
+    private struct EmptyParams: Encodable, Sendable {}
+
+    private struct BrowseParams: Encodable, Sendable {
+        let p_price_tier: String?
+        let p_group_id: Int?
+        let p_limit: Int
+    }
+
+    private struct EbayListingsSetRow: Decodable, Sendable {
+        let group_id: Int
+        let group_name: String
+        let listings_count: Int
+        let published_on: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case group_id, group_name, listings_count, published_on
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.group_id = try c.decode(Int.self, forKey: .group_id)
+            self.group_name = try c.decode(String.self, forKey: .group_name)
+            self.listings_count = try c.decode(Int.self, forKey: .listings_count)
+            // Postgres `date` arrives as a yyyy-MM-dd string; tolerate it.
+            if let raw = try c.decodeIfPresent(String.self, forKey: .published_on) {
+                let f = DateFormatter()
+                f.locale = Locale(identifier: "en_US_POSIX")
+                f.timeZone = TimeZone(identifier: "UTC")
+                f.dateFormat = "yyyy-MM-dd"
+                self.published_on = f.date(from: raw)
+            } else {
+                self.published_on = nil
+            }
+        }
     }
 
     private struct TopParams: Encodable, Sendable {

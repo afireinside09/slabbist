@@ -24,7 +24,7 @@ struct MoversListView: View {
                     VStack(alignment: .leading, spacing: Spacing.xxl) {
                         header
 
-                        languagePicker
+                        tabPicker
 
                         priceTierRail
 
@@ -32,8 +32,7 @@ struct MoversListView: View {
 
                         setRail
 
-                        gainersSection
-                        losersSection
+                        tabBody
 
                         Spacer(minLength: Spacing.xxxl)
                     }
@@ -43,18 +42,18 @@ struct MoversListView: View {
                 .refreshable { await viewModel.refresh() }
             }
             .toolbar(.hidden, for: .navigationBar)
-            // Keying on both fields means switching language *or* set
-            // triggers exactly one reload — the view-model's caches
-            // make the second visit a synchronous no-op.
+            // Keying on tab + set + tier means any picker change kicks
+            // off exactly one reload. Caches in the view-model make
+            // repeat visits to the same combo a synchronous no-op.
             .task(id: filterFingerprint) {
                 await viewModel.loadIfNeeded()
             }
             .navigationDestination(item: $selectedMover) { mover in
                 MoverDetailView(mover: mover)
             }
-            // Switching language wipes the search context — the cached
-            // suggestion list is the *previous* language's sets.
-            .onChange(of: viewModel.language) { _, _ in
+            // Tab/language change wipes the search context — the
+            // cached suggestion list is the *previous* tab's set list.
+            .onChange(of: viewModel.tab) { _, _ in
                 setSearchQuery = ""
                 setSearchFocused = false
             }
@@ -65,13 +64,13 @@ struct MoversListView: View {
     /// explicit and avoids a tuple-of-Hashable runtime cost.
     private var filterFingerprint: FilterKey {
         FilterKey(
-            language: viewModel.language,
+            tab: viewModel.tab,
             filter: viewModel.setFilter,
             priceTier: viewModel.priceTier
         )
     }
     private struct FilterKey: Hashable {
-        let language: MoversLanguage
+        let tab: MoversTab
         let filter: Int?
         let priceTier: MoversPriceTier
     }
@@ -103,33 +102,37 @@ struct MoversListView: View {
         if let id = viewModel.setFilter,
            let name = viewModel.currentSets.first(where: { $0.groupId == id })?.groupName {
             setPart = name
+        } else if viewModel.tab == .ebayListings {
+            setPart = "All sets"
         } else {
             setPart = "\(viewModel.language.displayName) sets"
         }
         return "\(setPart) · \(viewModel.priceTier.displayName)"
     }
 
-    // MARK: - Language picker
+    // MARK: - Tab picker
+    //
+    // Three-option segmented control. English / Japanese drive the
+    // movers slates; eBay Listings switches the screen into a flat
+    // browse over `mover_ebay_listings`. Each tab keeps its own
+    // (setFilter, priceTier) so flipping doesn't lose the user's
+    // place — the view-model handles the snapshot/restore.
 
-    private var languagePicker: some View {
-        PillToggle(
-            selection: Binding(
-                get: { viewModel.language },
-                set: { newValue in
-                    guard newValue != viewModel.language else { return }
-                    viewModel.language = newValue
-                    // group_id values don't bridge languages, so the
-                    // selected set is invalidated. Nilling it lets
-                    // the view-model auto-pick the newest set for
-                    // the new language once its sets list lands.
-                    viewModel.setFilter = nil
+    private var tabPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.s) {
+                ForEach(MoversTab.allCases) { tab in
+                    SetChip(
+                        label: tab.displayName,
+                        isSelected: viewModel.tab == tab
+                    ) {
+                        viewModel.switchTab(to: tab)
+                    }
                 }
-            ),
-            options: MoversLanguage.allCases.map { ($0, $0.displayName) },
-            style: .accent
-        )
-        .padding(.horizontal, Spacing.xxl)
-        .accessibilityLabel("Language")
+            }
+            .padding(.horizontal, Spacing.xxl)
+        }
+        .accessibilityLabel("Movers tab")
     }
 
     // MARK: - Price tier rail
@@ -300,19 +303,24 @@ struct MoversListView: View {
     private var setRail: some View {
         if viewModel.currentSets.isEmpty && viewModel.setsLoadError == nil {
             // Either still loading or no sets-with-movers exist yet.
-            // Skeleton shimmer is visual noise here — keep just the
-            // language picker until data lands.
             EmptyView()
         } else {
-            // ScrollViewReader is scoped to the *horizontal* rail so
-            // proxy.scrollTo drives this scroll view, not the outer
-            // vertical page. A regular HStack (not LazyHStack) means
-            // every chip is laid out eagerly, so scrollTo can find any
-            // id even far off-screen — the chip is a tiny text+rect,
-            // so 200 of them is a non-issue for performance.
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.s) {
+                        // Movers mode auto-bootstraps to a specific
+                        // set — there's no "all" affordance. eBay
+                        // mode lets the user broaden to "all sets",
+                        // so we pin a chip representing setFilter=nil
+                        // at the start.
+                        if viewModel.tab == .ebayListings {
+                            SetChip(
+                                label: "All sets",
+                                isSelected: viewModel.setFilter == nil
+                            ) {
+                                viewModel.setFilter = nil
+                            }
+                        }
                         ForEach(viewModel.currentSets) { set in
                             SetChip(
                                 label: set.groupName,
@@ -331,14 +339,56 @@ struct MoversListView: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         proxy.scrollTo(target, anchor: .center)
                     }
-                    // Clear on the next runloop so picking the same
-                    // suggestion twice in a row still re-fires.
                     Task { @MainActor in
                         scrollToSetId = nil
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Body switch
+
+    @ViewBuilder
+    private var tabBody: some View {
+        switch viewModel.tab {
+        case .english, .japanese:
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                gainersSection
+                losersSection
+            }
+        case .ebayListings:
+            ebayListingsSection
+        }
+    }
+
+    // MARK: - eBay listings section
+
+    private var ebayListingsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: "tag")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppColor.gold)
+                KickerLabel("Graded eBay listings")
+                Spacer()
+                if case let .loaded(rows) = viewModel.ebayListingsState, !rows.isEmpty {
+                    Text("\(rows.count)")
+                        .font(SlabFont.mono(size: 11, weight: .semibold))
+                        .foregroundStyle(AppColor.gold)
+                        .padding(.horizontal, Spacing.s)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                                .fill(AppColor.gold.opacity(0.12))
+                        )
+                }
+            }
+            SlabCard {
+                MoversEbayListingsBody(state: viewModel.ebayListingsState)
+            }
+        }
+        .padding(.horizontal, Spacing.xxl)
     }
 
     // MARK: - Sections
@@ -679,6 +729,137 @@ private struct ErrorMoversRow: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Spacing.l)
             Spacer(minLength: Spacing.m)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, Spacing.m)
+    }
+}
+
+// MARK: - eBay listings list (browse mode)
+
+/// State-machine wrapper for the eBay-Listings tab body. Renders a
+/// vertical list of compact listing rows (no horizontal scroll —
+/// scanning down a tall list is much faster than carouseling
+/// sideways through 60 items).
+private struct MoversEbayListingsBody: View {
+    let state: MoversViewModel.EbayBrowseState
+
+    var body: some View {
+        switch state {
+        case .idle, .loading:
+            SkeletonRows(count: 6)
+        case let .loaded(rows):
+            if rows.isEmpty {
+                EbayEmptyRow()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { SlabCardDivider() }
+                        EbayListingRow(row: row)
+                    }
+                }
+            }
+        case let .error(message):
+            ErrorMoversRow(message: message)
+        }
+    }
+}
+
+private struct EbayListingRow: View {
+    let row: EbayListingBrowseRowDTO
+
+    var body: some View {
+        Button {
+            if let url = URL(string: row.url) {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            HStack(alignment: .center, spacing: Spacing.m) {
+                thumbnail
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    HStack(spacing: Spacing.xs) {
+                        Text(row.productName)
+                            .slabRowTitle()
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if let badge = MoversFormat.variantBadge(row.subTypeName) {
+                            Text(badge)
+                                .font(SlabFont.mono(size: 10, weight: .medium))
+                                .foregroundStyle(AppColor.gold.opacity(0.85))
+                        }
+                    }
+                    if let set = row.groupName, !set.isEmpty {
+                        Text(set)
+                            .font(SlabFont.sans(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Text(row.gradeBadge)
+                        .font(SlabFont.mono(size: 10, weight: .semibold))
+                        .foregroundStyle(AppColor.gold)
+                }
+                Spacer(minLength: Spacing.s)
+                VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                    Text(MoversFormat.price(row.price))
+                        .slabMetric()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppColor.dim)
+                }
+            }
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens listing on eBay")
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        let urlString = row.imageUrl ?? row.cardImageUrl
+        ZStack {
+            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                .fill(AppColor.elev2)
+            if let urlString, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                    case .empty, .failure:
+                        Image(systemName: "photo")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppColor.dim)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+    }
+}
+
+private struct EbayEmptyRow: View {
+    var body: some View {
+        VStack(spacing: Spacing.m) {
+            Image(systemName: "tag")
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(AppColor.gold.opacity(0.7))
+                .padding(.top, Spacing.l)
+            Text("No listings yet")
+                .font(SlabFont.serif(size: 22))
+                .tracking(-0.5)
+                .foregroundStyle(AppColor.text)
+            Text("Run the scraper to populate eBay listings, or pick a different price tier or set.")
+                .font(SlabFont.sans(size: 13))
+                .foregroundStyle(AppColor.muted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, Spacing.l)
+            Spacer(minLength: Spacing.l)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, Spacing.m)

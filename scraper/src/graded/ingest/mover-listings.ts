@@ -45,10 +45,16 @@ export interface MoverListingsResult {
   stats: {
     cardsProcessed: number;
     cardsSkipped: number;
+    cardsFailed: number;
     listingsFetched: number;
     listingsAccepted: number;
+    listingsRejected: number;
     listingsInserted: number;
   };
+  /// Aggregated reject-reason histogram across the whole run. Lets
+  /// callers see whether the matcher is rejecting most listings for
+  /// missing card numbers vs. variant mismatches vs. blocklist hits.
+  rejectReasons: Record<string, number>;
   errorMessage?: string;
 }
 
@@ -70,16 +76,20 @@ export async function runMoverListingsIngest(
   const stats = {
     cardsProcessed: 0,
     cardsSkipped: 0,
+    cardsFailed: 0,
     listingsFetched: 0,
     listingsAccepted: 0,
+    listingsRejected: 0,
     listingsInserted: 0,
   };
+  const rejectReasons = new Map<string, number>();
 
   try {
     log?.info("mover-listings starting", {
       hasEbayToken: Boolean(opts.ebayToken),
       cardLimit: opts.cardLimit ?? null,
       concurrency,
+      perCardLimit,
     });
 
     // Pull every distinct (product_id, sub_type_name) currently in
@@ -95,11 +105,22 @@ export async function runMoverListingsIngest(
     );
     log?.info("table cleared");
 
+    const total = cards.length;
+    let completed = 0;
+
     await mapConcurrent(cards, concurrency, async (card: CardRow) => {
+      // Per-card reject histogram so the progress log shows *why*
+      // listings were dropped at this card. Rolled into the global
+      // rejectReasons map after each card finishes.
+      const cardRejects = new Map<string, number>();
+      let fetchedCount = 0;
+      let acceptedCount = 0;
+
       try {
         const query = buildSearchQuery(card);
         const fetched = await fetchListings(query, opts);
-        stats.listingsFetched += fetched.length;
+        fetchedCount = fetched.length;
+        stats.listingsFetched += fetchedCount;
 
         const accepted: Array<{ listing: ActiveListing; service: string; grade: string }> = [];
         for (const listing of fetched) {
@@ -108,7 +129,11 @@ export async function runMoverListingsIngest(
             cardNumber: card.card_number,
             subTypeName: card.sub_type_name,
           });
-          if (!verdict.ok) continue;
+          if (!verdict.ok) {
+            bumpReason(cardRejects, verdict.reason);
+            bumpReason(rejectReasons, verdict.reason);
+            continue;
+          }
           accepted.push({
             listing,
             service: verdict.gradingService,
@@ -116,58 +141,92 @@ export async function runMoverListingsIngest(
           });
           if (accepted.length >= perCardLimit) break;
         }
-        stats.listingsAccepted += accepted.length;
+        acceptedCount = accepted.length;
+        stats.listingsAccepted += acceptedCount;
+        stats.listingsRejected += fetchedCount - acceptedCount;
 
-        if (accepted.length === 0) {
+        if (accepted.length > 0) {
+          const rows = accepted.map(({ listing, service, grade }) => ({
+            product_id: card.product_id,
+            sub_type_name: card.sub_type_name,
+            ebay_item_id: listing.ebayItemId,
+            title: listing.title,
+            price: listing.price,
+            currency: listing.currency,
+            url: listing.url,
+            image_url: listing.imageUrl,
+            grading_service: service,
+            grade,
+            buying_options: listing.buyingOptions,
+            end_at: listing.endAt,
+            refreshed_at: new Date().toISOString(),
+          }));
+
+          await throwIfError(
+            opts.supabase
+              .from("mover_ebay_listings")
+              .upsert(rows, { onConflict: "product_id,sub_type_name,ebay_item_id" }),
+          );
+          stats.listingsInserted += rows.length;
+        } else {
           stats.cardsSkipped += 1;
-          stats.cardsProcessed += 1;
-          return;
         }
 
-        const rows = accepted.map(({ listing, service, grade }) => ({
-          product_id: card.product_id,
-          sub_type_name: card.sub_type_name,
-          ebay_item_id: listing.ebayItemId,
-          title: listing.title,
-          price: listing.price,
-          currency: listing.currency,
-          url: listing.url,
-          image_url: listing.imageUrl,
-          grading_service: service,
-          grade,
-          buying_options: listing.buyingOptions,
-          end_at: listing.endAt,
-          refreshed_at: new Date().toISOString(),
-        }));
-
-        await throwIfError(
-          opts.supabase
-            .from("mover_ebay_listings")
-            .upsert(rows, { onConflict: "product_id,sub_type_name,ebay_item_id" }),
-        );
-        stats.listingsInserted += rows.length;
+        completed += 1;
         stats.cardsProcessed += 1;
+        log?.info("card processed", {
+          progress: `${completed}/${total}`,
+          productId: card.product_id,
+          product: card.product_name,
+          subType: card.sub_type_name,
+          fetched: fetchedCount,
+          kept: acceptedCount,
+          rejected: fetchedCount - acceptedCount,
+          ...(cardRejects.size > 0 ? { topRejects: topReasons(cardRejects, 3) } : {}),
+        });
       } catch (e) {
         // Per-card failures shouldn't sink the whole run — log and
         // move on. The card just won't have listings until the next
-        // ingest.
+        // ingest. Counted separately from `cardsSkipped` (which
+        // means "matched zero listings, but the fetch worked") so
+        // the final summary distinguishes infra failures from
+        // legitimate empty results.
+        completed += 1;
+        stats.cardsProcessed += 1;
+        stats.cardsFailed += 1;
         log?.warn("card failed", {
+          progress: `${completed}/${total}`,
           productId: card.product_id,
+          product: card.product_name,
           subType: card.sub_type_name,
           error: String((e as Error).message ?? e),
         });
-        stats.cardsProcessed += 1;
-        stats.cardsSkipped += 1;
       }
     });
 
-    log?.info("mover-listings completed", { ...stats });
-    return { status: "completed", stats };
+    const rejectSummary = Object.fromEntries(
+      [...rejectReasons.entries()].sort(([, a], [, b]) => b - a),
+    );
+    log?.info("mover-listings completed", { ...stats, rejectReasons: rejectSummary });
+    return { status: "completed", stats, rejectReasons: rejectSummary };
   } catch (e) {
     const msg = String((e as Error).message ?? e);
+    const rejectSummary = Object.fromEntries(rejectReasons);
     log?.error("mover-listings failed", { error: msg, ...stats });
-    return { status: "failed", stats, errorMessage: msg };
+    return { status: "failed", stats, rejectReasons: rejectSummary, errorMessage: msg };
   }
+}
+
+function bumpReason(map: Map<string, number>, reason: string): void {
+  map.set(reason, (map.get(reason) ?? 0) + 1);
+}
+
+/// Top-N reasons by count, returned as a plain object (small enough
+/// that JSON-serializing inline in the progress log is fine).
+function topReasons(map: Map<string, number>, n: number): Record<string, number> {
+  return Object.fromEntries(
+    [...map.entries()].sort(([, a], [, b]) => b - a).slice(0, n),
+  );
 }
 
 // ---------------------------------------------------------------

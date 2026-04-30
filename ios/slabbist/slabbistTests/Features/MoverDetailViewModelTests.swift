@@ -207,4 +207,16 @@ final class StubDetailRepo: MoversRepository, @unchecked Sendable {
         guard let rows = listings else { throw StubError() }
         return rows
     }
+
+    func ebayListingsSets() async throws -> [MoversSetDTO] {
+        Issue.record("ebayListingsSets should not be called from detail flow")
+        return []
+    }
+
+    func ebayListingsBrowse(
+        priceTier: MoversPriceTier?, groupId: Int?, limit: Int
+    ) async throws -> [EbayListingBrowseRowDTO] {
+        Issue.record("ebayListingsBrowse should not be called from detail flow")
+        return []
+    }
 }
