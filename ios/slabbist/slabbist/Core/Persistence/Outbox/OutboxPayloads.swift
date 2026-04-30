@@ -49,4 +49,21 @@ extension OutboxPayloads {
         let status: String
         let updated_at: String
     }
+
+    /// User-initiated delete of a single slab. The outbox worker DELETEs the
+    /// row from `scans` (RLS scopes it to the user's store).
+    struct DeleteScan: Codable {
+        let id: String
+        let deleted_at: String
+    }
+
+    /// User-initiated delete of an entire lot. Server-side the `scans` rows
+    /// are removed by an accompanying batch of `DeleteScan` items enqueued
+    /// alongside this; we do not rely on a server-side cascade because the
+    /// `scans.lot_id` foreign key was set up with `on delete set null` to
+    /// avoid silent batch-loss from accidental lot deletes.
+    struct DeleteLot: Codable {
+        let id: String
+        let deleted_at: String
+    }
 }

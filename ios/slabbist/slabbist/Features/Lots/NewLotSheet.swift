@@ -33,7 +33,7 @@ struct NewLotSheet: View {
                 }
                 Spacer()
                 PrimaryGoldButton(
-                    title: "Start scanning",
+                    title: "Create lot",
                     isEnabled: !trimmedName.isEmpty
                 ) {
                     do {

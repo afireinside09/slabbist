@@ -75,6 +75,91 @@ final class LotsViewModel {
         return lot
     }
 
+    /// Delete a single scan locally and enqueue the server-side delete.
+    /// Idempotent — repeat calls find nothing to remove and exit cleanly.
+    func deleteScan(_ scan: Scan) throws {
+        let scanId = scan.id
+        let now = Date()
+
+        // Local-first: remove from SwiftData. The cert-lookup snapshot (if
+        // any) lives keyed on `gradedCardIdentityId`, not `scan.id`, and is
+        // deliberately retained — other scans of the same product still
+        // benefit from the cached comp.
+        context.delete(scan)
+
+        let dto = OutboxPayloads.DeleteScan(
+            id: scanId.uuidString,
+            deleted_at: ISO8601DateFormatter.shared.string(from: now)
+        )
+        let encoded = try JSONEncoder().encode(dto)
+
+        let outboxItem = OutboxItem(
+            id: UUID(),
+            kind: .deleteScan,
+            payload: encoded,
+            status: .pending,
+            attempts: 0,
+            createdAt: now,
+            nextAttemptAt: now
+        )
+        context.insert(outboxItem)
+        try context.save()
+    }
+
+    /// Delete an entire lot — cascades to all of its scans locally so the
+    /// queue view immediately reflects the removal. Each cascaded scan
+    /// emits its own `DeleteScan` outbox item so the server reconciles
+    /// piece by piece (no server-side cascade is wired today; see the
+    /// `DeleteLot` payload doc-comment).
+    func deleteLot(_ lot: Lot) throws {
+        let lotId = lot.id
+        let now = Date()
+
+        // Cascade scans first so we can encode their delete payloads while
+        // the rows are still attached to the context.
+        var scanDescriptor = FetchDescriptor<Scan>(
+            predicate: #Predicate<Scan> { $0.lotId == lotId }
+        )
+        scanDescriptor.fetchLimit = 1_000
+        let scans = (try? context.fetch(scanDescriptor)) ?? []
+
+        for scan in scans {
+            let dto = OutboxPayloads.DeleteScan(
+                id: scan.id.uuidString,
+                deleted_at: ISO8601DateFormatter.shared.string(from: now)
+            )
+            let encoded = try JSONEncoder().encode(dto)
+            context.insert(OutboxItem(
+                id: UUID(),
+                kind: .deleteScan,
+                payload: encoded,
+                status: .pending,
+                attempts: 0,
+                createdAt: now,
+                nextAttemptAt: now
+            ))
+            context.delete(scan)
+        }
+
+        let lotDto = OutboxPayloads.DeleteLot(
+            id: lotId.uuidString,
+            deleted_at: ISO8601DateFormatter.shared.string(from: now)
+        )
+        let encoded = try JSONEncoder().encode(lotDto)
+        context.insert(OutboxItem(
+            id: UUID(),
+            kind: .deleteLot,
+            payload: encoded,
+            status: .pending,
+            attempts: 0,
+            createdAt: now,
+            nextAttemptAt: now
+        ))
+        context.delete(lot)
+
+        try context.save()
+    }
+
     func listOpenLots() throws -> [Lot] {
         let storeId = currentStoreId
         // SwiftData's `#Predicate` macro doesn't translate enum equality

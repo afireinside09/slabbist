@@ -2,6 +2,16 @@ import SwiftUI
 import SwiftData
 import OSLog
 
+/// Typed routes for the Lots tab's NavigationStack. Using a single typed
+/// path eliminates the prior bug where mixing `.navigationDestination(item:)`
+/// for `Lot` with `.navigationDestination(for: Scan.self)` could cause
+/// SwiftUI to keep an old `selectedLot` binding active across pops, making
+/// it possible to "drill further and further" into the same product.
+enum LotsRoute: Hashable {
+    case lot(UUID)
+    case scan(UUID)
+}
+
 struct LotsListView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
@@ -9,19 +19,20 @@ struct LotsListView: View {
 
     @State private var showingNewLot = false
     @State private var lots: [Lot] = []
-    @State private var selectedLot: Lot?
+    @State private var path: [LotsRoute] = []
     @State private var viewModel: LotsViewModel?
+    @State private var lotPendingDelete: Lot?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             SlabbedRoot {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.xxl) {
                         header
 
                         PrimaryGoldButton(
-                            title: "New bulk scan",
-                            systemIcon: "viewfinder",
+                            title: "New lot",
+                            systemIcon: "plus",
                             trailingChevron: true,
                             isLoading: isHydrating,
                             isEnabled: viewModel != nil
@@ -51,12 +62,33 @@ struct LotsListView: View {
                     NewLotSheet { name in
                         let lot = try viewModel.createLot(name: name)
                         refresh()
-                        selectedLot = lot
+                        path = [.lot(lot.id)]
                     }
                 }
             }
-            .navigationDestination(item: $selectedLot) { lot in
-                BulkScanView(lot: lot)
+            .navigationDestination(for: LotsRoute.self) { route in
+                routeDestination(route)
+            }
+            .confirmationDialog(
+                "Delete \(lotPendingDelete?.name ?? "lot")?",
+                isPresented: Binding(
+                    get: { lotPendingDelete != nil },
+                    set: { if !$0 { lotPendingDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: lotPendingDelete
+            ) { lot in
+                Button("Delete lot and all slabs", role: .destructive) {
+                    do {
+                        try viewModel?.deleteLot(lot)
+                        refresh()
+                    } catch {
+                        AppLog.lots.error("delete lot failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: { _ in
+                Text("This removes the lot and every slab inside it. This can't be undone.")
             }
             .task(id: session.userId) {
                 await prepare()
@@ -135,16 +167,57 @@ struct LotsListView: View {
                         if lot.id != lots.first?.id {
                             SlabCardDivider()
                         }
-                        Button {
-                            selectedLot = lot
-                        } label: {
+                        NavigationLink(value: LotsRoute.lot(lot.id)) {
                             row(for: lot)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Delete lot", systemImage: "trash", role: .destructive) {
+                                lotPendingDelete = lot
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Resolves a path route to its destination view by looking the entity up
+    /// from the SwiftData store. Stable across re-renders because routes
+    /// carry only `UUID`s, not @Model references that can mutate.
+    @ViewBuilder
+    private func routeDestination(_ route: LotsRoute) -> some View {
+        switch route {
+        case .lot(let lotId):
+            if let lot = try? context.fetch(
+                FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+            ).first {
+                LotDetailView(lot: lot)
+            } else {
+                missingEntityView(label: "Lot")
+            }
+        case .scan(let scanId):
+            if let scan = try? context.fetch(
+                FetchDescriptor<Scan>(predicate: #Predicate { $0.id == scanId })
+            ).first {
+                ScanDetailView(scan: scan)
+            } else {
+                missingEntityView(label: "Slab")
+            }
+        }
+    }
+
+    private func missingEntityView(label: String) -> some View {
+        VStack(spacing: Spacing.m) {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 36))
+                .foregroundStyle(AppColor.dim)
+            Text("\(label) no longer available")
+                .font(SlabFont.sans(size: 14, weight: .semibold))
+                .foregroundStyle(AppColor.text)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColor.ink)
     }
 
     private func row(for lot: Lot) -> some View {
@@ -174,9 +247,9 @@ struct LotsListView: View {
             title: "No lots yet",
             subtitle: "A lot is a stack of cards you're processing together — a 500-count, a tournament pickup, a buylist haul.",
             steps: [
-                "Tap New bulk scan to start a lot.",
-                "Photograph each slab's label; cards match automatically.",
-                "Open a lot anytime to see comps, totals, and what's left.",
+                "Tap New lot to organize a stack.",
+                "Open the Scan tab when you're ready to add slabs.",
+                "Each lot shows totals, validation, and live eBay comps.",
             ]
         )
     }

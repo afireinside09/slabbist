@@ -12,6 +12,17 @@ enum ScanStatus: String, Codable, CaseIterable {
     case manualEntry = "manual_entry"
 }
 
+/// Lifecycle of the eBay comp fetch for a validated scan. Persisted on
+/// `Scan.compFetchState` so `ScanDetailView` can show meaningful UI
+/// instead of an infinite "Fetching comps…" spinner when something
+/// upstream goes wrong.
+enum CompFetchState: String, Codable {
+    case fetching                       // a request is in flight
+    case resolved                       // snapshot persisted; UI shows comps
+    case noData = "no_data"             // upstream returned 404 NO_MARKET_DATA
+    case failed                         // 5xx, decoding error, network error
+}
+
 @Model
 final class Scan {
     @Attribute(.unique) var id: UUID
@@ -28,6 +39,17 @@ final class Scan {
     var ocrConfidence: Double?
     var capturedPhotoURL: String?
     var offerCents: Int64?
+    /// Lifecycle of the eBay comp fetch — drives `ScanDetailView`'s state
+    /// machine (fetching / resolved / no_data / failed). `nil` means the
+    /// fetch has never been attempted (cert-lookup hasn't validated this
+    /// scan yet).
+    var compFetchState: String?
+    /// User-visible reason when `compFetchState == "failed"`. Cleared on
+    /// every successful fetch.
+    var compFetchError: String?
+    /// Timestamp of the last fetch attempt. Used both for retry throttling
+    /// and to display "Last checked …" on the failure UI.
+    var compFetchedAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -59,6 +81,9 @@ final class Scan {
         self.ocrConfidence = ocrConfidence
         self.capturedPhotoURL = capturedPhotoURL
         self.offerCents = nil
+        self.compFetchState = nil
+        self.compFetchError = nil
+        self.compFetchedAt = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

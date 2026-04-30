@@ -16,20 +16,108 @@ import Auth
 @MainActor
 @Observable
 final class BulkScanController {
-    let recognizer = CertOCRRecognizer()
+    /// `permissive: true` so the recognizer fires on stable digit-only
+    /// patterns even when Vision misreads the "PSA" keyword as "PEA" / "FA"
+    /// (observed in production logs). The downstream review card lets the
+    /// user override the inferred grader before the scan commits.
+    let recognizer = CertOCRRecognizer(permissive: true)
     var viewModel: BulkScanViewModel?
+
+    /// Live status driving the corner-bracket overlay and the status pill.
+    /// Updated from the OCR pipeline (`reading` ⇄ `idle`) and from the
+    /// view-model's lookup callback (`lookingUp` → `resolved` / `failed`).
+    var status: ScannerStatus = .idle
+
+    /// When the recognizer fires we capture the candidate here and pause
+    /// further OCR. The review card UI surfaces the detected cert + grader
+    /// for the user to confirm or edit before the scan commits — nothing
+    /// auto-records anymore.
+    var pendingReview: CertCandidate?
+
+    /// Vision-detected slab rectangle in screen-space points. Drives the
+    /// floating corner-bracket overlay. `nil` when no rectangle is detected
+    /// this frame (or the most recent detection has decayed).
+    var detectedSlabRect: CGRect?
+
+    /// AVCaptureVideoPreviewLayer reference set by `CameraPreview`'s
+    /// `onPreviewLayer` callback. Lives on the controller (a class) rather
+    /// than as `@State` on the view so the sample-queue closure can read
+    /// it lazily — the layer mounts after the first SwiftUI render pass,
+    /// so capturing it `[weak]` from the view's `configureCamera()` would
+    /// snapshot a nil before the layer was assigned.
+    @ObservationIgnored
+    nonisolated(unsafe) var previewLayer: AVCaptureVideoPreviewLayer?
+
+    /// Most recent successful detection time. Used to fade the rect when no
+    /// hit has come in for ~400ms so the brackets don't snap to stale coords.
+    @ObservationIgnored
+    nonisolated(unsafe) var lastRectAt: Date = .distantPast
+
+    /// Cross-thread flag mirroring `pendingReview != nil`. The sample queue
+    /// reads this synchronously to skip OCR while a review is up; the main
+    /// actor flips it whenever it sets `pendingReview`.
+    @ObservationIgnored
+    nonisolated(unsafe) var ocrPaused: Bool = false
+
+    func presentReview(_ candidate: CertCandidate) {
+        pendingReview = candidate
+        ocrPaused = true
+        // Reset the recognizer's stable window so it doesn't immediately
+        // re-fire the same candidate when OCR resumes.
+        recognizer.reset()
+    }
+
+    func dismissReview() {
+        pendingReview = nil
+        ocrPaused = false
+    }
+
+    /// `resolved` and `failed` are dwell-states — once we enter them we
+    /// hold the UI for ~2s so the user actually sees the outcome before a
+    /// new OCR frame can flip us back to `reading`.
+    @ObservationIgnored
+    private var statusLockUntil: Date = .distantPast
+
+    /// Last time a frame produced any text observations. After ~600ms of
+    /// nothing we drop back to `.idle` so the user sees "Position slab in
+    /// frame" again instead of a stale "Reading…".
+    @ObservationIgnored
+    nonisolated(unsafe) var lastTextSeenAt: Date = .distantPast
 
     /// One reusable Vision request for the entire scan session. Allocating
     /// a new `VNRecognizeTextRequest` on every frame at ~30 FPS dominates
     /// the sample-queue budget; reuse drops per-frame cost to the request
     /// reset plus the actual recognition pass.
+    ///
+    /// `recognitionLevel = .accurate` is critical for cert digits: the
+    /// `.fast` mode reads "12345678" as garbled mixed-case junk on small
+    /// labels (confirmed in user trace logs) and confidence caps near 0.50,
+    /// below the recognizer's stable-fire threshold.
     @ObservationIgnored
     let textRequest: VNRecognizeTextRequest = {
         let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .fast
+        request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
         return request
     }()
+
+    /// Debounce for the per-frame OCR diagnostic log. Without this every frame
+    /// at ~30 FPS would spam Console.app; we instead emit one summary line per
+    /// second showing observation count + peak confidence so a tester can
+    /// confirm the pipeline is alive without recording a trace.
+    @ObservationIgnored
+    nonisolated(unsafe) var lastFrameLogAt: Date = .distantPast
+
+    /// Update status with respect to the dwell-lock on resolved/failed.
+    /// Reading-state transitions (`reading` ⇄ `idle`) are blocked while a
+    /// dwell-locked status is active so the user sees the outcome.
+    func setStatus(_ next: ScannerStatus, dwellSeconds: Double = 0) {
+        let now = Date()
+        let isDwellRespecting = next == .reading || next == .idle
+        if isDwellRespecting && now < statusLockUntil { return }
+        status = next
+        statusLockUntil = dwellSeconds > 0 ? now.addingTimeInterval(dwellSeconds) : .distantPast
+    }
 }
 
 struct BulkScanView: View {
@@ -41,6 +129,7 @@ struct BulkScanView: View {
     @State private var cameraSession = CameraSession()
     @State private var controller = BulkScanController()
     @State private var lastCaptureFlash = false
+    @State private var showingManualEntry = false
     #if targetEnvironment(simulator)
     @State private var simulatorFixtureIndex = 0
     #endif
@@ -55,6 +144,29 @@ struct BulkScanView: View {
                         .allowsHitTesting(false)
                         .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
                 }
+                .overlay {
+                    SlabFinderOverlay(
+                        tone: controller.status.tone,
+                        detectedRect: controller.detectedSlabRect
+                    )
+                }
+                .overlay(alignment: .top) {
+                    ScannerStatusPill(status: controller.status)
+                        .padding(.top, Spacing.l)
+                        .padding(.horizontal, Spacing.xxl)
+                }
+                .overlay(alignment: .center) {
+                    if let pending = controller.pendingReview {
+                        CapturedReviewCard(
+                            candidate: pending,
+                            onConfirm: handleReviewConfirm,
+                            onCancel: handleReviewCancel
+                        )
+                        .padding(.horizontal, Spacing.xxl)
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(response: 0.32, dampingFraction: 0.82), value: controller.pendingReview)
 
             VStack(spacing: Spacing.m) {
                 #if targetEnvironment(simulator)
@@ -80,6 +192,26 @@ struct BulkScanView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingManualEntry = true
+                } label: {
+                    Image(systemName: "keyboard")
+                        .foregroundStyle(AppColor.gold)
+                }
+                .accessibilityLabel("Manual entry")
+                .accessibilityIdentifier("manual-entry-button")
+                .disabled(controller.viewModel == nil)
+            }
+        }
+        .sheet(isPresented: $showingManualEntry) {
+            ManualEntrySheet { candidate in
+                guard let viewModel = controller.viewModel else { return }
+                try viewModel.record(candidate: candidate)
+                triggerFlash()
+            }
+        }
         .onAppear {
             bootstrapViewModel()
             #if !targetEnvironment(simulator)
@@ -115,8 +247,16 @@ struct BulkScanView: View {
         #else
         switch cameraSession.authorization {
         case .authorized:
-            CameraPreview(session: cameraSession.captureSession)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            CameraPreview(
+                session: cameraSession.captureSession,
+                onPreviewLayer: { [controller] layer in
+                    // Stash the preview layer on the controller so the
+                    // rect-detection helper (running on the sample queue)
+                    // can convert Vision normalized rects → screen-space.
+                    controller.previewLayer = layer
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .denied, .restricted:
             VStack(spacing: Spacing.m) {
                 Image(systemName: "camera.fill")
@@ -235,13 +375,25 @@ struct BulkScanView: View {
         }
         let comp = CompRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
         let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
-        controller.viewModel = BulkScanViewModel(
+        let viewModel = BulkScanViewModel(
             context: context,
             lot: lot,
             currentUserId: userId,
             compRepository: comp,
             certLookupRepository: cert
         )
+        viewModel.onLookupEvent = { [weak controller] event in
+            guard let controller else { return }
+            switch event {
+            case .started(let grader, let cert):
+                controller.setStatus(.lookingUp(grader: grader, certNumber: cert))
+            case .resolved(let label):
+                controller.setStatus(.resolved(productLabel: label), dwellSeconds: 2.5)
+            case .failed(let reason):
+                controller.setStatus(.failed(message: reason), dwellSeconds: 2.5)
+            }
+        }
+        controller.viewModel = viewModel
     }
 
     private func configureCamera() async {
@@ -257,7 +409,32 @@ struct BulkScanView: View {
                 guard let controller else { return }
                 guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-                let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)
+                // Back-camera buffers arrive in the sensor's native landscape
+                // orientation; with the device held portrait (the bulk-scan
+                // UI is portrait-locked in practice), Vision needs `.right`
+                // to upright the frame. Passing `.up` makes Vision try to
+                // read text sideways and produces zero observations on a
+                // vertical slab — that was the original "camera opens but
+                // nothing happens" bug.
+                let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right)
+
+                // Run rect detection unconditionally — drives the floating
+                // corner brackets even while a review is pending so the user
+                // sees the bracket "stay" on the slab they're confirming.
+                Self.detectAndPublishSlabRect(
+                    handler: handler,
+                    controller: controller,
+                    previewLayer: controller.previewLayer
+                )
+
+                // Skip OCR while a review card is up — accepting more reads
+                // would race the user's confirm/edit decision and risk
+                // double-recording. The flag is flipped on MainActor whenever
+                // `pendingReview` changes; reading it from this queue is
+                // racy but eventually consistent (worst case: one extra
+                // frame's OCR runs).
+                if controller.ocrPaused { return }
+
                 let request = controller.textRequest
                 do {
                     try handler.perform([request])
@@ -273,12 +450,46 @@ struct BulkScanView: View {
                     texts.append(cand.string)
                     maxConfidence = max(maxConfidence, Double(cand.confidence))
                 }
-                guard !texts.isEmpty else { return }
+
+                let nowFrame = Date()
+                if texts.isEmpty {
+                    // No text this frame. If we've gone ~600ms without any
+                    // text observation at all, drop the pill back to idle so
+                    // the user knows to reposition.
+                    if nowFrame.timeIntervalSince(controller.lastTextSeenAt) > 0.6 {
+                        Task { @MainActor [weak controller] in
+                            controller?.setStatus(.idle)
+                        }
+                    }
+                    return
+                }
+                controller.lastTextSeenAt = nowFrame
+                Task { @MainActor [weak controller] in
+                    controller?.setStatus(.reading)
+                }
+
+                // Vision returns one observation per detected text region —
+                // "PSA", "MINT 10", and "12345678" land in separate strings.
+                // `CertOCRPatterns.match` requires keyword AND digits in the
+                // same string, so we join with newlines before handing off.
+                let joinedText = texts.joined(separator: "\n")
+
+                // Debounced diagnostic log: once a second, dump observation
+                // count + max confidence + a short preview so a tester can
+                // confirm OCR is alive (and correctly oriented) from
+                // Console.app without a trace recording.
+                if nowFrame.timeIntervalSince(controller.lastFrameLogAt) >= 1.0 {
+                    controller.lastFrameLogAt = nowFrame
+                    let preview = String(joinedText.prefix(120)).replacingOccurrences(of: "\n", with: " | ")
+                    AppLog.ocr.debug(
+                        "frame: \(texts.count, privacy: .public) obs, maxConf \(String(format: "%.2f", maxConfidence), privacy: .public) — \(preview, privacy: .public)"
+                    )
+                }
 
                 // Send the Sendable primitives into the MainActor hop. The
                 // recognizer and view model are read off the weakly-held
                 // controller inside the hop.
-                let capturedTexts = texts
+                let capturedTexts = [joinedText]
                 let capturedConfidence = maxConfidence
                 Task { @MainActor [weak controller] in
                     guard let controller else { return }
@@ -286,17 +497,83 @@ struct BulkScanView: View {
                         textCandidates: capturedTexts,
                         visionConfidence: capturedConfidence
                     ) else { return }
-                    do {
-                        try controller.viewModel?.record(candidate: cert)
-                        triggerFlash()
-                    } catch {
-                        AppLog.scans.error("record capture failed: \(error.localizedDescription, privacy: .public)")
-                    }
+                    AppLog.ocr.info("stable hit: \(cert.grader.rawValue, privacy: .public) \(cert.certNumber, privacy: .public) — presenting review")
+                    triggerFlash()
+                    controller.presentReview(cert)
                 }
             }
             cameraSession.start()
         } catch {
             AppLog.camera.error("camera configure failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func handleReviewConfirm(_ candidate: CertCandidate) {
+        defer { controller.dismissReview() }
+        guard let viewModel = controller.viewModel else { return }
+        do {
+            try viewModel.record(candidate: candidate)
+        } catch {
+            AppLog.scans.error("review confirm record failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func handleReviewCancel() {
+        controller.dismissReview()
+    }
+
+    /// Run `VNDetectRectanglesRequest` on the same VNImageRequestHandler the
+    /// OCR pipeline already built. Cheap re-use because Vision caches the
+    /// pixel buffer ingestion; an additional rectangle pass adds ~1–2ms on
+    /// modern hardware. Publishes the screen-space rect onto the controller
+    /// so the corner-bracket overlay can animate to it.
+    static nonisolated func detectAndPublishSlabRect(
+        handler: VNImageRequestHandler,
+        controller: BulkScanController,
+        previewLayer: AVCaptureVideoPreviewLayer?
+    ) {
+        let request = VNDetectRectanglesRequest()
+        request.minimumAspectRatio = 0.55   // slabs are ~0.65–0.75 (W/H portrait)
+        request.maximumAspectRatio = 0.85
+        request.minimumConfidence = 0.7
+        request.minimumSize = 0.25
+        request.maximumObservations = 1
+
+        do {
+            try handler.perform([request])
+        } catch {
+            return
+        }
+
+        guard let observation = request.results?.first else {
+            // No detection this frame. If we've been without one for ~400ms
+            // clear the published rect so the brackets fade.
+            let now = Date()
+            if now.timeIntervalSince(controller.lastRectAt) > 0.4 {
+                Task { @MainActor [weak controller] in
+                    controller?.detectedSlabRect = nil
+                }
+            }
+            return
+        }
+
+        controller.lastRectAt = Date()
+
+        // Vision: normalized 0–1, origin bottom-left, in the rotated portrait
+        // frame (because we passed `.right` orientation). Convert to
+        // metadata-output coords (origin top-left) for the AVCapture helper.
+        let bb = observation.boundingBox
+        let metadataRect = CGRect(
+            x: bb.minX,
+            y: 1 - bb.maxY,
+            width: bb.width,
+            height: bb.height
+        )
+
+        Task { @MainActor [weak controller, weak previewLayer] in
+            guard let controller, let previewLayer else { return }
+            let screenRect = previewLayer.layerRectConverted(fromMetadataOutputRect: metadataRect)
+            controller.detectedSlabRect = screenRect
         }
     }
 

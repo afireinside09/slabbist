@@ -12,6 +12,13 @@ final class BulkScanViewModel {
     var compRepository: CompRepository?
     var certLookupRepository: CertLookupRepository?
 
+    /// One-shot UI hook for the cert-lookup pipeline. Set by the bulk-scan
+    /// view so the camera overlay can surface "looking up…" / "found" /
+    /// "failed" feedback. The default no-op keeps tests insulated from the
+    /// view layer.
+    @ObservationIgnored
+    var onLookupEvent: (LookupEvent) -> Void = { _ in }
+
     private(set) var recentScans: [Scan] = []
 
     init(
@@ -96,6 +103,10 @@ final class BulkScanViewModel {
         let certNumber = scan.certNumber
         let ctx = self.context
 
+        // Emit `.started` synchronously so the UI flips to "Looking up…"
+        // before the network request lands.
+        self.onLookupEvent(.started(grader: grader, certNumber: certNumber))
+
         Task { [weak self] in
             do {
                 let result = try await lookup.lookup(grader: grader, certNumber: certNumber)
@@ -135,21 +146,44 @@ final class BulkScanViewModel {
                     try? ctx.save()
                     self.refreshRecent()
                     self.triggerCompFetch(for: target)
+                    self.onLookupEvent(.resolved(productLabel: Self.productLabel(from: result)))
                 }
             } catch CertLookupRepository.Error.certNotFound {
                 AppLog.scans.info("cert-lookup: cert not found upstream — leaving scan pending")
-                await MainActor.run { self?.markValidationFailed(scanId: scanId) }
+                await MainActor.run {
+                    self?.markValidationFailed(scanId: scanId)
+                    self?.onLookupEvent(.failed(reason: "Cert not found"))
+                }
             } catch CertLookupRepository.Error.notPokemon {
                 AppLog.scans.info("cert-lookup: cert resolved to non-pokemon product — skipping comp")
-                await MainActor.run { self?.markValidationFailed(scanId: scanId) }
+                await MainActor.run {
+                    self?.markValidationFailed(scanId: scanId)
+                    self?.onLookupEvent(.failed(reason: "Not a Pokémon slab"))
+                }
             } catch {
                 // Transient errors (network, upstream unavailable, rate limit)
                 // leave the scan in `pendingValidation` so a retry path remains
                 // open. The outbox worker will eventually pick up retries when
                 // a `certLookupJob` outbox kind is wired (see OutboxKind).
                 AppLog.scans.error("cert-lookup failed: \(error.localizedDescription, privacy: .public)")
+                await MainActor.run { self?.onLookupEvent(.failed(reason: "Lookup failed — check connection")) }
             }
         }
+    }
+
+    /// Builds a human-friendly one-liner for the status pill from a
+    /// `cert-lookup` response. Examples:
+    ///   "CHARIZARD-HOLO #4 — PSA 10"
+    ///   "MEWTWO V — PSA 9"
+    /// Card-name only (no set) so the line fits a single capsule. Year and
+    /// set are still in the queue row + detail screen.
+    static func productLabel(from result: CertLookupRepository.Decoded) -> String {
+        var pieces: [String] = [result.cardName]
+        if let n = result.cardNumber, !n.isEmpty {
+            pieces.append("#\(n)")
+        }
+        let head = pieces.joined(separator: " ")
+        return "\(head) — \(result.gradingService) \(result.grade)"
     }
 
     private func markValidationFailed(scanId: UUID) {
@@ -162,55 +196,15 @@ final class BulkScanViewModel {
         refreshRecent()
     }
 
-    /// Fetches a live price-comp for a validated scan and persists a
-    /// `GradedMarketSnapshot` (with listings) into the local SwiftData store
-    /// so `ScanDetailView`'s `@Query` picks it up. No-ops unless the scan has
-    /// been resolved to a `GradedCardIdentity` and a grade (wired by the
-    /// separate /cert-lookup plan).
+    /// Kicks off the eBay comp fetch for a validated scan. State transitions
+    /// (fetching / resolved / no_data / failed) are recorded on the scan by
+    /// `CompFetchService` so the detail view can show meaningful UI.
     func triggerCompFetch(for scan: Scan) {
-        guard let identityId = scan.gradedCardIdentityId,
-              let grade = scan.grade,
-              let compRepo = self.compRepository else { return }
-        let service = scan.grader.rawValue
-        let ctx = self.context
-        Task { [weak self] in
-            guard self != nil else { return }
-            do {
-                let decoded = try await compRepo.fetchComp(
-                    identityId: identityId,
-                    gradingService: service,
-                    grade: grade
-                )
-                await MainActor.run {
-                    let snapshot = GradedMarketSnapshot(
-                        identityId: identityId,
-                        gradingService: service,
-                        grade: grade,
-                        blendedPriceCents: decoded.blendedPriceCents,
-                        meanPriceCents: decoded.meanPriceCents,
-                        trimmedMeanPriceCents: decoded.trimmedMeanPriceCents,
-                        medianPriceCents: decoded.medianPriceCents,
-                        lowPriceCents: decoded.lowPriceCents,
-                        highPriceCents: decoded.highPriceCents,
-                        confidence: decoded.confidence,
-                        sampleCount: decoded.sampleCount,
-                        sampleWindowDays: decoded.sampleWindowDays,
-                        velocity7d: decoded.velocity7d,
-                        velocity30d: decoded.velocity30d,
-                        velocity90d: decoded.velocity90d,
-                        fetchedAt: decoded.fetchedAt,
-                        cacheHit: decoded.cacheHit,
-                        isStaleFallback: decoded.isStaleFallback,
-                        soldListings: decoded.soldListings
-                    )
-                    ctx.insert(snapshot)
-                    try? ctx.save()
-                }
-            } catch {
-                AppLog.scans.error("triggerCompFetch failed: \(error.localizedDescription, privacy: .public)")
-                // UI stays on "Fetching…" state until a retry or outbox worker lands.
-            }
+        guard let compRepo = self.compRepository else {
+            AppLog.scans.info("comp fetch skipped — no compRepository injected")
+            return
         }
+        CompFetchService.fetch(scan: scan, repository: compRepo, context: self.context)
     }
 
     /// SwiftData's `#Predicate` macro can't capture enum values (same quirk as
