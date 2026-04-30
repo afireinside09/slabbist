@@ -263,4 +263,11 @@ final class StubMoversRepository: MoversRepository, @unchecked Sendable {
         Issue.record("priceHistory should not be called from list flow")
         return []
     }
+
+    func ebayListings(
+        productId: Int, subType: String, limit: Int
+    ) async throws -> [MoverEbayListingDTO] {
+        Issue.record("ebayListings should not be called from list flow")
+        return []
+    }
 }

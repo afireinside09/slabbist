@@ -19,6 +19,7 @@ struct MoverDetailView: View {
                     hero
                     statsCard
                     historyCard
+                    listingsSection
                     Spacer(minLength: Spacing.xxxl)
                 }
                 .padding(.horizontal, Spacing.xxl)
@@ -270,6 +271,164 @@ struct MoverDetailView: View {
                 .padding(.horizontal, Spacing.m)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - eBay listings carousel
+    //
+    // Sits below the price-history chart. Horizontal scroll of cards
+    // (image, price, grade tag); each tile is a Link that opens the
+    // listing on eBay. Empty/error/idle render as one-line copy under
+    // the kicker so the section doesn't bloat when there's no data.
+
+    @ViewBuilder
+    private var listingsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            HStack(spacing: Spacing.s) {
+                KickerLabel("On eBay now")
+                Spacer()
+                if case let .loaded(rows) = viewModel.listingsState, !rows.isEmpty {
+                    Text("\(rows.count) listings")
+                        .font(SlabFont.mono(size: 11))
+                        .foregroundStyle(AppColor.dim)
+                }
+            }
+            switch viewModel.listingsState {
+            case .idle, .loading:
+                listingsSkeleton
+            case .loaded(let rows):
+                if rows.isEmpty {
+                    listingsHint(
+                        icon: "magnifyingglass",
+                        message: "No graded listings matched this card in the last sync."
+                    )
+                } else {
+                    listingsCarousel(rows: rows)
+                }
+            case .error(let message):
+                listingsHint(
+                    icon: "exclamationmark.triangle",
+                    message: message,
+                    isError: true
+                )
+            }
+        }
+    }
+
+    private func listingsCarousel(rows: [MoverEbayListingDTO]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: Spacing.m) {
+                ForEach(rows) { listing in
+                    if let url = URL(string: listing.url) {
+                        Link(destination: url) {
+                            listingTile(listing)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(listingAccessibilityLabel(listing))
+                        .accessibilityHint("Opens listing on eBay")
+                    }
+                }
+            }
+            .padding(.horizontal, 1) // hairline border doesn't get clipped
+        }
+    }
+
+    private func listingTile(_ listing: MoverEbayListingDTO) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                    .fill(AppColor.elev2)
+                    .frame(width: 132, height: 132)
+                if let urlString = listing.imageUrl, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFit()
+                        case .empty, .failure:
+                            Image(systemName: "photo")
+                                .font(.system(size: 24, weight: .regular))
+                                .foregroundStyle(AppColor.dim)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: 132, height: 132)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+                }
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text(listing.gradeBadge)
+                            .font(SlabFont.mono(size: 10, weight: .semibold))
+                            .foregroundStyle(AppColor.ink)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                                    .fill(AppColor.gold)
+                            )
+                            .padding(Spacing.xs)
+                    }
+                    Spacer()
+                }
+            }
+
+            Text(MoversFormat.price(listing.price))
+                .font(SlabFont.mono(size: 14, weight: .semibold))
+                .foregroundStyle(AppColor.text)
+
+            Text(listing.title)
+                .font(SlabFont.sans(size: 11))
+                .foregroundStyle(AppColor.muted)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(width: 132, alignment: .leading)
+    }
+
+    private var listingsSkeleton: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.m) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                            .fill(AppColor.elev2)
+                            .frame(width: 132, height: 132)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(AppColor.elev2)
+                            .frame(width: 56, height: 12)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(AppColor.elev2)
+                            .frame(width: 110, height: 8)
+                    }
+                }
+            }
+        }
+        .opacity(0.55)
+    }
+
+    private func listingsHint(
+        icon: String,
+        message: String,
+        isError: Bool = false
+    ) -> some View {
+        SlabCard {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: icon)
+                    .foregroundStyle(isError ? AppColor.negative : AppColor.dim)
+                Text(message)
+                    .font(SlabFont.sans(size: 12))
+                    .foregroundStyle(AppColor.muted)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.l)
+            .padding(.vertical, Spacing.md)
+        }
+    }
+
+    private func listingAccessibilityLabel(_ listing: MoverEbayListingDTO) -> String {
+        "\(listing.gradeBadge), \(MoversFormat.price(listing.price)). \(listing.title)"
     }
 
     // MARK: - Helpers

@@ -49,11 +49,23 @@ protocol MoversRepository: Sendable {
         subType: String,
         days: Int
     ) async throws -> [PriceHistoryDTO]
+
+    /// Active eBay listings the scraper matched to this card. Hard
+    /// limit on the response (`limit`) keeps the carousel bounded.
+    func ebayListings(
+        productId: Int,
+        subType: String,
+        limit: Int
+    ) async throws -> [MoverEbayListingDTO]
 }
 
 extension MoversRepository {
     func priceHistory(productId: Int, subType: String) async throws -> [PriceHistoryDTO] {
         try await priceHistory(productId: productId, subType: subType, days: 90)
+    }
+
+    func ebayListings(productId: Int, subType: String) async throws -> [MoverEbayListingDTO] {
+        try await ebayListings(productId: productId, subType: subType, limit: 24)
     }
 }
 
@@ -138,10 +150,36 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
         }
     }
 
+    func ebayListings(
+        productId: Int,
+        subType: String = "Normal",
+        limit: Int = 24
+    ) async throws -> [MoverEbayListingDTO] {
+        do {
+            let response = try await client.rpc(
+                "get_mover_ebay_listings",
+                params: ListingsParams(
+                    p_product_id: productId,
+                    p_sub_type_name: subType,
+                    p_limit: limit
+                )
+            ).execute()
+            return try JSONCoders.decoder.decode([MoverEbayListingDTO].self, from: response.data)
+        } catch {
+            throw SupabaseError.map(error)
+        }
+    }
+
     private struct HistoryParams: Encodable, Sendable {
         let p_product_id: Int
         let p_sub_type: String
         let p_days: Int
+    }
+
+    private struct ListingsParams: Encodable, Sendable {
+        let p_product_id: Int
+        let p_sub_type_name: String
+        let p_limit: Int
     }
 
     private struct TopParams: Encodable, Sendable {

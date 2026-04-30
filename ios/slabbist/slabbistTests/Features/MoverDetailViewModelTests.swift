@@ -81,6 +81,56 @@ struct MoverDetailViewModelTests {
         }
     }
 
+    @Test("listings load in parallel with price history")
+    func listingsLoadAlongsideHistory() async {
+        let listings = [
+            MoverEbayListingDTO(
+                ebayItemId: "111",
+                title: "PSA 10 Charizard 4/102 Holo",
+                price: 2400,
+                currency: "USD",
+                url: "https://example.com/111",
+                imageUrl: nil,
+                gradingService: "PSA",
+                grade: "10"
+            )
+        ]
+        let repo = StubDetailRepo(history: [], listings: listings)
+        let vm = MoverDetailViewModel(mover: Self.mover(), repository: repo)
+
+        await vm.loadIfNeeded()
+
+        if case .loaded(let rows) = vm.listingsState {
+            #expect(rows.map(\.ebayItemId) == ["111"])
+        } else {
+            Issue.record("expected listings .loaded, got \(vm.listingsState)")
+        }
+        #expect(repo.callCount == 1)
+        #expect(repo.listingsCallCount == 1)
+    }
+
+    @Test("a listings error doesn't taint the chart state")
+    func listingsErrorIsolated() async {
+        let repo = StubDetailRepo(
+            history: [PriceHistoryDTO(capturedAt: Date(), marketPrice: 5)],
+            listings: nil
+        )
+        let vm = MoverDetailViewModel(mover: Self.mover(), repository: repo)
+
+        await vm.loadIfNeeded()
+
+        if case .loaded = vm.state {
+            // chart loaded
+        } else {
+            Issue.record("chart should be .loaded, got \(vm.state)")
+        }
+        if case .error = vm.listingsState {
+            // expected
+        } else {
+            Issue.record("expected listings .error, got \(vm.listingsState)")
+        }
+    }
+
     // MARK: - Helpers
 
     static func mover() -> MoverDTO {
@@ -100,17 +150,24 @@ struct MoverDetailViewModelTests {
     }
 }
 
-/// Repository stub focused on the price-history surface. Other
-/// methods route through `Issue.record` because the detail flow only
-/// exercises one method — exercising another would mean a regression.
+/// Repository stub for the detail flow. Both `priceHistory` and
+/// `ebayListings` are exercised; pass `nil` to either to simulate an
+/// error path. The other movers methods are unreachable from the
+/// detail screen and route through `Issue.record`.
 final class StubDetailRepo: MoversRepository, @unchecked Sendable {
     struct StubError: Error {}
 
     private let history: [PriceHistoryDTO]?
+    private let listings: [MoverEbayListingDTO]?
     private(set) var callCount: Int = 0
+    private(set) var listingsCallCount: Int = 0
 
-    init(history: [PriceHistoryDTO]?) {
+    init(
+        history: [PriceHistoryDTO]?,
+        listings: [MoverEbayListingDTO]? = []
+    ) {
         self.history = history
+        self.listings = listings
     }
 
     func topMovers(
@@ -140,6 +197,14 @@ final class StubDetailRepo: MoversRepository, @unchecked Sendable {
     ) async throws -> [PriceHistoryDTO] {
         callCount += 1
         guard let rows = history else { throw StubError() }
+        return rows
+    }
+
+    func ebayListings(
+        productId: Int, subType: String, limit: Int
+    ) async throws -> [MoverEbayListingDTO] {
+        listingsCallCount += 1
+        guard let rows = listings else { throw StubError() }
         return rows
     }
 }
