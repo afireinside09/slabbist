@@ -37,4 +37,16 @@ extension OutboxPayloads {
         let grading_service: String
         let grade: String
     }
+
+    /// Patch payload for an existing scan. Sent after `/cert-lookup` resolves
+    /// a `(grader, cert_number)` to a graded card identity + grade. Only the
+    /// fields that change are populated; everything else stays untouched on
+    /// the server.
+    struct UpdateScan: Codable {
+        let id: String
+        let graded_card_identity_id: String?
+        let grade: String?
+        let status: String
+        let updated_at: String
+    }
 }

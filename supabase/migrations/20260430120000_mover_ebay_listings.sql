@@ -25,7 +25,7 @@
 --     the most recent ingest run; refreshed_at lets the iOS UI show
 --     "as of <when>" if useful.
 
-create table public.mover_ebay_listings (
+create table if not exists public.mover_ebay_listings (
   id              bigserial primary key,
   product_id      int           not null references public.tcg_products(product_id) on delete cascade,
   sub_type_name   text          not null,
@@ -51,7 +51,7 @@ create table public.mover_ebay_listings (
 
 -- Read path: per-card listings for the detail screen. Sorted by
 -- price ASC so the carousel leads with the cheapest available copy.
-create index mover_ebay_listings_card_price_idx
+create index if not exists mover_ebay_listings_card_price_idx
   on public.mover_ebay_listings (product_id, sub_type_name, price);
 
 alter table public.mover_ebay_listings enable row level security;

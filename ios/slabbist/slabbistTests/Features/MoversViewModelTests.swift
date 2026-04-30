@@ -176,6 +176,44 @@ struct MoversViewModelTests {
         else { Issue.record("gainers should be .loaded([]), got \(vm.gainers)") }
     }
 
+    @Test("eBay tab auto-bootstraps to newest set and corrects empty tier")
+    func ebayBootstrapAndTierAutoCorrect() async {
+        let repo = StubMoversRepository(
+            ebaySets: [
+                MoversSetDTO(groupId: 100, groupName: "Newest with listings", moversCount: 4),
+                MoversSetDTO(groupId: 99,  groupName: "Older with listings",  moversCount: 2),
+            ],
+            ebayTierCounts: [
+                // The newest set has nothing in under_5 (default
+                // priceTier on first eBay visit) — auto-correct
+                // should move us to the lowest non-empty band.
+                100: [.tier5_25: 4, .tier50_100: 1],
+                99:  [.under5: 2],
+            ]
+        )
+        let vm = MoversViewModel(repository: repo)
+        vm.switchTab(to: .ebayListings)
+        #expect(vm.setFilter == nil)
+        #expect(vm.priceTier == .under5)
+
+        // Pass 1: bootstrap setFilter
+        await vm.loadIfNeeded()
+        #expect(vm.setFilter == 100)
+
+        // Pass 2: load tier counts; .under5 has 0 listings → auto-correct to .tier5_25
+        await vm.loadIfNeeded()
+        #expect(vm.priceTier == .tier5_25)
+
+        // Pass 3: actually fetch listings for the corrected combo
+        await vm.loadIfNeeded()
+        #expect(repo.callCounts["ebay-listings-100-tier_5_25"] == 1)
+        #expect(repo.callCounts["ebay-listings-100-under_5"] == nil,
+                "should NEVER fetch for the empty (group, tier)")
+
+        // Available tiers should hide bands with zero counts.
+        #expect(vm.availableEbayTiers == [.tier5_25, .tier50_100])
+    }
+
     @Test("switching tabs preserves each tab's previous filter state")
     func tabStateRoundTrips() async {
         let repo = StubMoversRepository(
@@ -257,14 +295,20 @@ final class StubMoversRepository: MoversRepository, @unchecked Sendable {
 
     private let setsByLanguage: [Int: [MoversSetDTO]]
     private let setMoversByGroupTier: [GroupTierKey: [MoverDTO]?]
+    private let ebaySets: [MoversSetDTO]
+    private let ebayTierCounts: [Int /* groupId */: [MoversPriceTier: Int]]
     private(set) var callCounts: [String: Int] = [:]
 
     init(
         setsByLanguage: [Int: [MoversSetDTO]] = [:],
-        setMoversByGroupTier: [GroupTierKey: [MoverDTO]?] = [:]
+        setMoversByGroupTier: [GroupTierKey: [MoverDTO]?] = [:],
+        ebaySets: [MoversSetDTO] = [],
+        ebayTierCounts: [Int: [MoversPriceTier: Int]] = [:]
     ) {
         self.setsByLanguage = setsByLanguage
         self.setMoversByGroupTier = setMoversByGroupTier
+        self.ebaySets = ebaySets
+        self.ebayTierCounts = ebayTierCounts
     }
 
     func topMovers(
@@ -321,14 +365,26 @@ final class StubMoversRepository: MoversRepository, @unchecked Sendable {
     }
 
     func ebayListingsSets() async throws -> [MoversSetDTO] {
-        Issue.record("ebayListingsSets is not exercised in this test fixture")
-        return []
+        callCounts["ebay-sets", default: 0] += 1
+        return ebaySets
     }
 
     func ebayListingsBrowse(
         priceTier: MoversPriceTier?, groupId: Int?, limit: Int
     ) async throws -> [EbayListingBrowseRowDTO] {
-        Issue.record("ebayListingsBrowse is not exercised in this test fixture")
+        let key = "ebay-listings-\(groupId.map(String.init) ?? "any")-\(priceTier?.rawValue ?? "any")"
+        callCounts[key, default: 0] += 1
         return []
+    }
+
+    func ebayListingsTierCounts(
+        groupId: Int?
+    ) async throws -> [MoversPriceTier: Int] {
+        let key = "ebay-tier-counts-\(groupId.map(String.init) ?? "any")"
+        callCounts[key, default: 0] += 1
+        if let groupId, let counts = ebayTierCounts[groupId] {
+            return counts
+        }
+        return [:]
     }
 }

@@ -40,6 +40,16 @@ final class MoversViewModel {
         case error(String)
     }
 
+    /// Loading-state envelope for the per-set tier counts RPC. Drives
+    /// the eBay-tab tier-rail filtering — only tiers with > 0
+    /// listings are shown.
+    enum EbayTierCountsState: Equatable {
+        case idle
+        case loading
+        case loaded([MoversPriceTier: Int])
+        case error(String)
+    }
+
     // MARK: - Picker state
 
     /// Top-level tab. Drives data fetching and set-rail source.
@@ -76,6 +86,21 @@ final class MoversViewModel {
     var ebaySetsState: EbaySetsState = .idle
     /// Browse-list payload while `tab == .ebayListings`.
     var ebayListingsState: EbayBrowseState = .idle
+    /// Per-tier counts for the currently-selected eBay set. Drives
+    /// the tier rail's filtering — only positive-count tiers render.
+    var ebayTierCountsState: EbayTierCountsState = .idle
+
+    /// Tiers with at least one listing for the current selection.
+    /// Falls back to all picker options when counts haven't loaded
+    /// yet, so the rail isn't visibly empty during the brief load
+    /// window.
+    var availableEbayTiers: [MoversPriceTier] {
+        if case let .loaded(counts) = ebayTierCountsState {
+            let nonzero = MoversPriceTier.pickerOptions.filter { (counts[$0] ?? 0) > 0 }
+            return nonzero.isEmpty ? MoversPriceTier.pickerOptions : nonzero
+        }
+        return MoversPriceTier.pickerOptions
+    }
 
     // MARK: - Per-tab snapshots
 
@@ -123,6 +148,11 @@ final class MoversViewModel {
     }
     private var ebayBrowseCache: [EbayBrowseKey: [EbayListingBrowseRowDTO]] = [:]
     private var ebayInflight: EbayBrowseKey?
+
+    /// Tier-count cache. Keyed by groupId; the global "no group"
+    /// case is keyed under -1 since `Int?` isn't directly hashable
+    /// as a dict key in older Swift versions and this is simpler.
+    private var ebayTierCountsCache: [Int: [MoversPriceTier: Int]] = [:]
 
     init(
         repository: MoversRepository = SupabaseMoversRepository(),
@@ -173,9 +203,11 @@ final class MoversViewModel {
         case .english, .japanese:
             await refreshMovers()
         case .ebayListings:
-            async let sets: Void = ensureEbaySetsLoaded(force: true)
-            async let list: Void = fetchEbayBrowse(force: true)
-            _ = await (sets, list)
+            await ensureEbaySetsLoaded(force: true)
+            if let groupId = setFilter {
+                await ensureEbayTierCountsLoaded(groupId: groupId, force: true)
+            }
+            await fetchEbayBrowse(force: true)
         }
     }
 
@@ -312,9 +344,51 @@ final class MoversViewModel {
     // MARK: - eBay browse mode
 
     private func loadEbayIfNeeded() async {
-        async let sets: Void = ensureEbaySetsLoaded(force: false)
-        async let list: Void = fetchEbayBrowse(force: false)
-        _ = await (sets, list)
+        // Step 1 — sets list. Drives both the rail and the bootstrap
+        // pick below.
+        await ensureEbaySetsLoaded(force: false)
+
+        // Step 2 — bootstrap setFilter to the newest set with
+        // listings if the user hasn't picked one yet. The mutation
+        // retriggers the view's `.task(id:)`; we return early so the
+        // restart picks up the populated filter.
+        if setFilter == nil {
+            if case let .loaded(sets) = ebaySetsState, let first = sets.first?.groupId {
+                setFilter = first
+                return
+            }
+            // No sets with any listings — surface an explicit empty
+            // state instead of a perpetual skeleton.
+            ebayListingsState = .loaded([])
+            return
+        }
+
+        // Step 3 — tier counts for the currently-selected set. Lets
+        // the rail hide tiers that have zero listings AND lets us
+        // auto-correct an out-of-range priceTier.
+        guard let groupId = setFilter else { return }
+        await ensureEbayTierCountsLoaded(groupId: groupId, force: false)
+
+        // Step 4 — auto-correct priceTier if the saved/default tier
+        // has zero listings for this set. Same retrigger pattern as
+        // the bootstrap above: mutate state, return, let the .task
+        // re-run with corrected filters.
+        if let corrected = autoCorrectedTier(), corrected != priceTier {
+            priceTier = corrected
+            return
+        }
+
+        // Step 5 — listings for (set, tier).
+        await fetchEbayBrowse(force: false)
+    }
+
+    /// If the current priceTier has zero listings for the active
+    /// set, return the lowest-priced tier that does. Otherwise nil
+    /// (current is fine, no correction needed).
+    private func autoCorrectedTier() -> MoversPriceTier? {
+        guard case let .loaded(counts) = ebayTierCountsState else { return nil }
+        if (counts[priceTier] ?? 0) > 0 { return nil }
+        return MoversPriceTier.pickerOptions.first { (counts[$0] ?? 0) > 0 }
     }
 
     private func ensureEbaySetsLoaded(force: Bool) async {
@@ -328,6 +402,28 @@ final class MoversViewModel {
                 "ebayListingsSets failed: \(error.localizedDescription, privacy: .public)"
             )
             ebaySetsState = .error(error.localizedDescription)
+        }
+    }
+
+    private func ensureEbayTierCountsLoaded(groupId: Int, force: Bool) async {
+        if !force, let cached = ebayTierCountsCache[groupId] {
+            ebayTierCountsState = .loaded(cached)
+            return
+        }
+        ebayTierCountsState = .loading
+        do {
+            let counts = try await repository.ebayListingsTierCounts(groupId: groupId)
+            // Bail if the user moved on while we were in flight; we
+            // don't want stale counts to clobber the new state.
+            guard tab == .ebayListings, setFilter == groupId else { return }
+            ebayTierCountsCache[groupId] = counts
+            ebayTierCountsState = .loaded(counts)
+        } catch {
+            guard tab == .ebayListings, setFilter == groupId else { return }
+            AppLog.movers.error(
+                "ebayListingsTierCounts(\(groupId, privacy: .public)) failed: \(error.localizedDescription, privacy: .public)"
+            )
+            ebayTierCountsState = .error(error.localizedDescription)
         }
     }
 

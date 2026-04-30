@@ -219,4 +219,11 @@ final class StubDetailRepo: MoversRepository, @unchecked Sendable {
         Issue.record("ebayListingsBrowse should not be called from detail flow")
         return []
     }
+
+    func ebayListingsTierCounts(
+        groupId: Int?
+    ) async throws -> [MoversPriceTier: Int] {
+        Issue.record("ebayListingsTierCounts should not be called from detail flow")
+        return [:]
+    }
 }

@@ -1,0 +1,16 @@
+{
+  "PSACert": {
+    "CertNumber": "98765432",
+    "SpecID": 5500,
+    "Year": "1996",
+    "Brand": "POKEMON JAPANESE",
+    "Category": "TCG CARDS",
+    "CardNumber": "6",
+    "Subject": "CHARIZARD-HOLO",
+    "Variety": "",
+    "GradeDescription": "MINT",
+    "CardGrade": "9",
+    "TotalPopulation": 250,
+    "PopulationHigher": 100
+  }
+}

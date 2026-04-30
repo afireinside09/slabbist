@@ -103,7 +103,7 @@ struct MoversListView: View {
            let name = viewModel.currentSets.first(where: { $0.groupId == id })?.groupName {
             setPart = name
         } else if viewModel.tab == .ebayListings {
-            setPart = "All sets"
+            setPart = "eBay listings"
         } else {
             setPart = "\(viewModel.language.displayName) sets"
         }
@@ -146,7 +146,7 @@ struct MoversListView: View {
     private var priceTierRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: Spacing.s) {
-                ForEach(MoversPriceTier.pickerOptions) { tier in
+                ForEach(visibleTiers) { tier in
                     SetChip(
                         label: tier.displayName,
                         isSelected: viewModel.priceTier == tier
@@ -159,6 +159,18 @@ struct MoversListView: View {
             .padding(.horizontal, Spacing.xxl)
         }
         .accessibilityLabel("Price tier")
+    }
+
+    /// Tier rail source. Movers mode shows every tier (the user can
+    /// always pick one and we'll show "no movers in this band" if
+    /// it's empty). eBay mode hides tiers with zero listings for
+    /// the currently-selected set so the user can't tap into a band
+    /// with nothing in it.
+    private var visibleTiers: [MoversPriceTier] {
+        switch viewModel.tab {
+        case .english, .japanese: return MoversPriceTier.pickerOptions
+        case .ebayListings:       return viewModel.availableEbayTiers
+        }
     }
 
     // MARK: - Set search
@@ -308,19 +320,11 @@ struct MoversListView: View {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.s) {
-                        // Movers mode auto-bootstraps to a specific
-                        // set — there's no "all" affordance. eBay
-                        // mode lets the user broaden to "all sets",
-                        // so we pin a chip representing setFilter=nil
-                        // at the start.
-                        if viewModel.tab == .ebayListings {
-                            SetChip(
-                                label: "All sets",
-                                isSelected: viewModel.setFilter == nil
-                            ) {
-                                viewModel.setFilter = nil
-                            }
-                        }
+                        // Both modes auto-bootstrap to a specific
+                        // set (movers: newest set with movers; eBay:
+                        // newest set with listings) — no "all sets"
+                        // affordance, the user always lands on real
+                        // data.
                         ForEach(viewModel.currentSets) { set in
                             SetChip(
                                 label: set.groupName,

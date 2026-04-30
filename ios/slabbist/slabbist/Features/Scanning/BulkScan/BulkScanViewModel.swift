@@ -10,6 +10,7 @@ final class BulkScanViewModel {
     let lot: Lot
     let currentUserId: UUID
     var compRepository: CompRepository?
+    var certLookupRepository: CertLookupRepository?
 
     private(set) var recentScans: [Scan] = []
 
@@ -17,12 +18,14 @@ final class BulkScanViewModel {
         context: ModelContext,
         lot: Lot,
         currentUserId: UUID,
-        compRepository: CompRepository? = nil
+        compRepository: CompRepository? = nil,
+        certLookupRepository: CertLookupRepository? = nil
     ) {
         self.context = context
         self.lot = lot
         self.currentUserId = currentUserId
         self.compRepository = compRepository
+        self.certLookupRepository = certLookupRepository
         refreshRecent()
     }
 
@@ -76,7 +79,87 @@ final class BulkScanViewModel {
 
         try context.save()
         refreshRecent()
-        // TODO(cert-lookup plan): call triggerCompFetch(for: scan) when the scan transitions to .validated
+
+        triggerCertLookup(for: scan)
+    }
+
+    /// Resolves a freshly-recorded scan's `(grader, cert_number)` to a graded
+    /// card identity + grade by calling the `cert-lookup` Edge Function.
+    /// On success, mutates the scan in place (status, identity, grade),
+    /// enqueues a server-side patch, and chains into `triggerCompFetch`.
+    /// No-ops without a `certLookupRepository` (e.g. unit tests not exercising
+    /// the network path) so existing tests remain side-effect free.
+    func triggerCertLookup(for scan: Scan) {
+        guard let lookup = self.certLookupRepository else { return }
+        let scanId = scan.id
+        let grader = scan.grader
+        let certNumber = scan.certNumber
+        let ctx = self.context
+
+        Task { [weak self] in
+            do {
+                let result = try await lookup.lookup(grader: grader, certNumber: certNumber)
+                await MainActor.run {
+                    guard let self else { return }
+                    var descriptor = FetchDescriptor<Scan>(
+                        predicate: #Predicate<Scan> { $0.id == scanId }
+                    )
+                    descriptor.fetchLimit = 1
+                    guard let target = try? ctx.fetch(descriptor).first else { return }
+
+                    let now = Date()
+                    target.gradedCardIdentityId = result.identityId
+                    target.grade = result.grade
+                    target.status = .validated
+                    target.updatedAt = now
+
+                    let patch = OutboxPayloads.UpdateScan(
+                        id: target.id.uuidString,
+                        graded_card_identity_id: result.identityId.uuidString,
+                        grade: result.grade,
+                        status: ScanStatus.validated.rawValue,
+                        updated_at: ISO8601DateFormatter.shared.string(from: now)
+                    )
+                    if let payload = try? JSONEncoder().encode(patch) {
+                        let outboxItem = OutboxItem(
+                            id: UUID(),
+                            kind: .updateScan,
+                            payload: payload,
+                            status: .pending,
+                            attempts: 0,
+                            createdAt: now,
+                            nextAttemptAt: now
+                        )
+                        ctx.insert(outboxItem)
+                    }
+                    try? ctx.save()
+                    self.refreshRecent()
+                    self.triggerCompFetch(for: target)
+                }
+            } catch CertLookupRepository.Error.certNotFound {
+                AppLog.scans.info("cert-lookup: cert not found upstream — leaving scan pending")
+                await MainActor.run { self?.markValidationFailed(scanId: scanId) }
+            } catch CertLookupRepository.Error.notPokemon {
+                AppLog.scans.info("cert-lookup: cert resolved to non-pokemon product — skipping comp")
+                await MainActor.run { self?.markValidationFailed(scanId: scanId) }
+            } catch {
+                // Transient errors (network, upstream unavailable, rate limit)
+                // leave the scan in `pendingValidation` so a retry path remains
+                // open. The outbox worker will eventually pick up retries when
+                // a `certLookupJob` outbox kind is wired (see OutboxKind).
+                AppLog.scans.error("cert-lookup failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func markValidationFailed(scanId: UUID) {
+        var descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.id == scanId })
+        descriptor.fetchLimit = 1
+        guard let target = try? context.fetch(descriptor).first else { return }
+        target.status = .validationFailed
+        target.updatedAt = Date()
+        try? context.save()
+        refreshRecent()
     }
 
     /// Fetches a live price-comp for a validated scan and persists a

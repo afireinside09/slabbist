@@ -69,6 +69,11 @@ protocol MoversRepository: Sendable {
         groupId: Int?,
         limit: Int
     ) async throws -> [EbayListingBrowseRowDTO]
+
+    /// Counts of eBay listings per price tier, optionally scoped to a
+    /// specific set. Used to hide tier chips with zero data so the
+    /// user can't filter their way into an empty result.
+    func ebayListingsTierCounts(groupId: Int?) async throws -> [MoversPriceTier: Int]
 }
 
 extension MoversRepository {
@@ -240,6 +245,25 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
         }
     }
 
+    func ebayListingsTierCounts(groupId: Int?) async throws -> [MoversPriceTier: Int] {
+        do {
+            let response = try await client.rpc(
+                "get_ebay_listings_tier_counts",
+                params: TierCountsParams(p_group_id: groupId)
+            ).execute()
+            let rows = try JSONCoders.decoder.decode([TierCountRow].self, from: response.data)
+            var out: [MoversPriceTier: Int] = [:]
+            for row in rows {
+                if let tier = MoversPriceTier(rawValue: row.price_tier) {
+                    out[tier] = row.listings_count
+                }
+            }
+            return out
+        } catch {
+            throw SupabaseError.map(error)
+        }
+    }
+
     private struct ListingsParams: Encodable, Sendable {
         let p_product_id: Int
         let p_sub_type_name: String
@@ -252,6 +276,15 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
         let p_price_tier: String?
         let p_group_id: Int?
         let p_limit: Int
+    }
+
+    private struct TierCountsParams: Encodable, Sendable {
+        let p_group_id: Int?
+    }
+
+    private struct TierCountRow: Decodable, Sendable {
+        let price_tier: String
+        let listings_count: Int
     }
 
     private struct EbayListingsSetRow: Decodable, Sendable {

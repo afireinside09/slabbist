@@ -3,6 +3,8 @@ import SwiftData
 import AVFoundation
 import Vision
 import OSLog
+import Supabase
+import Auth
 
 /// Holds scan-path state that must survive being captured by a `@Sendable`
 /// closure fired off the MainActor. We keep the recognizer, view model,
@@ -227,7 +229,19 @@ struct BulkScanView: View {
 
     private func bootstrapViewModel() {
         guard controller.viewModel == nil, let userId = session.userId else { return }
-        controller.viewModel = BulkScanViewModel(context: context, lot: lot, currentUserId: userId)
+        let functionsBaseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
+        let tokenProvider: () async -> String? = {
+            try? await AppSupabase.shared.client.auth.session.accessToken
+        }
+        let comp = CompRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
+        let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
+        controller.viewModel = BulkScanViewModel(
+            context: context,
+            lot: lot,
+            currentUserId: userId,
+            compRepository: comp,
+            certLookupRepository: cert
+        )
     }
 
     private func configureCamera() async {
