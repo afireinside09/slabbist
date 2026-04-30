@@ -51,8 +51,8 @@ struct CapturedReviewCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(AppColor.dim, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                                .stroke(AppColor.hairlineStrong, lineWidth: 1)
                         )
                         .foregroundStyle(AppColor.muted)
                 }
@@ -68,14 +68,14 @@ struct CapturedReviewCard: View {
         }
         .padding(Spacing.l)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
                 .fill(AppColor.ink.opacity(0.96))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
                         .stroke(AppColor.gold.opacity(0.45), lineWidth: 1)
                 )
         )
-        .shadow(color: .black.opacity(0.4), radius: 14, y: 8)
+        .shadow(color: AppColor.ink.opacity(0.4), radius: 14, y: 8)
     }
 
     private var currentCandidate: CertCandidate {
