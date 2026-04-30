@@ -119,7 +119,7 @@ struct MoverDetailView: View {
                     }
                 }
 
-                Divider().background(AppColor.hairline)
+                SlabCardDivider()
 
                 HStack(spacing: Spacing.l) {
                     statColumn(
