@@ -22,27 +22,65 @@ struct ScanDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let snapshot = snapshots.first {
-                    CompCardView(snapshot: snapshot)
-                    listingsSection(snapshot: snapshot)
-                    if let attemptedAt = scan.compFetchedAt {
-                        Text("Last refreshed \(attemptedAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        SlabbedRoot {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    header
+                    if let snapshot = snapshots.first {
+                        valueSection(snapshot: snapshot)
+                        listingsSection(snapshot: snapshot)
+                    } else {
+                        fallbackContent
                     }
-                    refreshButton
-                } else {
-                    fallbackContent
                 }
+                .padding(.horizontal, Spacing.xxl)
+                .padding(.top, Spacing.l)
+                .padding(.bottom, Spacing.xxxl)
             }
-            .padding()
         }
-        .navigationTitle("\(scan.grader.rawValue) \(scan.grade ?? "")")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
-    // MARK: - State machine
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            KickerLabel(scan.grader.rawValue)
+            Text(headerTitle)
+                .slabTitle()
+                .lineLimit(2)
+            Text("Cert #\(scan.certNumber)")
+                .font(SlabFont.mono(size: 12))
+                .foregroundStyle(AppColor.muted)
+        }
+    }
+
+    private var headerTitle: String {
+        if let grade = scan.grade, !grade.isEmpty {
+            return "\(scan.grader.rawValue) \(grade)"
+        }
+        return scan.grader.rawValue
+    }
+
+    // MARK: - Value section (resolved)
+
+    private func valueSection(snapshot: GradedMarketSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Market value")
+            CompCardView(snapshot: snapshot)
+            if let attemptedAt = scan.compFetchedAt {
+                Text("Last refreshed \(attemptedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(SlabFont.mono(size: 11))
+                    .foregroundStyle(AppColor.dim)
+            }
+            PrimaryGoldButton(title: "Refresh comp", action: retry)
+        }
+    }
+
+    // MARK: - State machine (no snapshot)
 
     @ViewBuilder
     private var fallbackContent: some View {
@@ -65,89 +103,98 @@ struct ScanDetailView: View {
     }
 
     private var fetchingState: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Fetching eBay sold listings…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.top, 40)
+        emptyState(
+            kicker: "Fetching",
+            symbol: "arrow.triangle.2.circlepath",
+            symbolTint: AppColor.gold,
+            title: "Pulling eBay sold listings…",
+            detail: "This usually takes a couple of seconds.",
+            showsProgress: true,
+            cta: nil
+        )
     }
 
     private var certNotResolvedState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "questionmark.diamond")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-            Text(scan.status == .validationFailed ? "Cert lookup failed"
-                                                  : "Validating cert…")
-                .font(.headline)
-            Text(scan.status == .validationFailed
-                 ? "PSA didn't recognize cert \(scan.certNumber). Delete this slab and re-scan if the digits look wrong."
-                 : "Once PSA confirms the cert, eBay comps will load automatically.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.top, 40)
-        .padding(.horizontal)
+        emptyState(
+            kicker: scan.status == .validationFailed ? "Cert not found" : "Validating",
+            symbol: scan.status == .validationFailed ? "exclamationmark.circle" : "hourglass",
+            symbolTint: scan.status == .validationFailed ? AppColor.negative : AppColor.gold,
+            title: scan.status == .validationFailed ? "Cert lookup failed" : "Validating cert…",
+            detail: scan.status == .validationFailed
+                ? "PSA didn't recognize cert \(scan.certNumber). Delete this slab and re-scan if the digits look wrong."
+                : "Once PSA confirms the cert, eBay comps will load automatically.",
+            showsProgress: scan.status != .validationFailed,
+            cta: nil
+        )
     }
 
     private var noDataState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-            Text("No eBay sales found yet")
-                .font(.headline)
-            Text("This slab hasn't sold on eBay in the lookback window. Try again later, or this might just be a rarely-traded card.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            refreshButton
-            if let at = scan.compFetchedAt {
-                Text("Checked \(at.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.top, 40)
-        .padding(.horizontal)
+        emptyState(
+            kicker: "No comps",
+            symbol: "magnifyingglass",
+            symbolTint: AppColor.muted,
+            title: "No eBay sales found yet",
+            detail: "This slab hasn't sold on eBay in the lookback window. Try again later, or this might just be a rarely-traded card.",
+            showsProgress: false,
+            cta: ("Retry comp fetch", retry)
+        )
     }
 
     private var failedState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
-                .foregroundStyle(.orange)
-            Text("Comp fetch failed")
-                .font(.headline)
-            Text(scan.compFetchError ?? "Unknown error")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            refreshButton
-            if let at = scan.compFetchedAt {
-                Text("Last attempt \(at.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.top, 40)
-        .padding(.horizontal)
+        emptyState(
+            kicker: "Lookup failed",
+            symbol: "exclamationmark.triangle",
+            symbolTint: AppColor.negative,
+            title: "Comp fetch failed",
+            detail: scan.compFetchError ?? "Unknown error",
+            showsProgress: false,
+            cta: ("Retry comp fetch", retry)
+        )
     }
 
-    private var refreshButton: some View {
-        Button(action: retry) {
-            Label("Retry comp fetch", systemImage: "arrow.clockwise")
-                .font(.subheadline.weight(.semibold))
+    /// Shared empty / loading / error layout. Keeps the visual rhythm
+    /// consistent across the four state-machine branches.
+    private func emptyState(
+        kicker: String,
+        symbol: String,
+        symbolTint: Color,
+        title: String,
+        detail: String,
+        showsProgress: Bool,
+        cta: (label: String, action: () -> Void)?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel(kicker)
+            SlabCard {
+                VStack(spacing: Spacing.m) {
+                    if showsProgress {
+                        ProgressView().tint(AppColor.gold)
+                    } else {
+                        Image(systemName: symbol)
+                            .font(.system(size: 32, weight: .regular))
+                            .foregroundStyle(symbolTint)
+                    }
+                    Text(title)
+                        .slabRowTitle()
+                        .multilineTextAlignment(.center)
+                    Text(detail)
+                        .font(SlabFont.sans(size: 13))
+                        .foregroundStyle(AppColor.muted)
+                        .multilineTextAlignment(.center)
+                    if let at = scan.compFetchedAt, !showsProgress {
+                        Text("Last attempt \(at.formatted(date: .abbreviated, time: .shortened))")
+                            .font(SlabFont.mono(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Spacing.l)
+                .padding(.vertical, Spacing.xl)
+            }
+            if let cta {
+                PrimaryGoldButton(title: cta.label, action: cta.action)
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .tint(.accentColor)
     }
 
     private func retry() {
@@ -162,37 +209,58 @@ struct ScanDetailView: View {
     // MARK: - Listings
 
     private func listingsSection(snapshot: GradedMarketSnapshot) -> some View {
-        DisclosureGroup("View all \(snapshot.soldListings.count) sold listings") {
-            VStack(spacing: 8) {
-                ForEach(snapshot.soldListings.sorted(by: { $0.soldAt > $1.soldAt })) { listing in
-                    Link(destination: listing.url) { listingRow(listing) }
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Recent sales · \(snapshot.soldListings.count)")
+            SlabCard {
+                VStack(spacing: 0) {
+                    let sorted = snapshot.soldListings.sorted(by: { $0.soldAt > $1.soldAt })
+                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, listing in
+                        Link(destination: listing.url) {
+                            listingRow(listing)
+                        }
                         .buttonStyle(.plain)
+                        if index < sorted.count - 1 {
+                            SlabCardDivider()
+                        }
+                    }
                 }
             }
-            .padding(.top, 6)
         }
     }
 
     private func listingRow(_ l: SoldListingMirror) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(l.title).lineLimit(2).font(.subheadline)
-                Spacer()
-                Text(formatCents(l.soldPriceCents)).font(.subheadline.monospacedDigit())
-            }
-            HStack(spacing: 8) {
-                Text(l.soldAt.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption).foregroundStyle(.secondary)
-                if l.isOutlier {
-                    Text(l.outlierReason == .priceHigh ? "High outlier" : "Low outlier")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.orange.opacity(0.2)))
-                        .foregroundStyle(.orange)
+        HStack(alignment: .top, spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(l.title)
+                    .slabRowTitle()
+                    .lineLimit(2)
+                HStack(spacing: Spacing.s) {
+                    Text(l.soldAt.formatted(date: .abbreviated, time: .omitted))
+                        .font(SlabFont.mono(size: 11))
+                        .foregroundStyle(AppColor.dim)
+                    if l.isOutlier {
+                        outlierChip(reason: l.outlierReason)
+                    }
                 }
             }
+            Spacer(minLength: Spacing.m)
+            Text(formatCents(l.soldPriceCents))
+                .slabMetric()
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, Spacing.l)
+        .padding(.vertical, Spacing.md)
+    }
+
+    private func outlierChip(reason: OutlierReason?) -> some View {
+        Text(reason == .priceHigh ? "HIGH" : "LOW")
+            .font(SlabFont.sans(size: 10, weight: .medium))
+            .tracking(1.4)
+            .foregroundStyle(AppColor.negative)
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xxs)
+            .background(
+                Capsule().fill(AppColor.negative.opacity(0.12))
+            )
     }
 
     private func formatCents(_ cents: Int64) -> String {
