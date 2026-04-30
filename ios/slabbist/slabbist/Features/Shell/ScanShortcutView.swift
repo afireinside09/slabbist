@@ -57,6 +57,20 @@ struct ScanShortcutView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                        } else if viewModel != nil {
+                            // No open lot to resume — explain what
+                            // bulk scanning does so the Start-new-lot
+                            // button has clear context above it.
+                            FeatureEmptyState(
+                                systemImage: "viewfinder",
+                                title: "Bulk scan a stack",
+                                subtitle: "Slabbist watches your camera and identifies each slab as you flip through them — no manual entry, no per-card taps.",
+                                steps: [
+                                    "Tap Start new lot to open a fresh session.",
+                                    "Hold the camera over each slab's label.",
+                                    "Cards land in your Lots tab in real time.",
+                                ]
+                            )
                         }
                     }
                     .padding(.horizontal, Spacing.xxl)

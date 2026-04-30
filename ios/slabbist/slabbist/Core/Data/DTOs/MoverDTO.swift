@@ -8,7 +8,7 @@ import Foundation
 /// configurations (v11+) to preserve arbitrary precision, and as JSON
 /// number in others. `init(from:)` tolerates both so the DTO survives
 /// either wire shape without a bespoke server coercion layer.
-nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
+nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable, Hashable {
     let productId: Int
     let productName: String
     let groupName: String?
@@ -20,8 +20,18 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
     let pctChange: Double
     let capturedAt: Date
     let previousCapturedAt: Date
+    /// Populated only by the per-set RPC (`get_set_movers`) which
+    /// returns gainers + losers in one payload. Nil when fetched via
+    /// the per-direction RPC (`get_top_movers`), where direction is
+    /// implicit from the call.
+    let direction: String?
 
-    var id: String { "\(productId)-\(subTypeName)" }
+    var id: String {
+        if let dir = direction {
+            return "\(productId)-\(subTypeName)-\(dir)"
+        }
+        return "\(productId)-\(subTypeName)"
+    }
 
     enum CodingKeys: String, CodingKey {
         case productId = "product_id"
@@ -35,6 +45,7 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
         case pctChange = "pct_change"
         case capturedAt = "captured_at"
         case previousCapturedAt = "previous_captured_at"
+        case direction
     }
 
     init(
@@ -48,7 +59,8 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
         absChange: Double,
         pctChange: Double,
         capturedAt: Date,
-        previousCapturedAt: Date
+        previousCapturedAt: Date,
+        direction: String? = nil
     ) {
         self.productId = productId
         self.productName = productName
@@ -61,6 +73,7 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
         self.pctChange = pctChange
         self.capturedAt = capturedAt
         self.previousCapturedAt = previousCapturedAt
+        self.direction = direction
     }
 
     init(from decoder: Decoder) throws {
@@ -76,6 +89,7 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable {
         self.pctChange       = try c.decodeFlexibleDouble(forKey: .pctChange)
         self.capturedAt          = try c.decode(Date.self, forKey: .capturedAt)
         self.previousCapturedAt  = try c.decode(Date.self, forKey: .previousCapturedAt)
+        self.direction       = try c.decodeIfPresent(String.self, forKey: .direction)
     }
 }
 

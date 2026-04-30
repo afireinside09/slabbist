@@ -169,26 +169,16 @@ struct LotsListView: View {
     }
 
     private var emptyStateCard: some View {
-        SlabCard {
-            VStack(spacing: Spacing.m) {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 48, weight: .regular))
-                    .foregroundStyle(AppColor.gold.opacity(0.75))
-                    .padding(.top, Spacing.l)
-                Text("No lots yet")
-                    .font(SlabFont.serif(size: 28))
-                    .tracking(-0.8)
-                    .foregroundStyle(AppColor.text)
-                Text("Start your first bulk scan to see it here.")
-                    .font(SlabFont.sans(size: 14))
-                    .foregroundStyle(AppColor.muted)
-                    .multilineTextAlignment(.center)
-                Spacer(minLength: Spacing.l)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, Spacing.l)
-            .padding(.bottom, Spacing.l)
-        }
+        FeatureEmptyState(
+            systemImage: "square.stack.3d.up",
+            title: "No lots yet",
+            subtitle: "A lot is a stack of cards you're processing together — a 500-count, a tournament pickup, a buylist haul.",
+            steps: [
+                "Tap New bulk scan to start a lot.",
+                "Photograph each slab's label; cards match automatically.",
+                "Open a lot anytime to see comps, totals, and what's left.",
+            ]
+        )
     }
 
     private func prepare() async {
