@@ -89,6 +89,12 @@ struct ScanShortcutView: View {
             .task(id: session.userId) {
                 await prepare()
             }
+            .onAppear {
+                // Re-resolve when the tab becomes visible so a lot deleted
+                // from the Lots tab doesn't leave us holding a dangling
+                // SwiftData reference. Cheap — single fetch on appear.
+                refresh()
+            }
         }
     }
 

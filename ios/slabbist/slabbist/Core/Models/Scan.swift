@@ -60,6 +60,7 @@ final class Scan {
         userId: UUID,
         grader: Grader,
         certNumber: String,
+        grade: String? = nil,
         gradedCardIdentityId: UUID? = nil,
         status: ScanStatus = .pendingValidation,
         ocrRawText: String? = nil,
@@ -74,8 +75,8 @@ final class Scan {
         self.userId = userId
         self.grader = grader
         self.certNumber = certNumber
-        self.grade = nil
-        self.gradedCardIdentityId = nil
+        self.grade = grade
+        self.gradedCardIdentityId = gradedCardIdentityId
         self.status = status
         self.ocrRawText = ocrRawText
         self.ocrConfidence = ocrConfidence

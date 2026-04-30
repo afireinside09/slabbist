@@ -58,8 +58,8 @@ struct PillToggle<Value: Hashable>: View {
 
 #Preview("PillToggle") {
     struct Demo: View {
-        @State var mode: String = "ar"
-        @State var view: String = "grid"
+        @State private var mode: String = "ar"
+        @State private var view: String = "grid"
         var body: some View {
             VStack(spacing: Spacing.l) {
                 PillToggle(

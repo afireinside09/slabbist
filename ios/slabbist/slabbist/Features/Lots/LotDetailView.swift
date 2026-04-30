@@ -85,7 +85,9 @@ struct LotDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             KickerLabel("Lot")
-            Text(lot.name).slabTitle()
+            Text(lot.name)
+                .slabTitle()
+                .lineLimit(2)
             Text(headerSubtitle)
                 .font(SlabFont.mono(size: 12))
                 .foregroundStyle(AppColor.muted)

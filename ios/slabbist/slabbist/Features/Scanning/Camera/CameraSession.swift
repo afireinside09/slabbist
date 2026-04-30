@@ -9,9 +9,23 @@ final class CameraSession: NSObject {
         case notDetermined, authorized, denied, restricted
     }
 
+    enum SessionFault: Equatable {
+        /// `AVCaptureSessionRuntimeError` — usually device unplug, hardware
+        /// failure, or another foreground app stealing the camera.
+        case runtimeError(message: String)
+        /// `AVCaptureSessionWasInterrupted` — Control Center / FaceTime /
+        /// thermal shutdown. Caller should pause UI; the session will resume
+        /// automatically and `fault` will reset to `nil` when the
+        /// `interruptionEnded` notification fires.
+        case interrupted(reason: AVCaptureSession.InterruptionReason)
+    }
+
     private(set) var authorization: Authorization = .notDetermined
     private(set) var isRunning: Bool = false
     private(set) var isConfigured: Bool = false
+    /// Latest hardware/system fault, or `nil` if the session is healthy.
+    /// Observe to surface a banner / error state in the camera UI.
+    private(set) var fault: SessionFault?
 
     let captureSession = AVCaptureSession()
 
@@ -52,6 +66,7 @@ final class CameraSession: NSObject {
     /// input" on re-entry.
     func configure() throws {
         guard !isConfigured else { return }
+        registerSessionObservers()
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
@@ -89,6 +104,46 @@ final class CameraSession: NSObject {
         Task.detached(priority: .userInitiated) {
             self.captureSession.stopRunning()
             await MainActor.run { self.isRunning = false }
+        }
+    }
+
+    private func registerSessionObservers() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: .AVCaptureSessionRuntimeError,
+            object: captureSession,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            let err = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+            let message = err?.localizedDescription ?? "Camera runtime error"
+            MainActor.assumeIsolated {
+                self.fault = .runtimeError(message: message)
+                self.isRunning = self.captureSession.isRunning
+            }
+        }
+        center.addObserver(
+            forName: .AVCaptureSessionWasInterrupted,
+            object: captureSession,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+            let reason = raw.flatMap { AVCaptureSession.InterruptionReason(rawValue: $0) }
+                ?? .videoDeviceNotAvailableInBackground
+            MainActor.assumeIsolated {
+                self.fault = .interrupted(reason: reason)
+            }
+        }
+        center.addObserver(
+            forName: .AVCaptureSessionInterruptionEnded,
+            object: captureSession,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.fault = nil
+            }
         }
     }
 }

@@ -16,6 +16,14 @@ final class StillImageCapture: NSObject {
         super.init()
     }
 
+    deinit {
+        // Resume any in-flight continuation so callers don't hang when the
+        // view is dismissed mid-capture (e.g. user backs out before the
+        // photo delegate fires).
+        continuation?.resume(throwing: CancellationError())
+        continuation = nil
+    }
+
     func attachIfNeeded() {
         guard !attached else { return }
         let cs = session.captureSession

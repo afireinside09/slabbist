@@ -119,9 +119,40 @@ struct ManualEntrySheet: View {
         certNumber.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Per-grader format check. Mirrors the prompts above so the validation
+    /// failure is never a surprise — what the placeholder says is what the
+    /// validator enforces.
+    private func validate(_ cert: String) -> String? {
+        switch grader {
+        case .PSA:
+            guard cert.allSatisfy(\.isNumber), (8...9).contains(cert.count) else {
+                return "PSA certs are 8 or 9 digits."
+            }
+        case .BGS, .CGC:
+            guard cert.allSatisfy(\.isNumber), cert.count == 10 else {
+                return "\(grader.rawValue) certs are 10 digits."
+            }
+        case .SGC:
+            guard cert.allSatisfy(\.isNumber), (7...8).contains(cert.count) else {
+                return "SGC certs are 7 or 8 digits."
+            }
+        case .TAG:
+            let charset = CharacterSet.alphanumerics
+            let allValid = cert.unicodeScalars.allSatisfy(charset.contains)
+            guard allValid, (10...12).contains(cert.count) else {
+                return "TAG certs are 10–12 letters or digits."
+            }
+        }
+        return nil
+    }
+
     private func submit() {
         let cert = trimmedCert
         guard !cert.isEmpty else { return }
+        if let problem = validate(cert) {
+            self.error = problem
+            return
+        }
         let candidate = CertCandidate(
             grader: grader,
             certNumber: cert,

@@ -9,13 +9,40 @@ import OSLog
 /// Used by both:
 ///   - `BulkScanViewModel.triggerCompFetch` (auto, after cert-lookup)
 ///   - `ScanDetailView`'s Retry button
+///
+/// Concurrent calls for the same `(identityId, gradingService, grade)` key
+/// share one in-flight network request — N parallel scans of the same slab
+/// produce one upstream call, not N. The shared task flips every Scan whose
+/// `(identityId, grader, grade)` matches the key.
 @MainActor
-enum CompFetchService {
-    /// Kicks off a fetch for the given scan. Fire-and-forget — state is
-    /// observed via SwiftData `@Query` on `Scan` and `GradedMarketSnapshot`.
-    /// No-ops if the scan hasn't been validated yet (`gradedCardIdentityId`
-    /// or `grade` is nil).
+final class CompFetchService {
+    static let shared = CompFetchService()
+
+    /// In-flight fetches keyed by `(identityId|service|grade)`. New calls for
+    /// an in-flight key are absorbed (the requesting scan is flipped to
+    /// `.fetching` and will pick up the snapshot via `@Query` when the
+    /// shared task lands).
+    private var inFlight: [String: Task<Void, Never>] = [:]
+
+    private init() {}
+
+    /// Test seam: reset all in-flight tracking. Production code never calls.
+    func _resetForTests() {
+        inFlight.values.forEach { $0.cancel() }
+        inFlight.removeAll()
+    }
+
+    /// Static entry point preserved for source compatibility with prior call
+    /// sites; delegates to the shared instance.
     static func fetch(
+        scan: Scan,
+        repository: CompRepository,
+        context: ModelContext
+    ) {
+        shared.fetch(scan: scan, repository: repository, context: context)
+    }
+
+    func fetch(
         scan: Scan,
         repository: CompRepository,
         context: ModelContext
@@ -27,45 +54,105 @@ enum CompFetchService {
         }
         let scanId = scan.id
         let service = scan.grader.rawValue
+        let key = Self.cacheKey(identityId: identityId, service: service, grade: grade)
 
-        // Mark fetching synchronously so the UI flips off the spinner-only
-        // state and into a clear "fetching" mode (same visible spinner but
-        // distinguishable from "never started").
+        // Mark fetching so the UI flips off the spinner-only state into a
+        // clear "fetching" mode. Done unconditionally — both the kicker and
+        // the absorber paths set it so a freshly-arriving scan gets the same
+        // visible state as the scan that originally triggered the fetch.
         scan.compFetchState = CompFetchState.fetching.rawValue
         scan.compFetchError = nil
         scan.compFetchedAt = Date()
         try? context.save()
 
-        Task {
+        // Already a request in flight for this exact key — absorb. The shared
+        // task will flip every matching scan when it lands.
+        if inFlight[key] != nil {
+            AppLog.scans.info("comp fetch absorbed into in-flight request for key=\(key, privacy: .public)")
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            defer { self?.inFlight[key] = nil }
             do {
                 let decoded = try await repository.fetchComp(
                     identityId: identityId,
                     gradingService: service,
                     grade: grade
                 )
-                await MainActor.run {
-                    persistSnapshot(decoded: decoded, identityId: identityId, service: service, grade: grade, context: context)
-                    if let target = fetchScan(scanId, in: context) {
-                        target.compFetchState = CompFetchState.resolved.rawValue
-                        target.compFetchError = nil
-                        target.compFetchedAt = Date()
-                        try? context.save()
-                    }
+                Self.persistSnapshot(decoded: decoded, identityId: identityId, service: service, grade: grade, context: context)
+                Self.flipMatching(
+                    identityId: identityId,
+                    service: service,
+                    grade: grade,
+                    to: .resolved,
+                    error: nil,
+                    context: context
+                )
+                // Belt-and-braces: ensure the originating scan is also flipped
+                // even if it slipped out of the fetch above (e.g. deleted then
+                // re-inserted with the same id during the network window).
+                if let target = Self.fetchScan(scanId, in: context) {
+                    target.compFetchState = CompFetchState.resolved.rawValue
+                    target.compFetchError = nil
+                    target.compFetchedAt = Date()
+                    try? context.save()
                 }
             } catch {
-                let (state, message) = classify(error)
+                let (state, message) = Self.classify(error)
                 AppLog.scans.error(
                     "comp fetch failed: \(message, privacy: .public) (state=\(state.rawValue, privacy: .public))"
                 )
-                await MainActor.run {
-                    if let target = fetchScan(scanId, in: context) {
-                        target.compFetchState = state.rawValue
-                        target.compFetchError = message
-                        target.compFetchedAt = Date()
-                        try? context.save()
-                    }
+                Self.flipMatching(
+                    identityId: identityId,
+                    service: service,
+                    grade: grade,
+                    to: state,
+                    error: message,
+                    context: context
+                )
+                if let target = Self.fetchScan(scanId, in: context) {
+                    target.compFetchState = state.rawValue
+                    target.compFetchError = message
+                    target.compFetchedAt = Date()
+                    try? context.save()
                 }
             }
+        }
+        inFlight[key] = task
+    }
+
+    private static func cacheKey(identityId: UUID, service: String, grade: String) -> String {
+        "\(identityId.uuidString)|\(service)|\(grade)"
+    }
+
+    /// Flip every `Scan` whose `(identityId, grader, grade)` matches the
+    /// completed fetch — keeps absorbed requests in sync with the original.
+    private static func flipMatching(
+        identityId: UUID,
+        service: String,
+        grade: String,
+        to state: CompFetchState,
+        error: String?,
+        context: ModelContext
+    ) {
+        let descriptor = FetchDescriptor<Scan>(
+            predicate: #Predicate<Scan> { s in
+                s.gradedCardIdentityId == identityId &&
+                s.grade == grade
+            }
+        )
+        guard let candidates = try? context.fetch(descriptor) else { return }
+        let now = Date()
+        var changed = false
+        for s in candidates where s.grader.rawValue == service {
+            s.compFetchState = state.rawValue
+            s.compFetchError = error
+            s.compFetchedAt = now
+            changed = true
+        }
+        if changed {
+            try? context.save()
         }
     }
 
