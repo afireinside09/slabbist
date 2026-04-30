@@ -48,6 +48,7 @@ struct NewLotSheet: View {
             .padding(.top, Spacing.l)
             .padding(.bottom, Spacing.xl)
         }
+        .ambientGoldBlob(.topTrailing)
     }
 
     private var topBar: some View {

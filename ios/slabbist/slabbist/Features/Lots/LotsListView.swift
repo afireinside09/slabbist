@@ -163,10 +163,7 @@ struct LotsListView: View {
             KickerLabel("Open lots")
             SlabCard {
                 VStack(spacing: 0) {
-                    ForEach(lots, id: \.id) { lot in
-                        if lot.id != lots.first?.id {
-                            SlabCardDivider()
-                        }
+                    ForEach(Array(lots.enumerated()), id: \.element.id) { index, lot in
                         NavigationLink(value: LotsRoute.lot(lot.id)) {
                             row(for: lot)
                         }
@@ -175,6 +172,9 @@ struct LotsListView: View {
                             Button("Delete lot", systemImage: "trash", role: .destructive) {
                                 lotPendingDelete = lot
                             }
+                        }
+                        if index < lots.count - 1 {
+                            SlabCardDivider()
                         }
                     }
                 }
