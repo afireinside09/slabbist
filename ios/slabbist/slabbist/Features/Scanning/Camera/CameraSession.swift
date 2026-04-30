@@ -1,6 +1,7 @@
 import AVFoundation
 import Observation
 import UIKit
+import os
 
 @MainActor
 @Observable
@@ -33,18 +34,19 @@ final class CameraSession: NSObject {
     private let videoOutput = AVCaptureVideoDataOutput()
 
     // Callback storage lives off the MainActor because the AVFoundation
-    // delegate calls us back on `sampleQueue`. Guarded by a lock so writes
-    // from MainActor and reads from `sampleQueue` are well-ordered.
-    private let callbackLock = NSLock()
-    nonisolated(unsafe) private var _onSampleBuffer: (@Sendable (CMSampleBuffer) -> Void)?
+    // delegate calls us back on `sampleQueue`. `OSAllocatedUnfairLock`
+    // gives us a Sendable lock-protected cell whose `withLock` accessor is
+    // safe to call from any isolation domain — replacing the previous
+    // `nonisolated(unsafe) var + NSLock` pair which warned ("no effect")
+    // under Swift 6 strict concurrency because the closure type is
+    // already Sendable.
+    private let callbackStorage = OSAllocatedUnfairLock<(@Sendable (CMSampleBuffer) -> Void)?>(initialState: nil)
 
     /// Set the per-frame callback. The callback fires on the internal sample
     /// queue (a serial background queue) — callers that need MainActor work
     /// must hop themselves. Pass `nil` to clear.
     func setOnSampleBuffer(_ callback: (@Sendable (CMSampleBuffer) -> Void)?) {
-        callbackLock.lock()
-        defer { callbackLock.unlock() }
-        _onSampleBuffer = callback
+        callbackStorage.withLock { $0 = callback }
     }
 
     func requestAuthorization() async {
@@ -152,12 +154,10 @@ extension CameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {
     nonisolated func captureOutput(_ output: AVCaptureOutput,
                                    didOutput sampleBuffer: CMSampleBuffer,
                                    from connection: AVCaptureConnection) {
-        // Invoked on `sampleQueue`. Read the callback under lock and fire it
-        // synchronously on this queue — no MainActor hop. Callers that need
-        // MainActor work must hop inside their own closure.
-        callbackLock.lock()
-        let callback = _onSampleBuffer
-        callbackLock.unlock()
+        // Invoked on `sampleQueue`. Read the callback under the unfair lock
+        // and fire it synchronously on this queue — no MainActor hop.
+        // Callers that need MainActor work must hop inside their own closure.
+        let callback = callbackStorage.withLock { $0 }
         callback?(sampleBuffer)
     }
 }

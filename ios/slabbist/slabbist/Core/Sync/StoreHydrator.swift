@@ -32,11 +32,17 @@ final class StoreHydrator {
     /// Takes `ModelContainer` (Sendable, not MainActor-isolated) so the
     /// init is callable from any context. The MainActor-only
     /// `mainContext` is pulled lazily inside MainActor methods.
+    ///
+    /// `container` defaults to `nil` and resolves to
+    /// `AppModelContainer.shared` inside the MainActor-isolated init body
+    /// — Swift 6 evaluates default-arg expressions in nonisolated context,
+    /// so referencing the MainActor-isolated `shared` directly as a
+    /// default would warn under `-default-isolation=MainActor`.
     init(
-        container: ModelContainer = AppModelContainer.shared,
+        container: ModelContainer? = nil,
         repository: any StoreRepository = SupabaseStoreRepository()
     ) {
-        self.container = container
+        self.container = container ?? AppModelContainer.shared
         self.repository = repository
     }
 

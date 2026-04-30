@@ -93,8 +93,13 @@ final class BulkScanController {
     /// `.fast` mode reads "12345678" as garbled mixed-case junk on small
     /// labels (confirmed in user trace logs) and confidence caps near 0.50,
     /// below the recognizer's stable-fire threshold.
+    ///
+    /// `nonisolated(unsafe)` because the request is read from the sample
+    /// queue (background) inside the OCR closure. `VNRecognizeTextRequest`
+    /// isn't Sendable, but exclusive ownership lives on the sample queue —
+    /// the MainActor never touches it after initial assignment.
     @ObservationIgnored
-    let textRequest: VNRecognizeTextRequest = {
+    nonisolated(unsafe) let textRequest: VNRecognizeTextRequest = {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
@@ -421,10 +426,12 @@ struct BulkScanView: View {
                 // Run rect detection unconditionally — drives the floating
                 // corner brackets even while a review is pending so the user
                 // sees the bracket "stay" on the slab they're confirming.
+                // Read `previewLayer` inside the helper's MainActor hop so
+                // the non-Sendable AVCaptureVideoPreviewLayer is never
+                // captured by this @Sendable closure.
                 Self.detectAndPublishSlabRect(
                     handler: handler,
-                    controller: controller,
-                    previewLayer: controller.previewLayer
+                    controller: controller
                 )
 
                 // Skip OCR while a review card is up — accepting more reads
@@ -477,13 +484,19 @@ struct BulkScanView: View {
                 // Debounced diagnostic log: once a second, dump observation
                 // count + max confidence + a short preview so a tester can
                 // confirm OCR is alive (and correctly oriented) from
-                // Console.app without a trace recording.
+                // Console.app without a trace recording. `AppLog.ocr` is a
+                // MainActor-isolated static, so hop to MainActor for the
+                // log call — at ~1Hz the Task allocation is negligible.
                 if nowFrame.timeIntervalSince(controller.lastFrameLogAt) >= 1.0 {
                     controller.lastFrameLogAt = nowFrame
                     let preview = String(joinedText.prefix(120)).replacingOccurrences(of: "\n", with: " | ")
-                    AppLog.ocr.debug(
-                        "frame: \(texts.count, privacy: .public) obs, maxConf \(String(format: "%.2f", maxConfidence), privacy: .public) — \(preview, privacy: .public)"
-                    )
+                    let obsCount = texts.count
+                    let confSnapshot = maxConfidence
+                    Task { @MainActor in
+                        AppLog.ocr.debug(
+                            "frame: \(obsCount, privacy: .public) obs, maxConf \(String(format: "%.2f", confSnapshot), privacy: .public) — \(preview, privacy: .public)"
+                        )
+                    }
                 }
 
                 // Send the Sendable primitives into the MainActor hop. The
@@ -529,8 +542,7 @@ struct BulkScanView: View {
     /// so the corner-bracket overlay can animate to it.
     static nonisolated func detectAndPublishSlabRect(
         handler: VNImageRequestHandler,
-        controller: BulkScanController,
-        previewLayer: AVCaptureVideoPreviewLayer?
+        controller: BulkScanController
     ) {
         let request = VNDetectRectanglesRequest()
         request.minimumAspectRatio = 0.55   // slabs are ~0.65–0.75 (W/H portrait)
@@ -570,8 +582,11 @@ struct BulkScanView: View {
             height: bb.height
         )
 
-        Task { @MainActor [weak controller, weak previewLayer] in
-            guard let controller, let previewLayer else { return }
+        // Read the non-Sendable AVCaptureVideoPreviewLayer off the
+        // controller inside the MainActor hop so it's never captured by
+        // this @Sendable closure (Swift 6 errors on non-Sendable captures).
+        Task { @MainActor [weak controller] in
+            guard let controller, let previewLayer = controller.previewLayer else { return }
             let screenRect = previewLayer.layerRectConverted(fromMetadataOutputRect: metadataRect)
             controller.detectedSlabRect = screenRect
         }
