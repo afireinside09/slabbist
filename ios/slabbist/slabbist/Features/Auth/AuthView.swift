@@ -51,6 +51,7 @@ struct AuthView: View {
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .font(SlabFont.mono(size: 14))
                         .foregroundStyle(AppColor.text)
                         .tint(AppColor.gold)
                 }
@@ -59,6 +60,7 @@ struct AuthView: View {
                     SecureField("", text: $viewModel.password, prompt:
                         Text("Password").foregroundStyle(AppColor.dim))
                         .textContentType(viewModel.mode == .signIn ? .password : .newPassword)
+                        .font(SlabFont.mono(size: 14))
                         .foregroundStyle(AppColor.text)
                         .tint(AppColor.gold)
                 }
@@ -67,6 +69,7 @@ struct AuthView: View {
                     field(icon: "storefront") {
                         TextField("", text: $viewModel.storeName, prompt:
                             Text("Store name (optional)").foregroundStyle(AppColor.dim))
+                            .font(SlabFont.mono(size: 14))
                             .foregroundStyle(AppColor.text)
                             .tint(AppColor.gold)
                     }
@@ -150,7 +153,7 @@ struct AuthView: View {
     private var brand: some View {
         HStack(spacing: Spacing.s) {
             SlabbistLogo(size: 22)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
             Text("SLABBIST")
                 .font(SlabFont.sans(size: 14, weight: .medium))
                 .tracking(1.6)
@@ -161,6 +164,7 @@ struct AuthView: View {
     private func field<Content: View>(icon: String, @ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: Spacing.m) {
             Image(systemName: icon)
+                .font(SlabFont.sans(size: 15))
                 .foregroundStyle(AppColor.dim)
                 .frame(width: 18)
             content()

@@ -24,6 +24,7 @@ struct RootTabView: View {
         .tint(AppColor.gold)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
     }
 
     /// Force-unwrap is safe: `RootTabView` only renders when the parent
@@ -39,8 +40,12 @@ struct RootTabView: View {
         } else {
             // Defensive: if RootTabView is ever rendered before sign-in,
             // show a minimal placeholder rather than crashing.
-            Text("Sign in required")
-                .foregroundStyle(.secondary)
+            SlabbedRoot {
+                VStack(spacing: Spacing.s) {
+                    KickerLabel("Grade")
+                    Text("Sign in required").slabRowTitle()
+                }
+            }
         }
     }
 }
