@@ -22,9 +22,9 @@ struct GradingCaptureView: View {
             VStack {
                 Spacer()
                 QualityChip(message: qualityMessage)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, Spacing.s)
                 captureButton
-                    .padding(.bottom, 32)
+                    .padding(.bottom, Spacing.xxxl)
             }
         }
         .task {
@@ -56,31 +56,50 @@ struct GradingCaptureView: View {
             CameraPreview(session: session.captureSession)
                 .ignoresSafeArea()
         case .denied, .restricted:
-            Text("Camera permission required.")
-                .font(.body)
-                .foregroundStyle(AppColor.muted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppColor.ink)
+            permissionRequired
         @unknown default:
-            Text("Camera permission required.")
-                .font(.body)
-                .foregroundStyle(AppColor.muted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppColor.ink)
+            permissionRequired
         }
     }
 
+    private var permissionRequired: some View {
+        Text("Camera permission required.")
+            .font(SlabFont.sans(size: 15))
+            .foregroundStyle(AppColor.muted)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppColor.ink)
+    }
+
+    /// Big hollow gold ring with a radial-gradient inner disc — the
+    /// "shutter" treatment from the design brief, shared with bulk scan.
     private var captureButton: some View {
         Button {
             Task { await captureCurrentSide() }
         } label: {
-            Circle()
-                .fill(Color.white)
-                .frame(width: 78, height: 78)
-                .overlay(Circle().stroke(.black.opacity(0.2), lineWidth: 4))
+            ZStack {
+                Circle()
+                    .stroke(AppColor.gold, lineWidth: 4)
+                    .frame(width: 78, height: 78)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppColor.gold, AppColor.goldDim],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 32
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+                    .shadow(color: AppColor.ink.opacity(0.4), radius: 4, y: 2)
+            }
         }
-        .disabled(qualityMessage != nil || stillCapture == nil)
+        .opacity(captureEnabled ? 1.0 : 0.4)
+        .disabled(!captureEnabled)
         .accessibilityLabel(viewModel.phase == .front ? "Capture front" : "Capture back")
+    }
+
+    private var captureEnabled: Bool {
+        qualityMessage == nil && stillCapture != nil
     }
 
     private func captureCurrentSide() async {

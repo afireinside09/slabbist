@@ -4,24 +4,25 @@ struct FirstRunConsentView: View {
     let onAgree: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Text("Pre-grade Estimator")
-                .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
-            Text(consentBody)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-            Spacer()
-            PrimaryGoldButton(title: "I understand — continue") {
-                onAgree()
+        SlabbedRoot {
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                Spacer(minLength: Spacing.xxl)
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    KickerLabel("Before you proceed")
+                    Text("Pre-grade Estimator").slabTitle()
+                }
+                Text(consentBody)
+                    .font(SlabFont.sans(size: 15))
+                    .foregroundStyle(AppColor.muted)
+                    .lineSpacing(2)
+                Spacer()
+                PrimaryGoldButton(title: "I understand — continue") {
+                    onAgree()
+                }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
+            .padding(.horizontal, Spacing.xxl)
+            .padding(.bottom, Spacing.xl)
         }
-        .padding()
     }
 
     private var consentBody: String {
