@@ -164,14 +164,17 @@ struct LotsListView: View {
             SlabCard {
                 VStack(spacing: 0) {
                     ForEach(Array(lots.enumerated()), id: \.element.id) { index, lot in
-                        NavigationLink(value: LotsRoute.lot(lot.id)) {
-                            row(for: lot)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Delete lot", systemImage: "trash", role: .destructive) {
-                                lotPendingDelete = lot
+                        HStack(spacing: 0) {
+                            NavigationLink(value: LotsRoute.lot(lot.id)) {
+                                row(for: lot)
                             }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Delete lot", systemImage: "trash", role: .destructive) {
+                                    lotPendingDelete = lot
+                                }
+                            }
+                            rowMenu(for: lot)
                         }
                         if index < lots.count - 1 {
                             SlabCardDivider()
@@ -180,6 +183,22 @@ struct LotsListView: View {
                 }
             }
         }
+    }
+
+    private func rowMenu(for lot: Lot) -> some View {
+        Menu {
+            Button("Delete lot", systemImage: "trash", role: .destructive) {
+                lotPendingDelete = lot
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColor.dim)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Lot actions")
     }
 
     /// Resolves a path route to its destination view by looking the entity up

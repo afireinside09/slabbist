@@ -41,7 +41,18 @@ export interface MatchInput {
 }
 
 export type MatchResult =
-  | { ok: true; gradingService: GradingService; grade: string }
+  | {
+      ok: true;
+      /**
+       * The grading company name parsed from the title, when present.
+       * Null when the listing passed eBay's server-side "Graded" aspect
+       * filter but the title doesn't carry the grader (the slab/cert
+       * label has it; sellers just left it out of the headline).
+       */
+      gradingService: GradingService | null;
+      /** Numeric grade ("10", "9.5", etc.) parsed from the title; null when absent. */
+      grade: string | null;
+    }
   | { ok: false; reason: string };
 
 const GRADE_RE = /\b(PSA|BGS|CGC|SGC|TAG|HGA|GMA)\s*(10(?:\.0)?|[1-9](?:\.5)?)\b/i;
@@ -68,16 +79,25 @@ const BLOCK_RE = new RegExp(
 
 const VARIANT_HOLO_RE = /\b(holo(?:foil)?)\b/i;
 const VARIANT_REVERSE_RE = /\b(reverse(?:\s+holo(?:foil)?)?|rev\s*holo)\b/i;
-const VARIANT_FIRST_ED_RE = /\b(1st\s*ed(?:ition)?|first\s*ed(?:ition)?)\b/i;
+// Broad enough to catch "1st edition", "1st-edition", "1st ed.", "first ed",
+// "first-edition", "1sted", "FIRST EDITION", etc. — any spelling of
+// 1st/first glued to ed/edition with whitespace, hyphens, or nothing in
+// between, with an optional trailing period. We keep this aggressive
+// because — empirically — sellers DO put the 1st-edition cue in titles
+// reliably, while "Holo" / "Reverse Holo" cues are missing more often
+// than not (the slab label carries them, the headline doesn't bother).
+const VARIANT_FIRST_ED_RE = /\b(?:1st|first)[\s\-]*ed(?:ition)?\b/i;
 
 export function acceptListing(title: string, card: MatchInput): MatchResult {
-  // 1. Graded check — title must announce a service + grade.
+  // 1. Graded extraction — opportunistic. Server-side filters at the
+  // source layer (Browse API aspect_filter, scrape LH_Graded) gate the
+  // result set to graded slabs already, so we no longer reject when
+  // the title omits the grader; we just record null.
   const gradeMatch = title.match(GRADE_RE);
-  if (!gradeMatch) {
-    return { ok: false, reason: "no graded service+grade in title" };
-  }
-  const gradingService = gradeMatch[1]!.toUpperCase() as GradingService;
-  const grade = gradeMatch[2]!.replace(/\.0$/, "");
+  const gradingService = gradeMatch
+    ? (gradeMatch[1]!.toUpperCase() as GradingService)
+    : null;
+  const grade = gradeMatch ? gradeMatch[2]!.replace(/\.0$/, "") : null;
 
   // 2. Blocklist (lots / proxies / repacks / playmats / multi-packs).
   if (BLOCK_RE.test(title)) {
@@ -116,39 +136,45 @@ export function acceptListing(title: string, card: MatchInput): MatchResult {
   // "reverse" implies "holo" tokens too; treat reverse as primary.
   if (cues.reverse) cues.holo = false;
 
+  // Variant compatibility — relaxed model.
+  //
+  // Empirically, sellers don't reliably put "Holo" / "Reverse Holofoil"
+  // in titles — the slab label carries the variant, the listing
+  // headline doesn't bother. Requiring those cues threw away ~1100+
+  // valid listings per run. So we drop the *requirement* for holo /
+  // reverse cues and keep them only as *contradiction* signals: a title
+  // that loudly says "Reverse Holofoil" while the card is the regular
+  // Holofoil sibling is still a clear no.
+  //
+  // 1st Edition is the one cue sellers DO put in titles consistently
+  // (because it's the price-driving differentiator), so we keep it as
+  // a hard requirement for 1st-Edition sub-types and as a hard
+  // contradiction for non-1st-Edition sub-types.
   switch (wants) {
     case "normal":
-      // Normal Pokémon listings shouldn't loudly advertise a foil
-      // variant. (PSA labels say "HOLO" too — but title sellers who
-      // mean Normal usually don't include the word.)
-      if (cues.holo || cues.reverse || cues.firstEd) {
-        return { ok: false, reason: "title advertises a non-Normal variant" };
+      if (cues.firstEd) {
+        return { ok: false, reason: "title is 1st Edition; card is Normal" };
       }
       break;
     case "holo":
-      if (!cues.holo && !cues.reverse) {
-        return { ok: false, reason: "expected Holofoil cue in title" };
-      }
       if (cues.reverse) {
         return { ok: false, reason: "title is Reverse Holofoil; card is Holofoil" };
       }
-      if (cues.firstEd && !canonicalIsFirstEdition(card.subTypeName)) {
-        return { ok: false, reason: "title is 1st Edition; card is not" };
+      if (cues.firstEd) {
+        return { ok: false, reason: "title is 1st Edition; card is Holofoil" };
       }
       break;
     case "reverse":
-      if (!cues.reverse) {
-        return { ok: false, reason: "expected Reverse Holofoil cue in title" };
+      if (cues.firstEd) {
+        return { ok: false, reason: "title is 1st Edition; card is Reverse Holofoil" };
       }
       break;
     case "firstEd":
+    case "firstEdHolo":
+      // 1st Edition is required; the +Holofoil half of firstEdHolo is
+      // not — sellers omit "Holo" even on 1st-Edition holos.
       if (!cues.firstEd) {
         return { ok: false, reason: "expected 1st Edition cue in title" };
-      }
-      break;
-    case "firstEdHolo":
-      if (!cues.firstEd || !cues.holo) {
-        return { ok: false, reason: "expected 1st Edition + Holofoil cue in title" };
       }
       break;
     case "unlimited":
@@ -176,10 +202,6 @@ function canonicalVariant(subType: string): Variant {
   if (s === "unlimited holofoil") return "unlimitedHolo";
   // Unknown sub-types: don't reject on variant grounds.
   return "normal";
-}
-
-function canonicalIsFirstEdition(subType: string): boolean {
-  return /1st edition/i.test(subType);
 }
 
 type Variant =

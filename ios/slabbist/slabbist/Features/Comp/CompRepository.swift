@@ -6,6 +6,17 @@ final class CompRepository {
     enum Error: Swift.Error, Equatable {
         case noMarketData
         case upstreamUnavailable
+        /// Server returned 404 with `code: "IDENTITY_NOT_FOUND"` — the
+        /// graded-card identity the client persisted no longer exists
+        /// on the server (stale local cache, project switch, manual
+        /// row delete). Distinct from `notDeployed` so we can suggest
+        /// re-running the cert lookup vs. fixing infrastructure.
+        case identityNotFound
+        /// 404 with no `code` field (or an unrecognized one) — almost
+        /// always means the edge function isn't deployed at the
+        /// expected URL. Surfacing this as its own case lets the UI
+        /// show actionable copy instead of a bare HTTP code.
+        case notDeployed
         case httpStatus(Int)
         case decoding(String)
     }
@@ -109,7 +120,9 @@ final class CompRepository {
         struct Body: Decodable { let code: String? }
         let body = try? JSONDecoder().decode(Body.self, from: data)
         switch (statusCode, body?.code) {
-        case (404, "NO_MARKET_DATA"): throw Error.noMarketData
+        case (404, "NO_MARKET_DATA"):       throw Error.noMarketData
+        case (404, "IDENTITY_NOT_FOUND"):   throw Error.identityNotFound
+        case (404, .none):                  throw Error.notDeployed
         case (503, "UPSTREAM_UNAVAILABLE"): throw Error.upstreamUnavailable
         default: throw Error.httpStatus(statusCode)
         }
@@ -122,6 +135,13 @@ final class CompRepository {
     ) async throws -> Decoded {
         var request = URLRequest(url: baseURL.appendingPathComponent("/price-comp"))
         request.httpMethod = "POST"
+        // Cap a single attempt at 30s. The edge function fetches eBay
+        // OAuth + Marketplace Insights (a 4-bucket cascade) and writes
+        // back a cache row; warm path is sub-second, cold path < 10s.
+        // 30s leaves headroom without leaving the spinner stuck for a
+        // full minute when something upstream (eBay API, Supabase
+        // cold start) misbehaves.
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         if let token = await authTokenProvider() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")

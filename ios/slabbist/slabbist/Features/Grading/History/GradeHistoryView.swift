@@ -51,7 +51,7 @@ struct GradeHistoryView: View {
                     }
                 }
             }
-            .navigationTitle("Grade")
+            .navigationTitle("Pre-grade")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {

@@ -8,6 +8,7 @@ import SwiftUI
 struct MoversListView: View {
     @State private var viewModel = MoversViewModel()
     @State private var selectedMover: MoverDTO?
+    @State private var selectedEbayProduct: EbayProductGroup?
     @State private var setSearchQuery: String = ""
     @FocusState private var setSearchFocused: Bool
     /// Signal from the search-suggestion tap to the horizontal chip
@@ -50,6 +51,9 @@ struct MoversListView: View {
             }
             .navigationDestination(item: $selectedMover) { mover in
                 MoverDetailView(mover: mover)
+            }
+            .navigationDestination(item: $selectedEbayProduct) { group in
+                EbayProductListingsView(group: group)
             }
             // Tab/language change wipes the search context — the
             // cached suggestion list is the *previous* tab's set list.
@@ -374,10 +378,10 @@ struct MoversListView: View {
                 Image(systemName: "tag")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppColor.gold)
-                KickerLabel("Graded eBay listings")
+                KickerLabel("Pokémon products with listings")
                 Spacer()
                 if case let .loaded(rows) = viewModel.ebayListingsState, !rows.isEmpty {
-                    Text("\(rows.count)")
+                    Text("\(rows.groupedByProduct().count)")
                         .font(SlabFont.mono(size: 11, weight: .semibold))
                         .foregroundStyle(AppColor.gold)
                         .padding(.horizontal, Spacing.s)
@@ -389,7 +393,10 @@ struct MoversListView: View {
                 }
             }
             SlabCard {
-                MoversEbayListingsBody(state: viewModel.ebayListingsState)
+                MoversEbayProductsBody(
+                    state: viewModel.ebayListingsState,
+                    onSelect: { group in selectedEbayProduct = group }
+                )
             }
         }
         .padding(.horizontal, Spacing.xxl)
@@ -741,25 +748,28 @@ private struct ErrorMoversRow: View {
 
 // MARK: - eBay listings list (browse mode)
 
-/// State-machine wrapper for the eBay-Listings tab body. Renders a
-/// vertical list of compact listing rows (no horizontal scroll —
-/// scanning down a tall list is much faster than carouseling
-/// sideways through 60 items).
-private struct MoversEbayListingsBody: View {
+/// State-machine wrapper for the eBay-Listings tab body. Folds the
+/// flat listings payload into product-level groups so the user sees
+/// Pokémon products first; tapping a product drills into its
+/// associated listings. This swap is purely a client-side
+/// presentation change — the underlying RPC still returns flat rows.
+private struct MoversEbayProductsBody: View {
     let state: MoversViewModel.EbayBrowseState
+    let onSelect: (EbayProductGroup) -> Void
 
     var body: some View {
         switch state {
         case .idle, .loading:
             SkeletonRows(count: 6)
         case let .loaded(rows):
-            if rows.isEmpty {
+            let groups = rows.groupedByProduct()
+            if groups.isEmpty {
                 EbayEmptyRow()
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         if index > 0 { SlabCardDivider() }
-                        EbayListingRow(row: row)
+                        EbayProductRow(group: group, onTap: { onSelect(group) })
                     }
                 }
             }
@@ -769,45 +779,57 @@ private struct MoversEbayListingsBody: View {
     }
 }
 
-private struct EbayListingRow: View {
-    let row: EbayListingBrowseRowDTO
+private struct EbayProductRow: View {
+    let group: EbayProductGroup
+    let onTap: () -> Void
 
     var body: some View {
-        Button {
-            if let url = URL(string: row.url) {
-                UIApplication.shared.open(url)
-            }
-        } label: {
+        Button(action: onTap) {
             HStack(alignment: .center, spacing: Spacing.m) {
                 thumbnail
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(spacing: Spacing.xs) {
-                        Text(row.productName)
+                        Text(group.productName)
                             .slabRowTitle()
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if let badge = MoversFormat.variantBadge(row.subTypeName) {
+                        if let badge = MoversFormat.variantBadge(group.subTypeName) {
                             Text(badge)
                                 .font(SlabFont.mono(size: 10, weight: .medium))
                                 .foregroundStyle(AppColor.gold.opacity(0.85))
+                                .padding(.horizontal, Spacing.xs)
+                                .padding(.vertical, 1)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                                        .fill(AppColor.gold.opacity(0.12))
+                                )
+                                .lineLimit(1)
+                                .fixedSize()
                         }
                     }
-                    if let set = row.groupName, !set.isEmpty {
+                    if let set = group.groupName, !set.isEmpty {
                         Text(set)
                             .font(SlabFont.sans(size: 11))
                             .foregroundStyle(AppColor.dim)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    Text(row.gradeBadge)
-                        .font(SlabFont.mono(size: 10, weight: .semibold))
+                    Text(listingsLabel)
+                        .font(SlabFont.mono(size: 11))
                         .foregroundStyle(AppColor.gold)
                 }
                 Spacer(minLength: Spacing.s)
                 VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                    Text(MoversFormat.price(row.price))
-                        .slabMetric()
-                    Image(systemName: "arrow.up.right")
+                    if let minPrice = group.minPrice {
+                        Text(MoversFormat.price(minPrice))
+                            .slabMetric()
+                        if let maxPrice = group.maxPrice, maxPrice > minPrice {
+                            Text("up to \(MoversFormat.price(maxPrice))")
+                                .font(SlabFont.mono(size: 10))
+                                .foregroundStyle(AppColor.dim)
+                        }
+                    }
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppColor.dim)
                 }
@@ -818,16 +840,28 @@ private struct EbayListingRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens listing on eBay")
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Opens this product's eBay listings")
+    }
+
+    private var listingsLabel: String {
+        let n = group.listingCount
+        return "\(n) live \(n == 1 ? "listing" : "listings")"
+    }
+
+    private var accessibilityLabel: String {
+        let variant = MoversFormat.variantBadge(group.subTypeName).map { ", \($0)" } ?? ""
+        let set = group.groupName.map { ", \($0)" } ?? ""
+        let priceFrom = group.minPrice.map { ", from \(MoversFormat.price($0))" } ?? ""
+        return "\(group.productName)\(variant)\(set), \(group.listingCount) listings\(priceFrom)"
     }
 
     @ViewBuilder
     private var thumbnail: some View {
-        let urlString = row.imageUrl ?? row.cardImageUrl
         ZStack {
             RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
                 .fill(AppColor.elev2)
-            if let urlString, let url = URL(string: urlString) {
+            if let urlString = group.displayImageUrl, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):

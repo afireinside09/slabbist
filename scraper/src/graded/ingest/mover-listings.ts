@@ -122,7 +122,11 @@ export async function runMoverListingsIngest(
         fetchedCount = fetched.length;
         stats.listingsFetched += fetchedCount;
 
-        const accepted: Array<{ listing: ActiveListing; service: string; grade: string }> = [];
+        const accepted: Array<{
+          listing: ActiveListing;
+          service: string | null;
+          grade: string | null;
+        }> = [];
         for (const listing of fetched) {
           const verdict = acceptListing(listing.title, {
             productName: card.product_name,
@@ -301,9 +305,9 @@ export function buildSearchQuery(card: CardRow): string {
     const cleanSet = card.group_name.replace(/[()]/g, "").trim();
     if (cleanSet) parts.push(`"${cleanSet}"`);
   }
-  // OR-group of grading-service tokens. Forces the search to graded
-  // listings server-side too, not just our post-filter.
-  parts.push("(PSA,BGS,CGC,SGC,graded)");
+  // Note: graded gating is handled at the source layer via eBay's
+  // structured "Graded" aspect filter, so we no longer need to inject
+  // a `(PSA,BGS,CGC,SGC,graded)` OR-group here.
   return parts.join(" ");
 }
 

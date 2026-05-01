@@ -11,7 +11,7 @@ struct RootTabView: View {
             Tab("Scan", systemImage: "viewfinder") {
                 ScanShortcutView()
             }
-            Tab("Grade", systemImage: "checkmark.seal") {
+            Tab("Pre-grade", systemImage: "checkmark.seal") {
                 gradeTab
             }
             Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
@@ -42,7 +42,7 @@ struct RootTabView: View {
             // show a minimal placeholder rather than crashing.
             SlabbedRoot {
                 VStack(spacing: Spacing.s) {
-                    KickerLabel("Grade")
+                    KickerLabel("Pre-grade")
                     Text("Sign in required").slabRowTitle()
                 }
             }

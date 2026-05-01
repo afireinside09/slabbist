@@ -8,6 +8,7 @@ struct ScanDetailView: View {
     let scan: Scan
     @Environment(\.modelContext) private var context
     @Query private var snapshots: [GradedMarketSnapshot]
+    @Query private var identities: [GradedCardIdentity]
 
     init(scan: Scan) {
         self.scan = scan
@@ -19,7 +20,12 @@ struct ScanDetailView: View {
             s.gradingService == service &&
             s.grade == grade
         }, sort: \GradedMarketSnapshot.fetchedAt, order: .reverse)
+        // Filtering by id avoids loading every identity in the store
+        // just to render one detail screen.
+        _identities = Query(filter: #Predicate<GradedCardIdentity> { $0.id == identityId })
     }
+
+    private var identity: GradedCardIdentity? { identities.first }
 
     var body: some View {
         SlabbedRoot {
@@ -42,28 +48,76 @@ struct ScanDetailView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        // Recovery hatch for two real-world stuck states:
+        //   1. The scan was validated in a prior session and never had a
+        //      comp fetched (state = nil) — bulk scan exited too soon.
+        //   2. State is `.fetching` but the in-memory `inFlight` task
+        //      from `CompFetchService` was lost when the app was killed,
+        //      so the spinner is a ghost with nothing behind it.
+        // Both manifest as "Pulling eBay sold listings…" forever with
+        // no retry CTA — kicking a fresh fetch on appear unblocks them.
+        .task(id: scan.id) {
+            autoTriggerCompFetchIfNeeded()
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            KickerLabel(scan.grader.rawValue)
+            KickerLabel(headerKicker)
             Text(headerTitle)
                 .slabTitle()
                 .lineLimit(2)
-            Text("Cert #\(scan.certNumber)")
+            if let setLine = headerSetLine {
+                Text(setLine)
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.muted)
+            }
+            Text(headerSubtitle)
                 .font(SlabFont.mono(size: 12))
                 .foregroundStyle(AppColor.muted)
         }
     }
 
-    private var headerTitle: String {
+    /// Kicker reads as "PSA 10" so the eye lands on the slab tier
+    /// before the card name, matching the queue rows. Falls back to
+    /// the bare grader when no grade has landed yet.
+    private var headerKicker: String {
         if let grade = scan.grade, !grade.isEmpty {
             return "\(scan.grader.rawValue) \(grade)"
         }
         return scan.grader.rawValue
     }
+
+    private var headerTitle: String {
+        if let identity {
+            if let n = identity.cardNumber, !n.isEmpty {
+                return "\(identity.cardName) #\(n)"
+            }
+            return identity.cardName
+        }
+        // Pre-validation fallback so the view doesn't render an empty
+        // big-text region while cert lookup is still in flight.
+        if let grade = scan.grade, !grade.isEmpty {
+            return "\(scan.grader.rawValue) \(grade)"
+        }
+        return scan.grader.rawValue
+    }
+
+    /// Year + set + variant in the same shape used by the lot row.
+    /// `nil` while the identity hasn't been persisted yet so the
+    /// header stays compact.
+    private var headerSetLine: String? {
+        guard let identity else { return nil }
+        var parts: [String] = []
+        if let year = identity.year { parts.append(String(year)) }
+        parts.append(identity.setName)
+        if let v = identity.variant, !v.isEmpty { parts.append(v) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var headerSubtitle: String { "Cert #\(scan.certNumber)" }
 
     // MARK: - Value section (resolved)
 
@@ -108,9 +162,9 @@ struct ScanDetailView: View {
             symbol: "arrow.triangle.2.circlepath",
             symbolTint: AppColor.gold,
             title: "Pulling eBay sold listings…",
-            detail: "This usually takes a couple of seconds.",
+            detail: "This usually takes a couple of seconds. Tap retry if it's stuck.",
             showsProgress: true,
-            cta: nil
+            cta: ("Retry comp fetch", retry)
         )
     }
 
@@ -204,6 +258,26 @@ struct ScanDetailView: View {
             authTokenProvider: { try? await AppSupabase.shared.client.auth.session.accessToken }
         )
         CompFetchService.fetch(scan: scan, repository: repo, context: context)
+    }
+
+    /// True when the scan thinks it's fetching but the originating
+    /// task can no longer exist — used to recover from app kills /
+    /// view-model teardowns that left the persisted state at
+    /// `.fetching` with nothing actually in flight.
+    private static let fetchingStaleThreshold: TimeInterval = 90
+
+    private func autoTriggerCompFetchIfNeeded() {
+        guard scan.gradedCardIdentityId != nil else { return }
+        guard snapshots.first == nil else { return }
+        let state = scan.compFetchState.flatMap(CompFetchState.init(rawValue:))
+        let stale: Bool = {
+            guard state == .fetching else { return false }
+            guard let last = scan.compFetchedAt else { return true }
+            return Date().timeIntervalSince(last) > Self.fetchingStaleThreshold
+        }()
+        if state == nil || stale {
+            retry()
+        }
     }
 
     // MARK: - Listings

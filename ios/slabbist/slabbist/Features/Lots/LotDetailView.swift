@@ -12,6 +12,7 @@ struct LotDetailView: View {
     @Environment(SessionStore.self) private var session
     @Query private var scans: [Scan]
     @Query private var snapshots: [GradedMarketSnapshot]
+    @Query private var identities: [GradedCardIdentity]
     @State private var scanPendingDelete: Scan?
 
     init(lot: Lot) {
@@ -25,6 +26,9 @@ struct LotDetailView: View {
         // to scan. We join in memory by (identityId, gradingService, grade).
         // Sorted newest-first so `latestSnapshot(for:)` picks the freshest.
         _snapshots = Query(sort: [SortDescriptor(\GradedMarketSnapshot.fetchedAt, order: .reverse)])
+        // Identities are unbounded but small (one row per unique slab the
+        // user has ever scanned). Joined in-memory by `gradedCardIdentityId`.
+        _identities = Query()
     }
 
     var body: some View {
@@ -140,14 +144,17 @@ struct LotDetailView: View {
                         if scan.id != scans.first?.id {
                             SlabCardDivider()
                         }
-                        NavigationLink(value: LotsRoute.scan(scan.id)) {
-                            slabRow(for: scan)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Delete slab", systemImage: "trash", role: .destructive) {
-                                scanPendingDelete = scan
+                        HStack(spacing: 0) {
+                            NavigationLink(value: LotsRoute.scan(scan.id)) {
+                                slabRow(for: scan)
                             }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Delete slab", systemImage: "trash", role: .destructive) {
+                                    scanPendingDelete = scan
+                                }
+                            }
+                            rowMenu(for: scan)
                         }
                     }
                 }
@@ -155,18 +162,38 @@ struct LotDetailView: View {
         }
     }
 
+    private func rowMenu(for scan: Scan) -> some View {
+        Menu {
+            Button("Delete slab", systemImage: "trash", role: .destructive) {
+                scanPendingDelete = scan
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColor.dim)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Slab actions")
+    }
+
     private func slabRow(for scan: Scan) -> some View {
-        HStack(alignment: .center, spacing: Spacing.m) {
+        let identity = identity(for: scan)
+        return HStack(alignment: .center, spacing: Spacing.m) {
             Circle()
                 .fill(statusColor(for: scan))
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("\(scan.grader.rawValue) · \(scan.certNumber)")
+                Text(rowTitle(for: scan, identity: identity))
                     .slabRowTitle()
-                Text(secondaryLine(for: scan))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(secondaryLine(for: scan, identity: identity))
                     .font(SlabFont.mono(size: 11))
                     .foregroundStyle(AppColor.dim)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
@@ -185,6 +212,28 @@ struct LotDetailView: View {
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.m)
+    }
+
+    /// Lookup helper — joins a scan to its `GradedCardIdentity` row by
+    /// the FK that cert-lookup writes when validation succeeds.
+    /// `nil` for scans that haven't validated yet (and for legacy
+    /// scans that validated before the identity row started being
+    /// persisted client-side).
+    private func identity(for scan: Scan) -> GradedCardIdentity? {
+        guard let id = scan.gradedCardIdentityId else { return nil }
+        return identities.first(where: { $0.id == id })
+    }
+
+    private func rowTitle(for scan: Scan, identity: GradedCardIdentity?) -> String {
+        if let identity {
+            // Card name as the row title — matches what the green
+            // resolve banner showed at scan time, persisted now.
+            if let n = identity.cardNumber, !n.isEmpty {
+                return "\(identity.cardName) #\(n)"
+            }
+            return identity.cardName
+        }
+        return "\(scan.grader.rawValue) · \(scan.certNumber)"
     }
 
     private var emptyHint: some View {
@@ -233,14 +282,18 @@ struct LotDetailView: View {
         }
     }
 
-    private func secondaryLine(for scan: Scan) -> String {
+    private func secondaryLine(for scan: Scan, identity: GradedCardIdentity?) -> String {
         switch scan.status {
         case .validated:
+            // Lead with set + grader/grade so the user always sees
+            // *what* the slab is, not a cert number. Comp/freshness
+            // info trails once a snapshot lands.
+            let head = primaryDetail(scan: scan, identity: identity)
             if let snapshot = latestSnapshot(for: scan) {
                 let confPct = Int((snapshot.confidence * 100).rounded())
-                return "Grade \(scan.grade ?? "—") • \(confPct)% conf"
+                return "\(head) • \(confPct)% conf"
             }
-            return "Grade \(scan.grade ?? "—") • fetching comp…"
+            return "\(head) • fetching comp…"
         case .pendingValidation:
             return "Validating cert…"
         case .validationFailed:
@@ -248,6 +301,21 @@ struct LotDetailView: View {
         case .manualEntry:
             return "Manual entry"
         }
+    }
+
+    /// Set / grade summary used in the validated-row subtitle. Falls
+    /// back to a cert-style line when identity hasn't been persisted
+    /// yet (e.g. scans that landed before the identity upsert).
+    private func primaryDetail(scan: Scan, identity: GradedCardIdentity?) -> String {
+        let gradeLabel = "\(scan.grader.rawValue) \(scan.grade ?? "—")"
+        if let identity {
+            var parts: [String] = []
+            if let year = identity.year { parts.append(String(year)) }
+            parts.append(identity.setName)
+            if let v = identity.variant, !v.isEmpty { parts.append(v) }
+            return "\(parts.joined(separator: " · ")) • \(gradeLabel)"
+        }
+        return "Grade \(scan.grade ?? "—")"
     }
 
     private func formattedCents(_ cents: Int64) -> String {

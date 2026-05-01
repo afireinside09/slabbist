@@ -12,16 +12,29 @@ nonisolated struct MoverEbayListingDTO: Codable, Sendable, Identifiable, Equatab
     let currency: String
     let url: String
     let imageUrl: String?
-    let gradingService: String
-    let grade: String
+    /// Nullable: the scraper's eBay sources gate to graded slabs server-side
+    /// via the "Graded" aspect, so listings whose titles don't carry the
+    /// grader name still land here with this column unset.
+    let gradingService: String?
+    let grade: String?
     let buyingOptions: String?
     let endAt: Date?
     let refreshedAt: Date
 
     var id: String { ebayItemId }
 
-    /// Short label rendered on the carousel chip, e.g. "PSA 10".
-    var gradeBadge: String { "\(gradingService) \(grade)" }
+    /// Short label rendered on the carousel chip. "PSA 10" when both
+    /// grader and grade are known; "PSA" or "10" when only one is; falls
+    /// back to "Graded" when the scraper couldn't parse either from the
+    /// title (the slab is still graded — eBay's filter guaranteed that).
+    var gradeBadge: String {
+        switch (gradingService, grade) {
+        case let (service?, grade?): return "\(service) \(grade)"
+        case let (service?, nil):    return service
+        case let (nil, grade?):      return grade
+        case (nil, nil):             return "Graded"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case ebayItemId    = "ebay_item_id"
@@ -44,8 +57,8 @@ nonisolated struct MoverEbayListingDTO: Codable, Sendable, Identifiable, Equatab
         currency: String,
         url: String,
         imageUrl: String?,
-        gradingService: String,
-        grade: String,
+        gradingService: String? = nil,
+        grade: String? = nil,
         buyingOptions: String? = nil,
         endAt: Date? = nil,
         refreshedAt: Date = Date()
@@ -71,8 +84,8 @@ nonisolated struct MoverEbayListingDTO: Codable, Sendable, Identifiable, Equatab
         self.currency       = try c.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
         self.url            = try c.decode(String.self, forKey: .url)
         self.imageUrl       = try c.decodeIfPresent(String.self, forKey: .imageUrl)
-        self.gradingService = try c.decode(String.self, forKey: .gradingService)
-        self.grade          = try c.decode(String.self, forKey: .grade)
+        self.gradingService = try c.decodeIfPresent(String.self, forKey: .gradingService)
+        self.grade          = try c.decodeIfPresent(String.self, forKey: .grade)
         self.buyingOptions  = try c.decodeIfPresent(String.self, forKey: .buyingOptions)
         self.endAt          = try c.decodeIfPresent(Date.self, forKey: .endAt)
         self.refreshedAt    = try c.decode(Date.self, forKey: .refreshedAt)

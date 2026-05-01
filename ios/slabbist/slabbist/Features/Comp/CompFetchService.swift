@@ -203,6 +203,10 @@ final class CompFetchService {
                 return (.noData, "No eBay sales found for this slab yet.")
             case .upstreamUnavailable:
                 return (.failed, "eBay lookup unavailable — check function logs and try again.")
+            case .identityNotFound:
+                return (.failed, "Card identity not on file — re-scan to refresh the cert.")
+            case .notDeployed:
+                return (.failed, "price-comp edge function isn't deployed. Run `supabase functions deploy price-comp`.")
             case .httpStatus(let code):
                 return (.failed, "Lookup failed (HTTP \(code)).")
             case .decoding(let detail):

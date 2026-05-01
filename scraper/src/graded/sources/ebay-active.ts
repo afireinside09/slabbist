@@ -21,6 +21,13 @@ export interface EbayActiveOpts {
   marketplace?: string;
   /** Page size cap. eBay Browse caps at 200; HTML scrape returns ~60. */
   limit?: number;
+  /**
+   * eBay leaf category to scope the search to. Defaults to 183454
+   * ("Pokémon Individual Cards"), which is what every movers card maps
+   * to today. Required for `aspect_filter` to work — eBay only honors
+   * aspect filters when a single category is specified.
+   */
+  categoryId?: string;
 }
 
 export interface EbayActiveApiOpts extends EbayActiveOpts {
@@ -43,6 +50,7 @@ export interface ActiveListing {
 
 const BROWSE_SEARCH = "https://api.ebay.com/buy/browse/v1/item_summary/search";
 const ACTIVE_SEARCH = "https://www.ebay.com/sch/i.html";
+const DEFAULT_CATEGORY_ID = "183454"; // Pokémon Individual Cards
 
 const BrowseResponse = z.object({
   itemSummaries: z
@@ -73,7 +81,19 @@ export async function fetchActiveViaBrowseApi(
   opts: EbayActiveApiOpts,
 ): Promise<ActiveListing[]> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
-  const url = `${BROWSE_SEARCH}?q=${encodeURIComponent(query)}&limit=${limit}`;
+  const categoryId = opts.categoryId ?? DEFAULT_CATEGORY_ID;
+  // Server-side gating to *graded* slabs only via eBay's structured
+  // "Graded" aspect on the trading-card categories. We pair it with
+  // category_ids so the aspect filter is honored — it's a no-op when
+  // the search isn't scoped to a single category.
+  const aspectFilter = `categoryId:${categoryId},Graded:{Yes}`;
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+    category_ids: categoryId,
+    aspect_filter: aspectFilter,
+  });
+  const url = `${BROWSE_SEARCH}?${params.toString()}`;
   const body = await httpJson(url, {
     userAgent: opts.userAgent,
     headers: {
@@ -106,8 +126,21 @@ export async function fetchActiveViaScrape(
   opts: EbayActiveOpts,
 ): Promise<ActiveListing[]> {
   // _sop=12 = best match; _ipg=60 = 60 results/page (eBay's max for
-  // unauthenticated search).
-  const url = `${ACTIVE_SEARCH}?_nkw=${encodeURIComponent(query)}&_sop=12&_ipg=60`;
+  // unauthenticated search). _sacat scopes the search to a single
+  // category (default Pokémon Individual Cards). LH_PrefLoc is
+  // intentionally omitted — we want global supply. LH_Graded=1 is
+  // eBay's structured "Graded" filter; pairing it with the category
+  // mirrors the Browse API's aspect_filter behaviour so titles no
+  // longer have to mention PSA/BGS/etc. for a slab to be returned.
+  const categoryId = opts.categoryId ?? DEFAULT_CATEGORY_ID;
+  const params = new URLSearchParams({
+    _nkw: query,
+    _sop: "12",
+    _ipg: "60",
+    _sacat: categoryId,
+    LH_Graded: "1",
+  });
+  const url = `${ACTIVE_SEARCH}?${params.toString()}`;
   const html = await httpText(url, { userAgent: opts.userAgent });
 
   // eBay's search HTML changes occasionally but the per-item block

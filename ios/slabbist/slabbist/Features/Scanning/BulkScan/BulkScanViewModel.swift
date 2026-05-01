@@ -119,6 +119,7 @@ final class BulkScanViewModel {
                     guard let target = try? ctx.fetch(descriptor).first else { return }
 
                     let now = Date()
+                    Self.upsertIdentity(result: result, in: ctx)
                     target.gradedCardIdentityId = result.identityId
                     target.grade = result.grade
                     target.status = .validated
@@ -169,6 +170,35 @@ final class BulkScanViewModel {
                 await MainActor.run { self?.onLookupEvent(.failed(reason: "Lookup failed — check connection")) }
             }
         }
+    }
+
+    /// Persists the `cert-lookup` response's card metadata as a local
+    /// `GradedCardIdentity` row so the lot detail screen and scan
+    /// detail header can show the card name / set / variant
+    /// immediately — without waiting for the eBay comp fetch (or
+    /// silently losing the data when the green resolve banner
+    /// auto-dismisses). Idempotent: a re-scan of the same identity
+    /// finds the existing row and skips the insert.
+    static func upsertIdentity(
+        result: CertLookupRepository.Decoded,
+        in ctx: ModelContext
+    ) {
+        let identityId = result.identityId
+        var descriptor = FetchDescriptor<GradedCardIdentity>(
+            predicate: #Predicate<GradedCardIdentity> { $0.id == identityId }
+        )
+        descriptor.fetchLimit = 1
+        if (try? ctx.fetch(descriptor).first) != nil { return }
+        ctx.insert(GradedCardIdentity(
+            id: result.identityId,
+            game: "pokemon",
+            language: result.language,
+            setName: result.setName,
+            cardNumber: result.cardNumber,
+            cardName: result.cardName,
+            variant: result.variant,
+            year: result.year
+        ))
     }
 
     /// Builds a human-friendly one-liner for the status pill from a

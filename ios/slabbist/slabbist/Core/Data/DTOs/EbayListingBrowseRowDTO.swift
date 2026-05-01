@@ -21,8 +21,11 @@ nonisolated struct EbayListingBrowseRowDTO: Codable, Sendable, Identifiable, Equ
     let currency: String
     let url: String
     let imageUrl: String?
-    let gradingService: String
-    let grade: String
+    /// See MoverEbayListingDTO — graded gating is enforced at the
+    /// scraper's source layer, so these can be null when the title
+    /// doesn't surface the grader / grade.
+    let gradingService: String?
+    let grade: String?
     let buyingOptions: String?
     let endAt: Date?
     let refreshedAt: Date
@@ -32,7 +35,14 @@ nonisolated struct EbayListingBrowseRowDTO: Codable, Sendable, Identifiable, Equ
     /// IDs are globally distinct.
     var id: String { ebayItemId }
 
-    var gradeBadge: String { "\(gradingService) \(grade)" }
+    var gradeBadge: String {
+        switch (gradingService, grade) {
+        case let (service?, grade?): return "\(service) \(grade)"
+        case let (service?, nil):    return service
+        case let (nil, grade?):      return grade
+        case (nil, nil):             return "Graded"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case productId      = "product_id"
@@ -68,8 +78,8 @@ nonisolated struct EbayListingBrowseRowDTO: Codable, Sendable, Identifiable, Equ
         self.currency       = try c.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
         self.url            = try c.decode(String.self, forKey: .url)
         self.imageUrl       = try c.decodeIfPresent(String.self, forKey: .imageUrl)
-        self.gradingService = try c.decode(String.self, forKey: .gradingService)
-        self.grade          = try c.decode(String.self, forKey: .grade)
+        self.gradingService = try c.decodeIfPresent(String.self, forKey: .gradingService)
+        self.grade          = try c.decodeIfPresent(String.self, forKey: .grade)
         self.buyingOptions  = try c.decodeIfPresent(String.self, forKey: .buyingOptions)
         self.endAt          = try c.decodeIfPresent(Date.self, forKey: .endAt)
         self.refreshedAt    = try c.decode(Date.self, forKey: .refreshedAt)
@@ -79,7 +89,8 @@ nonisolated struct EbayListingBrowseRowDTO: Codable, Sendable, Identifiable, Equ
         productId: Int, subTypeName: String, productName: String,
         groupId: Int, groupName: String?, cardImageUrl: String?,
         ebayItemId: String, title: String, price: Double, currency: String,
-        url: String, imageUrl: String?, gradingService: String, grade: String,
+        url: String, imageUrl: String?,
+        gradingService: String? = nil, grade: String? = nil,
         buyingOptions: String? = nil, endAt: Date? = nil, refreshedAt: Date = Date()
     ) {
         self.productId      = productId
