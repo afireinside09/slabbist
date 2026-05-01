@@ -4,6 +4,7 @@ import SwiftData
 @testable import slabbist
 
 @Suite("CompRepository")
+@MainActor
 struct CompRepositoryTests {
     @Test("decodes a live-fetch response into a GradedMarketSnapshot with listings")
     func decodesLiveFetchResponse() async throws {
