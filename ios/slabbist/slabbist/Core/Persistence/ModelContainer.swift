@@ -10,15 +10,22 @@ enum AppModelContainer {
             Scan.self,
             OutboxItem.self,
             GradedCardIdentity.self,
-            GradedMarketSnapshot.self,
-            SoldListingMirror.self
+            GradedMarketSnapshot.self
             // Plan 2 adds: GradedCard
         ])
         let config = ModelConfiguration("slabbist", schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            // The schema reshape from the eBay-aggregate model to the
+            // PriceCharting per-tier ladder is not lightweight-migratable
+            // (added optional Int64? fields, dropped a relationship, removed
+            // many fields). On first launch after this change, blow the
+            // store away and start fresh — comp data is recoverable from
+            // a cheap re-fetch, all other models cascade through Store/Lot
+            // ownership which is server-backed.
+            try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "default.store"))
+            return try! ModelContainer(for: schema, configurations: [config])
         }
     }()
 
@@ -28,8 +35,7 @@ enum AppModelContainer {
             Store.self, StoreMember.self, Lot.self,
             Scan.self, OutboxItem.self,
             GradedCardIdentity.self,
-            GradedMarketSnapshot.self,
-            SoldListingMirror.self
+            GradedMarketSnapshot.self
         ])
         let config = ModelConfiguration("slabbist-tests", schema: schema, isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
