@@ -198,12 +198,9 @@ struct LotDetailView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 if let snapshot = latestSnapshot(for: scan) {
-                    Text(formattedCents(snapshot.blendedPriceCents))
+                    Text(snapshot.headlinePriceCents.map(formattedCents) ?? "—")
                         .font(SlabFont.mono(size: 13, weight: .semibold))
                         .foregroundStyle(AppColor.text)
-                    Text("\(snapshot.sampleCount) listed")
-                        .font(SlabFont.mono(size: 10))
-                        .foregroundStyle(AppColor.dim)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .regular))
@@ -259,7 +256,7 @@ struct LotDetailView: View {
     }
 
     private var aggregateValueCents: Int64 {
-        scans.compactMap { latestSnapshot(for: $0)?.blendedPriceCents }.reduce(0, +)
+        scans.compactMap { latestSnapshot(for: $0)?.headlinePriceCents }.reduce(0, +)
     }
 
     private var aggregateValueDetail: String {
@@ -286,12 +283,11 @@ struct LotDetailView: View {
         switch scan.status {
         case .validated:
             // Lead with set + grader/grade so the user always sees
-            // *what* the slab is, not a cert number. Comp/freshness
-            // info trails once a snapshot lands.
+            // *what* the slab is, not a cert number. Fetched-state
+            // signal trails once a snapshot lands.
             let head = primaryDetail(scan: scan, identity: identity)
-            if let snapshot = latestSnapshot(for: scan) {
-                let confPct = Int((snapshot.confidence * 100).rounded())
-                return "\(head) • \(confPct)% conf"
+            if latestSnapshot(for: scan) != nil {
+                return "\(head) • comp ready"
             }
             return "\(head) • fetching comp…"
         case .pendingValidation:
