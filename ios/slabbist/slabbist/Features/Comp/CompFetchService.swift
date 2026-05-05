@@ -167,22 +167,21 @@ final class CompFetchService {
             identityId: identityId,
             gradingService: service,
             grade: grade,
-            blendedPriceCents: decoded.blendedPriceCents,
-            meanPriceCents: decoded.meanPriceCents,
-            trimmedMeanPriceCents: decoded.trimmedMeanPriceCents,
-            medianPriceCents: decoded.medianPriceCents,
-            lowPriceCents: decoded.lowPriceCents,
-            highPriceCents: decoded.highPriceCents,
-            confidence: decoded.confidence,
-            sampleCount: decoded.sampleCount,
-            sampleWindowDays: decoded.sampleWindowDays,
-            velocity7d: decoded.velocity7d,
-            velocity30d: decoded.velocity30d,
-            velocity90d: decoded.velocity90d,
+            headlinePriceCents: decoded.headlinePriceCents,
+            loosePriceCents: decoded.loosePriceCents,
+            grade7PriceCents: decoded.grade7PriceCents,
+            grade8PriceCents: decoded.grade8PriceCents,
+            grade9PriceCents: decoded.grade9PriceCents,
+            grade9_5PriceCents: decoded.grade9_5PriceCents,
+            psa10PriceCents: decoded.psa10PriceCents,
+            bgs10PriceCents: decoded.bgs10PriceCents,
+            cgc10PriceCents: decoded.cgc10PriceCents,
+            sgc10PriceCents: decoded.sgc10PriceCents,
+            pricechartingProductId: decoded.pricechartingProductId,
+            pricechartingURL: decoded.pricechartingURL,
             fetchedAt: decoded.fetchedAt,
             cacheHit: decoded.cacheHit,
-            isStaleFallback: decoded.isStaleFallback,
-            soldListings: decoded.soldListings
+            isStaleFallback: decoded.isStaleFallback
         )
         context.insert(snapshot)
     }
@@ -200,13 +199,15 @@ final class CompFetchService {
         if let typed = error as? CompRepository.Error {
             switch typed {
             case .noMarketData:
-                return (.noData, "No eBay sales found for this slab yet.")
+                return (.noData, "PriceCharting has no comp for this slab yet.")
+            case .productNotResolved:
+                return (.noData, "We couldn't find this card on PriceCharting.")
             case .upstreamUnavailable:
-                return (.failed, "eBay lookup unavailable — check function logs and try again.")
+                return (.failed, "PriceCharting lookup unavailable — try again.")
             case .identityNotFound:
                 return (.failed, "Card identity not on file — re-scan to refresh the cert.")
-            case .notDeployed:
-                return (.failed, "price-comp edge function isn't deployed. Run `supabase functions deploy price-comp`.")
+            case .authInvalid:
+                return (.failed, "Comp lookup misconfigured — contact support.")
             case .httpStatus(let code):
                 return (.failed, "Lookup failed (HTTP \(code)).")
             case .decoding(let detail):

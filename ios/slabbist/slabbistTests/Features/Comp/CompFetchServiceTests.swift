@@ -4,18 +4,39 @@ import Foundation
 
 @Suite("CompFetchService.classify")
 struct CompFetchServiceClassifyTests {
-    @Test("noMarketData maps to no_data with a friendly message")
+    @Test("noMarketData maps to no_data with a PriceCharting-flavored message")
     func mapsNoMarketData() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.noMarketData)
         #expect(state == .noData)
-        #expect(message.contains("No eBay sales"))
+        #expect(message.localizedCaseInsensitiveContains("pricecharting"))
     }
 
-    @Test("upstreamUnavailable maps to failed and points the user at logs")
+    @Test("productNotResolved also maps to no_data, with distinct copy")
+    func mapsProductNotResolved() {
+        let (state, message) = CompFetchService.classify(CompRepository.Error.productNotResolved)
+        #expect(state == .noData)
+        #expect(message.localizedCaseInsensitiveContains("couldn't find"))
+    }
+
+    @Test("upstreamUnavailable maps to failed with PriceCharting wording")
     func mapsUpstream() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.upstreamUnavailable)
         #expect(state == .failed)
-        #expect(message.localizedCaseInsensitiveContains("ebay"))
+        #expect(message.localizedCaseInsensitiveContains("pricecharting"))
+    }
+
+    @Test("authInvalid maps to failed with operator-actionable copy")
+    func mapsAuthInvalid() {
+        let (state, message) = CompFetchService.classify(CompRepository.Error.authInvalid)
+        #expect(state == .failed)
+        #expect(message.localizedCaseInsensitiveContains("misconfigured"))
+    }
+
+    @Test("identityNotFound suggests re-scanning the cert")
+    func mapsIdentityNotFound() {
+        let (state, message) = CompFetchService.classify(CompRepository.Error.identityNotFound)
+        #expect(state == .failed)
+        #expect(message.localizedCaseInsensitiveContains("re-scan"))
     }
 
     @Test("httpStatus surfaces the status code in the message")
@@ -27,9 +48,9 @@ struct CompFetchServiceClassifyTests {
 
     @Test("decoding error includes the underlying detail")
     func mapsDecoding() {
-        let (state, message) = CompFetchService.classify(CompRepository.Error.decoding("missing key 'sample_count'"))
+        let (state, message) = CompFetchService.classify(CompRepository.Error.decoding("missing key 'headline_price_cents'"))
         #expect(state == .failed)
-        #expect(message.contains("sample_count"))
+        #expect(message.contains("headline_price_cents"))
     }
 
     @Test("unknown errors fall through to localizedDescription")
