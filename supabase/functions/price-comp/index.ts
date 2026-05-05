@@ -1,19 +1,15 @@
-// @ts-nocheck — runs on Deno (Supabase Edge Functions). Local TS LSP can't resolve `Deno` or `https://` imports.
+// @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 // supabase/functions/price-comp/index.ts
-
 import { createClient } from "@supabase/supabase-js";
-import type {
-  CacheState, GradingService, OutlierReason, PriceCompRequest, PriceCompResponse, SoldListing,
-} from "./types.ts";
-import { callBrowseApi } from "./ebay/browse.ts";
-import { runCascade } from "./ebay/cascade.ts";
-import { normalizeGrade } from "./lib/grade-normalize.ts";
-import { high, low, mean, median } from "./stats/aggregates.ts";
-import { detectOutliers, trimmedMean } from "./stats/outliers.ts";
-import { confidence } from "./stats/confidence.ts";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { GradingService, PriceCompRequest, PriceCompResponse, CacheState } from "./types.ts";
+import type { LadderPrices, PCProductRow } from "./pricecharting/parse.ts";
+import { extractLadder, pickTier, productUrl, ladderHasAnyPrice } from "./pricecharting/parse.ts";
+import { searchProducts } from "./pricecharting/search.ts";
+import { getProduct } from "./pricecharting/product.ts";
+import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
+import { persistIdentityProductId, clearIdentityProductId } from "./persistence/identity-product-id.ts";
 import { evaluateFreshness } from "./cache/freshness.ts";
-import { upsertMarket } from "./persistence/market.ts";
-import { recordScanEvent } from "./persistence/scan-event.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -28,307 +24,236 @@ function env(name: string, fallback?: string): string {
   throw new Error(`missing env: ${name}`);
 }
 
-interface EnrichedListing {
-  sold_price_cents: number;
-  sold_at: string;
-  title: string;
-  url: string;
-  source: "ebay";
-  is_outlier: boolean;
-  outlier_reason: OutlierReason;
-  source_listing_id?: string;
+function ladderToCents(ladder: LadderPrices): LadderPrices {
+  // ladder is already in pennies (PriceCharting native unit) — pass through.
+  // The function name is for clarity at the call site; no transform needed.
+  return ladder;
 }
 
-interface BuildResponseArgs {
-  listings: EnrichedListing[];
-  sampleWindowDays: 90 | 365;
+function buildSearchQuery(identity: {
+  card_name: string;
+  card_number: string | null;
+  set_name: string;
+  year: number | null;
+}): string {
+  const parts: string[] = [];
+  parts.push(`"${identity.card_name}"`);
+  if (identity.card_number) parts.push(`"${identity.card_number}"`);
+  parts.push(identity.set_name);
+  if (identity.year !== null) parts.push(String(identity.year));
+  return parts.join(" ");
+}
+
+function buildResponse(args: {
+  ladderCents: LadderPrices;
+  headlineCents: number | null;
+  service: GradingService;
+  grade: string;
+  productId: string;
+  productUrl: string;
   cacheHit: boolean;
   isStaleFallback: boolean;
-}
-
-function enrichWithOutlierFlags(
-  raw: Array<{ sold_price_cents: number; sold_at: string; title: string; url: string; source_listing_id?: string }>,
-): EnrichedListing[] {
-  if (raw.length === 0) return [];
-  const prices = raw.map(l => l.sold_price_cents);
-  const flags = detectOutliers(prices);
-  const med = median(prices);
-  return raw.map((l, i) => ({
-    sold_price_cents: l.sold_price_cents,
-    sold_at: l.sold_at,
-    title: l.title,
-    url: l.url,
-    source: "ebay" as const,
-    is_outlier: flags[i]!,
-    outlier_reason: !flags[i] ? null : (l.sold_price_cents >= med ? "price_high" : "price_low"),
-    source_listing_id: l.source_listing_id,
-  }));
-}
-
-function velocityAt(listings: EnrichedListing[], cutoffMs: number): number {
-  return listings.filter(l => Date.parse(l.sold_at) >= cutoffMs).length;
-}
-
-function buildResponse(args: BuildResponseArgs): PriceCompResponse {
-  const { listings, sampleWindowDays, cacheHit, isStaleFallback } = args;
-  const prices = listings.map(l => l.sold_price_cents);
-  const flags = listings.map(l => l.is_outlier);
-  const meanCents = prices.length ? mean(prices) : 0;
-  const trimmedCents = prices.length ? trimmedMean(prices, flags) : 0;
-  const medianCents = prices.length ? median(prices) : 0;
-  const lowCents = prices.length ? low(prices) : 0;
-  const highCents = prices.length ? high(prices) : 0;
-  const now = new Date();
-  const n = now.getTime();
-  const sevenDaysAgo = n - 7 * 86400_000;
-  const thirtyDaysAgo = n - 30 * 86400_000;
-  const ninetyDaysAgo = n - 90 * 86400_000;
+}): PriceCompResponse {
   return {
-    blended_price_cents: trimmedCents,
-    mean_price_cents: meanCents,
-    trimmed_mean_price_cents: trimmedCents,
-    median_price_cents: medianCents,
-    low_price_cents: lowCents,
-    high_price_cents: highCents,
-    confidence: confidence(prices.length, sampleWindowDays),
-    sample_count: prices.length,
-    sample_window_days: sampleWindowDays,
-    velocity_7d: velocityAt(listings, sevenDaysAgo),
-    velocity_30d: velocityAt(listings, thirtyDaysAgo),
-    velocity_90d: velocityAt(listings, ninetyDaysAgo),
-    sold_listings: listings.map(({ source_listing_id: _sid, ...rest }) => rest as SoldListing),
-    fetched_at: now.toISOString(),
-    cache_hit: cacheHit,
-    is_stale_fallback: isStaleFallback,
+    headline_price_cents: args.headlineCents,
+    grading_service: args.service,
+    grade: args.grade,
+    loose_price_cents:     args.ladderCents.loose,
+    grade_7_price_cents:   args.ladderCents.grade_7,
+    grade_8_price_cents:   args.ladderCents.grade_8,
+    grade_9_price_cents:   args.ladderCents.grade_9,
+    grade_9_5_price_cents: args.ladderCents.grade_9_5,
+    psa_10_price_cents:    args.ladderCents.psa_10,
+    bgs_10_price_cents:    args.ladderCents.bgs_10,
+    cgc_10_price_cents:    args.ladderCents.cgc_10,
+    sgc_10_price_cents:    args.ladderCents.sgc_10,
+    pricecharting_product_id: args.productId,
+    pricecharting_url: args.productUrl,
+    fetched_at: new Date().toISOString(),
+    cache_hit: args.cacheHit,
+    is_stale_fallback: args.isStaleFallback,
   };
 }
 
-Deno.serve(async (req) => {
+export interface HandleDeps {
+  supabase: SupabaseClient | unknown;
+  pricechartingBaseUrl: string;
+  pricechartingToken: string;
+  ttlSeconds: number;
+  now: () => number;
+}
+
+export async function handle(req: Request, deps: HandleDeps): Promise<Response> {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   let body: PriceCompRequest;
-  try { body = await req.json() as PriceCompRequest; } catch { return json(400, { error: "invalid_json" }); }
+  try { body = (await req.json()) as PriceCompRequest; }
+  catch { return json(400, { error: "invalid_json" }); }
   if (!body.graded_card_identity_id || !body.grading_service || !body.grade) {
     return json(400, { error: "missing_fields" });
   }
 
-  // Strip PSA's verbose adjectives ("GEM MT 10" → "10") so the eBay
-  // query reads like a human search, the cache key matches across
-  // grader-specific verbose styles, and `parseGradedTitle`'s validator
-  // (which only ever sees the bare number from listing titles) can
-  // actually agree with us. Used everywhere downstream — only the raw
-  // body value is preserved for the missing-fields guard above.
-  const grade = normalizeGrade(body.grade);
+  const supabase = deps.supabase as SupabaseClient;
 
-  const serviceRole = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-  const ttlSeconds = Number(env("EBAY_FRESHNESS_TTL_SECONDS", "21600"));
-  const minResults = Number(env("EBAY_MIN_RESULTS_HEADLINE", "10"));
-
-  // 1. Identity lookup (needed for query builder on miss/stale; also validates existence)
-  const { data: identity, error: idErr } = await serviceRole
+  // 1. Identity lookup
+  const { data: identity, error: idErr } = await supabase
     .from("graded_card_identities").select("*")
     .eq("id", body.graded_card_identity_id).single();
   if (idErr || !identity) {
     console.error("price-comp.identity_not_found", {
       identity_id: body.graded_card_identity_id,
-      grading_service: body.grading_service,
-      grade: grade,
       pg_error: idErr?.message ?? null,
     });
     return json(404, { code: "IDENTITY_NOT_FOUND" });
   }
 
   // 2. Cache read
-  const { data: marketRow } = await serviceRole
-    .from("graded_market")
-    .select("updated_at, sample_window_days")
-    .eq("identity_id", body.graded_card_identity_id)
-    .eq("grading_service", body.grading_service)
-    .eq("grade", grade)
-    .maybeSingle();
-
+  const cached = await readMarketLadder(supabase, body.graded_card_identity_id, body.grading_service, body.grade);
   const state: CacheState = evaluateFreshness({
-    updatedAtMs: marketRow?.updated_at ? Date.parse(marketRow.updated_at) : null,
-    nowMs: Date.now(),
-    ttlSeconds,
+    updatedAtMs: cached?.updatedAt ? Date.parse(cached.updatedAt) : null,
+    nowMs: deps.now(),
+    ttlSeconds: deps.ttlSeconds,
   });
 
-  // 3. Cache hit — read sales and return
-  if (state === "hit") {
-    const { data: sales } = await serviceRole
-      .from("graded_market_sales")
-      .select("sold_price,sold_at,title,url,source_listing_id")
-      .eq("identity_id", body.graded_card_identity_id)
-      .eq("grading_service", body.grading_service)
-      .eq("grade", grade)
-      .order("sold_at", { ascending: false })
-      .limit(10);
-    const raw = (sales ?? []).map((s: { sold_price: string | number; sold_at: string; title: string | null; url: string | null; source_listing_id: string | null }) => ({
-      sold_price_cents: Math.round(Number(s.sold_price) * 100),
-      sold_at: s.sold_at,
-      title: s.title ?? "",
-      url: s.url ?? "",
-      source_listing_id: s.source_listing_id ?? undefined,
+  if (state === "hit" && cached) {
+    return json(200, buildResponse({
+      ladderCents: ladderToCents(cached.ladderCents),
+      headlineCents: cached.headlinePriceCents,
+      service: body.grading_service,
+      grade: body.grade,
+      productId: cached.pricechartingProductId ?? identity.pricecharting_product_id ?? "",
+      productUrl: cached.pricechartingUrl ?? identity.pricecharting_url ?? "",
+      cacheHit: true,
+      isStaleFallback: false,
     }));
-    const enriched = enrichWithOutlierFlags(raw);
-    const sampleWindowDays = (marketRow?.sample_window_days ?? 90) as 90 | 365;
-    const response = buildResponse({
-      listings: enriched, sampleWindowDays, cacheHit: true, isStaleFallback: false,
-    });
-    await recordScanEvent(serviceRole, {
-      identityId: body.graded_card_identity_id,
-      gradingService: body.grading_service as GradingService,
-      grade: grade,
-      storeId: null,
-      cacheState: "hit",
-    });
-    return json(200, response);
   }
 
-  // 4. Miss or stale — live fetch, with stale-fallback on upstream failure.
-  // The Browse API requires an OAuth client-credentials token minted
-  // from app id + cert id, scope `api_scope` (public, no eBay
-  // approval needed). Browse returns ACTIVE listings only — sold
-  // comps are off-limits without Marketplace Insights access. See
-  // ebay/browse.ts for the full caveat.
-  const ebayAppId = env("EBAY_APP_ID");
-  const ebayCertId = env("EBAY_CERT_ID");
+  // 3. Resolve PriceCharting product id (hybrid)
+  const clientOpts = {
+    token: deps.pricechartingToken,
+    baseUrl: deps.pricechartingBaseUrl,
+    now: deps.now,
+  };
 
-  let cascade;
-  try {
-    cascade = await runCascade(identity as never, body.grading_service as GradingService, grade, {
-      minResults,
-      fetchBucket: (q) => callBrowseApi({
-        appId: ebayAppId,
-        certId: ebayCertId,
-        q: q.q,
-        categoryId: q.categoryId,
-        limit: 50,
-        windowDays: q.windowDays,
-      }),
-    });
-  } catch (e) {
-    console.error("price-comp.cascade.failed", { message: (e as Error).message });
-    return await serveStaleOrUpstreamDown(serviceRole, body, state === "stale", marketRow?.sample_window_days);
+  let productId = identity.pricecharting_product_id as string | null;
+  if (!productId) {
+    const q = buildSearchQuery(identity);
+    const search = await searchProducts(clientOpts, q);
+    if (search.status >= 500) {
+      return await staleOrUpstreamDown(cached, body, "5xx_search");
+    }
+    if (search.status === 401 || search.status === 403) {
+      console.error("pc.auth_invalid", { phase: "search" });
+      return json(502, { code: "AUTH_INVALID" });
+    }
+    if (search.products.length === 0) {
+      console.log("pc.match.zero_hits", { q });
+      return json(404, { code: "PRODUCT_NOT_RESOLVED" });
+    }
+    const top = search.products[0];
+    productId = String(top.id ?? "");
+    if (!productId) return json(404, { code: "PRODUCT_NOT_RESOLVED" });
+    const url = productUrl(top);
+    try {
+      await persistIdentityProductId(supabase, body.graded_card_identity_id, productId, url);
+      console.log("pc.match.first_resolved", { identity_id: body.graded_card_identity_id, product_id: productId });
+    } catch (e) {
+      console.error("pc.persist.identity_failed", { message: (e as Error).message });
+    }
   }
 
-  if (cascade.listings.length === 0) {
-    console.log("price-comp.no_market_data", {
-      identity_id: body.graded_card_identity_id,
-      grading_service: body.grading_service,
-      grade: grade,
-      // The card metadata used to build cascade queries — surfacing this
-      // makes it obvious when an unusual `set_name` (PSA's brand
-      // surrogate, e.g. "POKEMON GAME") is dragging the broad query
-      // away from real eBay listing titles.
-      card_name: identity.card_name ?? null,
-      card_number: identity.card_number ?? null,
-      set_name: identity.set_name ?? null,
-      year: identity.year ?? null,
-    });
-    await recordScanEvent(serviceRole, {
-      identityId: body.graded_card_identity_id,
-      gradingService: body.grading_service as GradingService,
-      grade: grade,
-      storeId: null,
-      cacheState: state === "miss" ? "miss" : "stale",
-    });
+  // 4. Live fetch product
+  const product = await getProduct(clientOpts, productId);
+  if (product.status === 401 || product.status === 403) {
+    console.error("pc.auth_invalid", { phase: "product" });
+    return json(502, { code: "AUTH_INVALID" });
+  }
+  if (product.status === 404) {
+    // Cached id pointing at a deleted product. Clear it so the next scan
+    // re-runs search.
+    if (identity.pricecharting_product_id) {
+      try { await clearIdentityProductId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+    }
+    return json(404, { code: "NO_MARKET_DATA" });
+  }
+  if (product.status === 429 || product.status >= 500) {
+    return await staleOrUpstreamDown(cached, body, `${product.status}_product`);
+  }
+  if (!product.product) {
     return json(404, { code: "NO_MARKET_DATA" });
   }
 
-  const enriched = enrichWithOutlierFlags(cascade.listings.map(l => ({
-    sold_price_cents: l.sold_price_cents,
-    sold_at: l.sold_at,
-    title: l.title,
-    url: l.url,
-    source_listing_id: l.source_listing_id,
-  })));
-  const prices = enriched.map(l => l.sold_price_cents);
-  const flags = enriched.map(l => l.is_outlier);
-  const meanCents = mean(prices);
-  const trimmedCents = trimmedMean(prices, flags);
-  const medianCents = median(prices);
-  const lowCents = low(prices);
-  const highCents = high(prices);
+  const row: PCProductRow = product.product;
+  const ladder = extractLadder(row);
+  if (!ladderHasAnyPrice(ladder)) {
+    console.log("pc.product.no_prices", { product_id: productId });
+    return json(404, { code: "NO_MARKET_DATA" });
+  }
+  const headlineCents = pickTier(row, body.grading_service, body.grade);
+  const url = identity.pricecharting_url ?? productUrl(row);
 
   try {
-    await upsertMarket(serviceRole, {
+    await upsertMarketLadder(supabase, {
       identityId: body.graded_card_identity_id,
-      gradingService: body.grading_service as GradingService,
-      grade: grade,
-      listings: enriched,
-      aggregates: {
-        low_cents: lowCents,
-        high_cents: highCents,
-        mean_cents: meanCents,
-        trimmed_mean_cents: trimmedCents,
-        median_cents: medianCents,
-        confidence: confidence(prices.length, cascade.sampleWindowDays),
-        sample_window_days: cascade.sampleWindowDays,
-        velocity_7d: velocityAt(enriched, Date.now() - 7 * 86400_000),
-        velocity_30d: velocityAt(enriched, Date.now() - 30 * 86400_000),
-        velocity_90d: velocityAt(enriched, Date.now() - 90 * 86400_000),
-      },
+      gradingService: body.grading_service,
+      grade: body.grade,
+      headlinePriceCents: headlineCents,
+      ladderCents: ladder,
+      pricechartingProductId: productId,
+      pricechartingUrl: url,
     });
   } catch (e) {
-    console.error("price-comp.persist.failed", { message: (e as Error).message });
+    console.error("pc.persist.market_failed", { message: (e as Error).message });
   }
-
-  const response = buildResponse({
-    listings: enriched,
-    sampleWindowDays: cascade.sampleWindowDays,
-    cacheHit: false,
-    isStaleFallback: false,
-  });
-
-  await recordScanEvent(serviceRole, {
-    identityId: body.graded_card_identity_id,
-    gradingService: body.grading_service as GradingService,
-    grade: grade,
-    storeId: null,
-    cacheState: state === "miss" ? "miss" : "stale",
-  });
 
   console.log("price-comp.live", {
     identity_id: body.graded_card_identity_id,
-    bucket_hit: cascade.bucketHit,
-    result_count: cascade.listings.length,
+    product_id: productId,
     cache_state: state,
+    headline_present: headlineCents !== null,
   });
 
-  return json(200, response);
-});
-
-async function serveStaleOrUpstreamDown(
-  supabase: ReturnType<typeof createClient>,
-  body: PriceCompRequest,
-  hasStale: boolean,
-  sampleWindowDaysHint: number | null | undefined,
-): Promise<Response> {
-  if (!hasStale) return json(503, { code: "UPSTREAM_UNAVAILABLE" });
-  const { data: sales } = await supabase
-    .from("graded_market_sales")
-    .select("sold_price,sold_at,title,url,source_listing_id")
-    .eq("identity_id", body.graded_card_identity_id)
-    .eq("grading_service", body.grading_service)
-    .eq("grade", grade)
-    .order("sold_at", { ascending: false })
-    .limit(10);
-  const raw = (sales ?? []).map((s) => ({
-    sold_price_cents: Math.round(Number(s.sold_price) * 100),
-    sold_at: s.sold_at,
-    title: s.title ?? "",
-    url: s.url ?? "",
-    source_listing_id: s.source_listing_id ?? undefined,
+  return json(200, buildResponse({
+    ladderCents: ladder,
+    headlineCents,
+    service: body.grading_service,
+    grade: body.grade,
+    productId,
+    productUrl: url,
+    cacheHit: false,
+    isStaleFallback: false,
   }));
-  const enriched = enrichWithOutlierFlags(raw);
-  const response = buildResponse({
-    listings: enriched,
-    sampleWindowDays: (sampleWindowDaysHint ?? 90) as 90 | 365,
+}
+
+async function staleOrUpstreamDown(
+  cached: Awaited<ReturnType<typeof readMarketLadder>>,
+  body: PriceCompRequest,
+  marker: string,
+): Promise<Response> {
+  console.error("pc.upstream_5xx", { marker });
+  if (!cached) return json(503, { code: "UPSTREAM_UNAVAILABLE" });
+  return json(200, buildResponse({
+    ladderCents: cached.ladderCents,
+    headlineCents: cached.headlinePriceCents,
+    service: body.grading_service,
+    grade: body.grade,
+    productId: cached.pricechartingProductId ?? "",
+    productUrl: cached.pricechartingUrl ?? "",
     cacheHit: true,
     isStaleFallback: true,
-  });
-  return json(200, response);
+  }));
 }
+
+// Production entrypoint. Tests import `handle` directly with injected deps.
+Deno.serve(async (req) => {
+  const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false },
+  });
+  return await handle(req, {
+    supabase,
+    pricechartingBaseUrl: "https://www.pricecharting.com",
+    pricechartingToken: env("PRICECHARTING_API_TOKEN"),
+    ttlSeconds: Number(env("PRICECHARTING_FRESHNESS_TTL_SECONDS", "86400")),
+    now: () => Date.now(),
+  });
+});
