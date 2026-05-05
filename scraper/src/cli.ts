@@ -4,7 +4,6 @@ import { createLogger } from "@/shared/logger.js";
 import { getSupabase } from "@/shared/db/supabase.js";
 import { ingestPokemonAllCategories } from "@/raw/ingest.js";
 import { runPopReportIngest } from "@/graded/ingest/pop-reports.js";
-import { runEbaySoldIngest } from "@/graded/ingest/ebay-sold.js";
 import { runMoverListingsIngest } from "@/graded/ingest/mover-listings.js";
 import { mintEbayBrowseToken } from "@/graded/sources/ebay-oauth.js";
 import { runPopularSlabsSeed } from "@/graded/seeds/popular-slabs.js";
@@ -34,33 +33,11 @@ run.command("raw")
   });
 
 run.command("graded")
-  .argument("<job>", "job: ebay | pop")
+  .argument("<job>", "job: pop")
   .option("-s, --service <svc>", "pop: which services (comma-separated or 'all')", "all")
-  .option(
-    "-q, --queries <list>",
-    "ebay: comma-separated search queries (if omitted, queries are sourced from graded_watchlist)",
-  )
   .action(async (job, o) => {
     const cfg = loadConfig();
     const log = createLogger({ level: cfg.runtime.logLevel });
-    if (job === "ebay") {
-      const queries = o.queries
-        ? String(o.queries).split(",").map((s: string) => s.trim()).filter(Boolean)
-        : [];
-      const ebaySoldOpts: Parameters<typeof runEbaySoldIngest>[0] = {
-        supabase: getSupabase(),
-        userAgent: cfg.runtime.userAgent,
-        queries,
-        log,
-      };
-      if (cfg.ebay.marketplaceInsightsApproved && process.env.EBAY_OAUTH_TOKEN) {
-        ebaySoldOpts.marketplaceInsightsToken = process.env.EBAY_OAUTH_TOKEN;
-      }
-      const res = await runEbaySoldIngest(ebaySoldOpts);
-      log.info("ebay ingest complete", { ...res });
-      if (res.status === "failed") process.exit(1);
-      return;
-    }
     if (job === "pop") {
       const requestedServices = o.service === "all"
         ? ["psa", "cgc", "bgs", "sgc", "tag"]
