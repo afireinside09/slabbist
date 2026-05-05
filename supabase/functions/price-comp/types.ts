@@ -12,6 +12,8 @@ export interface GradedCardIdentity {
   card_name: string;
   variant: string | null;
   year: number | null;
+  pricecharting_product_id: string | null;
+  pricecharting_url: string | null;
 }
 
 export interface PriceCompRequest {
@@ -20,40 +22,24 @@ export interface PriceCompRequest {
   grade: string;
 }
 
-export type OutlierReason = "price_high" | "price_low" | null;
-
-export interface SoldListing {
-  sold_price_cents: number;
-  sold_at: string;           // ISO 8601
-  title: string;
-  url: string;
-  source: "ebay";
-  is_outlier: boolean;
-  outlier_reason: OutlierReason;
-}
-
-export interface SoldListingRaw {
-  sold_price_cents: number;
-  sold_at: string;
-  title: string;
-  url: string;
-  source_listing_id: string;
-}
-
 export interface PriceCompResponse {
-  blended_price_cents: number;
-  mean_price_cents: number;
-  trimmed_mean_price_cents: number;
-  median_price_cents: number;
-  low_price_cents: number;
-  high_price_cents: number;
-  confidence: number;
-  sample_count: number;
-  sample_window_days: 90 | 365;
-  velocity_7d: number;
-  velocity_30d: number;
-  velocity_90d: number;
-  sold_listings: SoldListing[];
+  headline_price_cents: number | null;
+  grading_service: GradingService;
+  grade: string;
+
+  loose_price_cents:     number | null;
+  grade_7_price_cents:   number | null;
+  grade_8_price_cents:   number | null;
+  grade_9_price_cents:   number | null;
+  grade_9_5_price_cents: number | null;
+  psa_10_price_cents:    number | null;
+  bgs_10_price_cents:    number | null;
+  cgc_10_price_cents:    number | null;
+  sgc_10_price_cents:    number | null;
+
+  pricecharting_product_id: string;
+  pricecharting_url: string;
+
   fetched_at: string;
   cache_hit: boolean;
   is_stale_fallback: boolean;
