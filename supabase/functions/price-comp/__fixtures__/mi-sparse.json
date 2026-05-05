@@ -1,7 +1,0 @@
-{
-  "itemSales": [
-    { "itemId": "v1|211|0", "title": "Pikachu ex 247/191 Surging Sparks PSA 10", "lastSoldDate": "2026-04-15T10:00:00.000Z", "lastSoldPrice": { "value": "115.00", "currency": "USD" }, "itemWebUrl": "https://www.ebay.com/itm/211" },
-    { "itemId": "v1|212|0", "title": "PSA 10 Pikachu ex 247/191", "lastSoldDate": "2026-04-10T10:00:00.000Z", "lastSoldPrice": { "value": "120.00", "currency": "USD" }, "itemWebUrl": "https://www.ebay.com/itm/212" },
-    { "itemId": "v1|213|0", "title": "Pokemon Pikachu ex 247/191 PSA 10 Surging Sparks", "lastSoldDate": "2026-04-05T10:00:00.000Z", "lastSoldPrice": { "value": "125.00", "currency": "USD" }, "itemWebUrl": "https://www.ebay.com/itm/213" }
-  ]
-}
