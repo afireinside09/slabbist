@@ -11,19 +11,22 @@ struct CompCardView: View {
                     .padding(.horizontal, Spacing.l)
                     .padding(.top, Spacing.l)
                     .padding(.bottom, Spacing.md)
-                SlabCardDivider()
-                StatStrip(items: rangeItems)
-                    .padding(.horizontal, Spacing.l)
+                if !ladderTiers.isEmpty {
+                    SlabCardDivider()
+                    ladderRail
+                        .padding(.horizontal, Spacing.l)
+                        .padding(.vertical, Spacing.md)
+                }
                 if showsCaveat {
                     SlabCardDivider()
                     caveatRow
                         .padding(.horizontal, Spacing.l)
                         .padding(.vertical, Spacing.md)
                 }
-                metaRow
+                SlabCardDivider()
+                footerRow
                     .padding(.horizontal, Spacing.l)
-                    .padding(.bottom, Spacing.md)
-                    .padding(.top, Spacing.s)
+                    .padding(.vertical, Spacing.md)
             }
         }
     }
@@ -33,79 +36,123 @@ struct CompCardView: View {
     private var heroRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(formatCents(snapshot.trimmedMeanPriceCents))
+                Text(headlineText)
                     .font(SlabFont.serif(size: 40))
                     .tracking(-1)
                     .foregroundStyle(AppColor.text)
-                Text("AVG ASK · \(snapshot.sampleCount) LISTINGS")
+                Text("\(snapshot.gradingService) \(snapshot.grade) · PRICECHARTING")
                     .font(SlabFont.sans(size: 10, weight: .medium))
                     .tracking(1.4)
                     .foregroundStyle(AppColor.dim)
             }
             Spacer()
-            confidenceChip
         }
     }
 
-    private var confidenceChip: some View {
-        Text("\(Int((snapshot.confidence * 100).rounded()))%")
-            .font(SlabFont.mono(size: 12, weight: .medium))
-            .foregroundStyle(confidenceTint)
-            .padding(.horizontal, Spacing.s)
-            .padding(.vertical, Spacing.xxs)
-            .overlay(
-                Capsule().stroke(confidenceTint.opacity(0.4), lineWidth: 1)
-            )
+    private var headlineText: String {
+        guard let cents = snapshot.headlinePriceCents else { return "—" }
+        return formatCents(cents)
     }
 
-    private var confidenceTint: Color {
-        if snapshot.confidence >= 0.75 { return AppColor.positive }
-        if snapshot.confidence >= 0.40 { return AppColor.gold }
-        return AppColor.negative
+    // MARK: - Grade ladder
+
+    private struct Tier: Identifiable {
+        let id: String
+        let label: String
+        let cents: Int64
+        let isHeadline: Bool
     }
 
-    // MARK: - Range strip
-
-    private var rangeItems: [StatStrip.Item] {
-        [
-            .init(label: "Low",    value: formatCentsCompact(snapshot.lowPriceCents)),
-            .init(label: "Median", value: formatCentsCompact(snapshot.medianPriceCents)),
-            .init(label: "High",   value: formatCentsCompact(snapshot.highPriceCents)),
+    /// Ordered tiers we render in the ladder rail when present. The headline
+    /// tier (matching the snapshot's grader+grade) gets a gold border.
+    private var ladderTiers: [Tier] {
+        let entries: [(id: String, label: String, cents: Int64?, headlineKey: (service: String, grade: String)?)] = [
+            ("loose",     "Raw",        snapshot.loosePriceCents,     nil),
+            ("grade_7",   "7",          snapshot.grade7PriceCents,    nil),
+            ("grade_8",   "8",          snapshot.grade8PriceCents,    nil),
+            ("grade_9",   "9",          snapshot.grade9PriceCents,    nil),
+            ("grade_9_5", "9.5",        snapshot.grade9_5PriceCents,  nil),
+            ("psa_10",    "PSA 10",     snapshot.psa10PriceCents,     ("PSA", "10")),
+            ("bgs_10",    "BGS 10",     snapshot.bgs10PriceCents,     ("BGS", "10")),
+            ("cgc_10",    "CGC 10",     snapshot.cgc10PriceCents,     ("CGC", "10")),
+            ("sgc_10",    "SGC 10",     snapshot.sgc10PriceCents,     ("SGC", "10")),
         ]
+        return entries.compactMap { e in
+            guard let cents = e.cents else { return nil }
+            let isHeadline: Bool = {
+                if let k = e.headlineKey {
+                    return k.service == snapshot.gradingService && k.grade == snapshot.grade
+                }
+                return false
+            }()
+            return Tier(id: e.id, label: e.label, cents: cents, isHeadline: isHeadline)
+        }
     }
 
-    // MARK: - Caveat (low-confidence / stale)
-
-    private var showsCaveat: Bool {
-        snapshot.isStaleFallback || snapshot.sampleCount < 10
+    private var ladderRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.s) {
+                ForEach(ladderTiers) { tier in
+                    tierCell(tier)
+                }
+            }
+        }
     }
+
+    private func tierCell(_ tier: Tier) -> some View {
+        VStack(spacing: Spacing.xxs) {
+            Text(tier.label)
+                .font(SlabFont.sans(size: 10, weight: .medium))
+                .tracking(1.4)
+                .foregroundStyle(AppColor.dim)
+            Text(formatCentsCompact(tier.cents))
+                .font(SlabFont.mono(size: 14, weight: .medium))
+                .foregroundStyle(AppColor.text)
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(tier.isHeadline ? AppColor.gold : AppColor.dim.opacity(0.3),
+                        lineWidth: tier.isHeadline ? 1.5 : 1)
+        )
+    }
+
+    // MARK: - Caveat (stale fallback)
+
+    private var showsCaveat: Bool { snapshot.isStaleFallback }
 
     private var caveatRow: some View {
         HStack(spacing: Spacing.s) {
-            Image(systemName: snapshot.isStaleFallback ? "wifi.slash" : "exclamationmark.triangle")
+            Image(systemName: "wifi.slash")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColor.negative)
-            Text(snapshot.isStaleFallback
-                 ? "Cached — live data unavailable"
-                 : "Few listings — \(snapshot.sampleCount) matches")
+            Text("Cached — PriceCharting unavailable")
                 .font(SlabFont.sans(size: 12, weight: .medium))
                 .foregroundStyle(AppColor.negative)
             Spacer()
         }
     }
 
-    // MARK: - Meta footer
+    // MARK: - Footer (PriceCharting deep link)
 
-    private var metaRow: some View {
-        HStack {
-            Text("Mean \(formatCentsCompact(snapshot.meanPriceCents))")
-                .font(SlabFont.mono(size: 11))
-                .foregroundStyle(AppColor.muted)
-            Spacer()
-            Text("\(snapshot.sampleWindowDays)D WINDOW")
-                .font(SlabFont.sans(size: 10, weight: .medium))
-                .tracking(1.4)
-                .foregroundStyle(AppColor.dim)
+    @ViewBuilder
+    private var footerRow: some View {
+        if let url = snapshot.pricechartingURL {
+            Link(destination: url) {
+                HStack(spacing: Spacing.xxs) {
+                    Text("View real listings on PriceCharting")
+                        .font(SlabFont.sans(size: 12, weight: .medium))
+                        .foregroundStyle(AppColor.gold)
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColor.gold)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            EmptyView()
         }
     }
 
@@ -120,8 +167,6 @@ struct CompCardView: View {
         return fmt.string(from: dollars as NSNumber) ?? "$\(dollars)"
     }
 
-    /// Compact form (no cents) for the dense stat strip — keeps three cells
-    /// readable at phone widths.
     private func formatCentsCompact(_ cents: Int64) -> String {
         let dollars = Int((Double(cents) / 100).rounded())
         let fmt = NumberFormatter()
