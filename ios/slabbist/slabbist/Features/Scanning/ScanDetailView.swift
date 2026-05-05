@@ -34,7 +34,6 @@ struct ScanDetailView: View {
                     header
                     if let snapshot = snapshots.first {
                         valueSection(snapshot: snapshot)
-                        listingsSection(snapshot: snapshot)
                     } else {
                         fallbackContent
                     }
@@ -161,7 +160,7 @@ struct ScanDetailView: View {
             kicker: "Fetching",
             symbol: "arrow.triangle.2.circlepath",
             symbolTint: AppColor.gold,
-            title: "Pulling eBay listings…",
+            title: "Fetching PriceCharting comp…",
             detail: "This usually takes a couple of seconds. Tap retry if it's stuck.",
             showsProgress: true,
             cta: ("Retry comp fetch", retry)
@@ -184,11 +183,11 @@ struct ScanDetailView: View {
 
     private var noDataState: some View {
         emptyState(
-            kicker: "No listings",
+            kicker: "No comp",
             symbol: "magnifyingglass",
             symbolTint: AppColor.muted,
-            title: "No eBay listings found",
-            detail: "No active listings match this slab right now. Try again later, or this might just be a rarely-traded card.",
+            title: "PriceCharting has no comp for this slab",
+            detail: "Either we couldn't find this card on PriceCharting, or there's no published price for this tier yet. Try retrying later.",
             showsProgress: false,
             cta: ("Retry comp fetch", retry)
         )
@@ -280,66 +279,4 @@ struct ScanDetailView: View {
         }
     }
 
-    // MARK: - Listings
-
-    private func listingsSection(snapshot: GradedMarketSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.m) {
-            KickerLabel("Active listings · \(snapshot.soldListings.count)")
-            SlabCard {
-                VStack(spacing: 0) {
-                    let sorted = snapshot.soldListings.sorted(by: { $0.soldAt > $1.soldAt })
-                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, listing in
-                        Link(destination: listing.url) {
-                            listingRow(listing)
-                        }
-                        .buttonStyle(.plain)
-                        if index < sorted.count - 1 {
-                            SlabCardDivider()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func listingRow(_ l: SoldListingMirror) -> some View {
-        HStack(alignment: .top, spacing: Spacing.m) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(l.title)
-                    .slabRowTitle()
-                    .lineLimit(2)
-                HStack(spacing: Spacing.s) {
-                    Text(l.soldAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(SlabFont.mono(size: 11))
-                        .foregroundStyle(AppColor.dim)
-                    if l.isOutlier {
-                        outlierChip(reason: l.outlierReason)
-                    }
-                }
-            }
-            Spacer(minLength: Spacing.m)
-            Text(formatCents(l.soldPriceCents))
-                .slabMetric()
-        }
-        .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.md)
-    }
-
-    private func outlierChip(reason: OutlierReason?) -> some View {
-        Text(reason == .priceHigh ? "HIGH" : "LOW")
-            .font(SlabFont.sans(size: 10, weight: .medium))
-            .tracking(1.4)
-            .foregroundStyle(AppColor.negative)
-            .padding(.horizontal, Spacing.s)
-            .padding(.vertical, Spacing.xxs)
-            .background(
-                Capsule().fill(AppColor.negative.opacity(0.12))
-            )
-    }
-
-    private func formatCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        let fmt = NumberFormatter(); fmt.numberStyle = .currency; fmt.currencyCode = "USD"
-        return fmt.string(from: dollars as NSNumber) ?? "$\(dollars)"
-    }
 }
