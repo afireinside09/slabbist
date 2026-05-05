@@ -5,65 +5,49 @@ import SwiftData
 final class CompRepository {
     enum Error: Swift.Error, Equatable {
         case noMarketData
-        case upstreamUnavailable
-        /// Server returned 404 with `code: "IDENTITY_NOT_FOUND"` — the
-        /// graded-card identity the client persisted no longer exists
-        /// on the server (stale local cache, project switch, manual
-        /// row delete). Distinct from `notDeployed` so we can suggest
-        /// re-running the cert lookup vs. fixing infrastructure.
+        case productNotResolved
         case identityNotFound
-        /// 404 with no `code` field (or an unrecognized one) — almost
-        /// always means the edge function isn't deployed at the
-        /// expected URL. Surfacing this as its own case lets the UI
-        /// show actionable copy instead of a bare HTTP code.
-        case notDeployed
+        case authInvalid
+        case upstreamUnavailable
         case httpStatus(Int)
         case decoding(String)
     }
 
     nonisolated struct Wire: Decodable {
-        let blended_price_cents: Int64
-        let mean_price_cents: Int64
-        let trimmed_mean_price_cents: Int64
-        let median_price_cents: Int64
-        let low_price_cents: Int64
-        let high_price_cents: Int64
-        let confidence: Double
-        let sample_count: Int
-        let sample_window_days: Int
-        let velocity_7d: Int
-        let velocity_30d: Int
-        let velocity_90d: Int
-        let sold_listings: [WireListing]
+        let headline_price_cents: Int64?
+        let grading_service: String
+        let grade: String
+        let loose_price_cents: Int64?
+        let grade_7_price_cents: Int64?
+        let grade_8_price_cents: Int64?
+        let grade_9_price_cents: Int64?
+        let grade_9_5_price_cents: Int64?
+        let psa_10_price_cents: Int64?
+        let bgs_10_price_cents: Int64?
+        let cgc_10_price_cents: Int64?
+        let sgc_10_price_cents: Int64?
+        let pricecharting_product_id: String
+        let pricecharting_url: String
         let fetched_at: Date
         let cache_hit: Bool
         let is_stale_fallback: Bool
     }
 
-    nonisolated struct WireListing: Decodable {
-        let sold_price_cents: Int64
-        let sold_at: Date
-        let title: String
-        let url: URL
-        let source: String
-        let is_outlier: Bool
-        let outlier_reason: String?
-    }
-
     struct Decoded {
-        let blendedPriceCents: Int64
-        let meanPriceCents: Int64
-        let trimmedMeanPriceCents: Int64
-        let medianPriceCents: Int64
-        let lowPriceCents: Int64
-        let highPriceCents: Int64
-        let confidence: Double
-        let sampleCount: Int
-        let sampleWindowDays: Int
-        let velocity7d: Int
-        let velocity30d: Int
-        let velocity90d: Int
-        let soldListings: [SoldListingMirror]
+        let headlinePriceCents: Int64?
+        let gradingService: String
+        let grade: String
+        let loosePriceCents: Int64?
+        let grade7PriceCents: Int64?
+        let grade8PriceCents: Int64?
+        let grade9PriceCents: Int64?
+        let grade9_5PriceCents: Int64?
+        let psa10PriceCents: Int64?
+        let bgs10PriceCents: Int64?
+        let cgc10PriceCents: Int64?
+        let sgc10PriceCents: Int64?
+        let pricechartingProductId: String
+        let pricechartingURL: URL?
         let fetchedAt: Date
         let cacheHit: Bool
         let isStaleFallback: Bool
@@ -85,31 +69,21 @@ final class CompRepository {
         let wire: Wire
         do { wire = try decoder.decode(Wire.self, from: data) }
         catch { throw Error.decoding("\(error)") }
-        let listings = wire.sold_listings.map { w in
-            SoldListingMirror(
-                soldPriceCents: w.sold_price_cents,
-                soldAt: w.sold_at,
-                title: w.title,
-                url: w.url,
-                source: w.source,
-                isOutlier: w.is_outlier,
-                outlierReason: w.outlier_reason.flatMap(OutlierReason.init(rawValue:))
-            )
-        }
         return Decoded(
-            blendedPriceCents: wire.blended_price_cents,
-            meanPriceCents: wire.mean_price_cents,
-            trimmedMeanPriceCents: wire.trimmed_mean_price_cents,
-            medianPriceCents: wire.median_price_cents,
-            lowPriceCents: wire.low_price_cents,
-            highPriceCents: wire.high_price_cents,
-            confidence: wire.confidence,
-            sampleCount: wire.sample_count,
-            sampleWindowDays: wire.sample_window_days,
-            velocity7d: wire.velocity_7d,
-            velocity30d: wire.velocity_30d,
-            velocity90d: wire.velocity_90d,
-            soldListings: listings,
+            headlinePriceCents: wire.headline_price_cents,
+            gradingService: wire.grading_service,
+            grade: wire.grade,
+            loosePriceCents: wire.loose_price_cents,
+            grade7PriceCents: wire.grade_7_price_cents,
+            grade8PriceCents: wire.grade_8_price_cents,
+            grade9PriceCents: wire.grade_9_price_cents,
+            grade9_5PriceCents: wire.grade_9_5_price_cents,
+            psa10PriceCents: wire.psa_10_price_cents,
+            bgs10PriceCents: wire.bgs_10_price_cents,
+            cgc10PriceCents: wire.cgc_10_price_cents,
+            sgc10PriceCents: wire.sgc_10_price_cents,
+            pricechartingProductId: wire.pricecharting_product_id,
+            pricechartingURL: URL(string: wire.pricecharting_url),
             fetchedAt: wire.fetched_at,
             cacheHit: wire.cache_hit,
             isStaleFallback: wire.is_stale_fallback
@@ -121,8 +95,9 @@ final class CompRepository {
         let body = try? JSONDecoder().decode(Body.self, from: data)
         switch (statusCode, body?.code) {
         case (404, "NO_MARKET_DATA"):       throw Error.noMarketData
+        case (404, "PRODUCT_NOT_RESOLVED"): throw Error.productNotResolved
         case (404, "IDENTITY_NOT_FOUND"):   throw Error.identityNotFound
-        case (404, .none):                  throw Error.notDeployed
+        case (502, "AUTH_INVALID"):         throw Error.authInvalid
         case (503, "UPSTREAM_UNAVAILABLE"): throw Error.upstreamUnavailable
         default: throw Error.httpStatus(statusCode)
         }
@@ -135,12 +110,9 @@ final class CompRepository {
     ) async throws -> Decoded {
         var request = URLRequest(url: baseURL.appendingPathComponent("/price-comp"))
         request.httpMethod = "POST"
-        // Cap a single attempt at 30s. The edge function fetches eBay
-        // OAuth + Marketplace Insights (a 4-bucket cascade) and writes
-        // back a cache row; warm path is sub-second, cold path < 10s.
-        // 30s leaves headroom without leaving the spinner stuck for a
-        // full minute when something upstream (eBay API, Supabase
-        // cold start) misbehaves.
+        // PriceCharting calls are sub-second on a warm cache, low-single-digit
+        // seconds on a cold path (search + product). 30s leaves headroom
+        // without leaving the spinner stuck for a full minute.
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         if let token = await authTokenProvider() {
