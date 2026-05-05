@@ -1,74 +1,102 @@
-// @ts-nocheck — runs on Deno. Local TS LSP can't resolve `std/*` imports or `.ts` relative paths that Deno accepts.
+// @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 // supabase/functions/price-comp/persistence/market.ts
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GradingService, SoldListing } from "../types.ts";
+import type { GradingService } from "../types.ts";
+import type { LadderPrices } from "../pricecharting/parse.ts";
 
 export interface MarketUpsertInput {
   identityId: string;
   gradingService: GradingService;
   grade: string;
-  listings: (SoldListing & { source_listing_id?: string })[];
-  aggregates: {
-    low_cents: number;
-    high_cents: number;
-    mean_cents: number;
-    trimmed_mean_cents: number;
-    median_cents: number;
-    confidence: number;
-    sample_window_days: 90 | 365;
-    velocity_7d: number;
-    velocity_30d: number;
-    velocity_90d: number;
-  };
+  headlinePriceCents: number | null;
+  ladderCents: LadderPrices;
+  pricechartingProductId: string;
+  pricechartingUrl: string;
 }
 
-// graded_market prices are numeric(12,2). Convert cents <-> dollars at the boundary.
-function centsToDecimal(cents: number): number {
+// graded_market columns are numeric(12,2). Convert cents <-> dollars at the
+// boundary; null cents passes through as null.
+function centsToDecimal(cents: number | null): number | null {
+  if (cents === null) return null;
   return Math.round(cents) / 100;
 }
 
-export async function upsertMarket(
+export async function upsertMarketLadder(
   supabase: SupabaseClient,
   input: MarketUpsertInput,
 ): Promise<void> {
-  const { identityId, gradingService, grade, listings, aggregates } = input;
-
-  if (listings.length > 0) {
-    const rows = listings.map(l => ({
-      identity_id: identityId,
-      grading_service: gradingService,
-      grade,
-      sold_price: centsToDecimal(l.sold_price_cents),
-      sold_at: l.sold_at,
-      source: "ebay",
-      source_listing_id: l.source_listing_id ?? l.url,
-      title: l.title,
-      url: l.url,
-    }));
-    const { error } = await supabase
-      .from("graded_market_sales")
-      .upsert(rows, { onConflict: "source,source_listing_id" });
-    if (error) throw new Error(`graded_market_sales upsert: ${error.message}`);
-  }
-
-  const { error: aggError } = await supabase
+  const { error } = await supabase
     .from("graded_market")
     .upsert({
-      identity_id: identityId,
-      grading_service: gradingService,
-      grade,
-      low_price: centsToDecimal(aggregates.low_cents),
-      high_price: centsToDecimal(aggregates.high_cents),
-      mean_price: centsToDecimal(aggregates.mean_cents),
-      trimmed_mean_price: centsToDecimal(aggregates.trimmed_mean_cents),
-      median_price: centsToDecimal(aggregates.median_cents),
-      confidence: aggregates.confidence,
-      sample_window_days: aggregates.sample_window_days,
-      sample_count_30d: aggregates.velocity_30d,
-      sample_count_90d: aggregates.velocity_90d,
-      last_sale_price: centsToDecimal(listings[0]?.sold_price_cents ?? 0),
-      last_sale_at: listings[0]?.sold_at ?? null,
+      identity_id: input.identityId,
+      grading_service: input.gradingService,
+      grade: input.grade,
+      source: "pricecharting",
+      pricecharting_product_id: input.pricechartingProductId,
+      pricecharting_url: input.pricechartingUrl,
+      headline_price:  centsToDecimal(input.headlinePriceCents),
+      loose_price:     centsToDecimal(input.ladderCents.loose),
+      grade_7_price:   centsToDecimal(input.ladderCents.grade_7),
+      grade_8_price:   centsToDecimal(input.ladderCents.grade_8),
+      grade_9_price:   centsToDecimal(input.ladderCents.grade_9),
+      grade_9_5_price: centsToDecimal(input.ladderCents.grade_9_5),
+      psa_10_price:    centsToDecimal(input.ladderCents.psa_10),
+      bgs_10_price:    centsToDecimal(input.ladderCents.bgs_10),
+      cgc_10_price:    centsToDecimal(input.ladderCents.cgc_10),
+      sgc_10_price:    centsToDecimal(input.ladderCents.sgc_10),
       updated_at: new Date().toISOString(),
     }, { onConflict: "identity_id,grading_service,grade" });
-  if (aggError) throw new Error(`graded_market upsert: ${aggError.message}`);
+  if (error) throw new Error(`graded_market upsert: ${error.message}`);
+}
+
+export interface MarketReadResult {
+  headlinePriceCents: number | null;
+  ladderCents: LadderPrices;
+  pricechartingProductId: string | null;
+  pricechartingUrl: string | null;
+  updatedAt: string | null;
+}
+
+function decimalToCents(d: string | number | null): number | null {
+  if (d === null || d === undefined) return null;
+  const n = typeof d === "string" ? Number(d) : d;
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}
+
+export async function readMarketLadder(
+  supabase: SupabaseClient,
+  identityId: string,
+  gradingService: GradingService,
+  grade: string,
+): Promise<MarketReadResult | null> {
+  const { data } = await supabase
+    .from("graded_market")
+    .select(
+      "headline_price, loose_price, grade_7_price, grade_8_price, grade_9_price, " +
+      "grade_9_5_price, psa_10_price, bgs_10_price, cgc_10_price, sgc_10_price, " +
+      "pricecharting_product_id, pricecharting_url, updated_at",
+    )
+    .eq("identity_id", identityId)
+    .eq("grading_service", gradingService)
+    .eq("grade", grade)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    headlinePriceCents: decimalToCents(data.headline_price),
+    ladderCents: {
+      loose:     decimalToCents(data.loose_price),
+      grade_7:   decimalToCents(data.grade_7_price),
+      grade_8:   decimalToCents(data.grade_8_price),
+      grade_9:   decimalToCents(data.grade_9_price),
+      grade_9_5: decimalToCents(data.grade_9_5_price),
+      psa_10:    decimalToCents(data.psa_10_price),
+      bgs_10:    decimalToCents(data.bgs_10_price),
+      cgc_10:    decimalToCents(data.cgc_10_price),
+      sgc_10:    decimalToCents(data.sgc_10_price),
+    },
+    pricechartingProductId: data.pricecharting_product_id ?? null,
+    pricechartingUrl: data.pricecharting_url ?? null,
+    updatedAt: data.updated_at ?? null,
+  };
 }
