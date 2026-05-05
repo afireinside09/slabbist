@@ -44,7 +44,7 @@ nonisolated struct PriceHistoryDTO: Codable, Sendable, Equatable {
 }
 
 private extension KeyedDecodingContainer {
-    func decodeFlexibleDouble(forKey key: Key) throws -> Double {
+    nonisolated func decodeFlexibleDouble(forKey key: Key) throws -> Double {
         if let asDouble = try? decode(Double.self, forKey: key) { return asDouble }
         if let asString = try? decode(String.self, forKey: key),
            let parsed = Double(asString) { return parsed }
@@ -54,7 +54,7 @@ private extension KeyedDecodingContainer {
         )
     }
 
-    func decodeFlexibleDoubleIfPresent(forKey key: Key) throws -> Double? {
+    nonisolated func decodeFlexibleDoubleIfPresent(forKey key: Key) throws -> Double? {
         if try decodeNil(forKey: key) { return nil }
         return try decodeFlexibleDouble(forKey: key)
     }

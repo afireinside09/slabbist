@@ -54,7 +54,7 @@ struct ScanDetailView: View {
         //   2. State is `.fetching` but the in-memory `inFlight` task
         //      from `CompFetchService` was lost when the app was killed,
         //      so the spinner is a ghost with nothing behind it.
-        // Both manifest as "Pulling eBay sold listings…" forever with
+        // Both manifest as "Pulling eBay listings…" forever with
         // no retry CTA — kicking a fresh fetch on appear unblocks them.
         .task(id: scan.id) {
             autoTriggerCompFetchIfNeeded()
@@ -161,7 +161,7 @@ struct ScanDetailView: View {
             kicker: "Fetching",
             symbol: "arrow.triangle.2.circlepath",
             symbolTint: AppColor.gold,
-            title: "Pulling eBay sold listings…",
+            title: "Pulling eBay listings…",
             detail: "This usually takes a couple of seconds. Tap retry if it's stuck.",
             showsProgress: true,
             cta: ("Retry comp fetch", retry)
@@ -176,7 +176,7 @@ struct ScanDetailView: View {
             title: scan.status == .validationFailed ? "Cert lookup failed" : "Validating cert…",
             detail: scan.status == .validationFailed
                 ? "PSA didn't recognize cert \(scan.certNumber). Delete this slab and re-scan if the digits look wrong."
-                : "Once PSA confirms the cert, eBay comps will load automatically.",
+                : "Once PSA confirms the cert, eBay listings will load automatically.",
             showsProgress: scan.status != .validationFailed,
             cta: nil
         )
@@ -184,11 +184,11 @@ struct ScanDetailView: View {
 
     private var noDataState: some View {
         emptyState(
-            kicker: "No comps",
+            kicker: "No listings",
             symbol: "magnifyingglass",
             symbolTint: AppColor.muted,
-            title: "No eBay sales found yet",
-            detail: "This slab hasn't sold on eBay in the lookback window. Try again later, or this might just be a rarely-traded card.",
+            title: "No eBay listings found",
+            detail: "No active listings match this slab right now. Try again later, or this might just be a rarely-traded card.",
             showsProgress: false,
             cta: ("Retry comp fetch", retry)
         )
@@ -284,7 +284,7 @@ struct ScanDetailView: View {
 
     private func listingsSection(snapshot: GradedMarketSnapshot) -> some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
-            KickerLabel("Recent sales · \(snapshot.soldListings.count)")
+            KickerLabel("Active listings · \(snapshot.soldListings.count)")
             SlabCard {
                 VStack(spacing: 0) {
                     let sorted = snapshot.soldListings.sorted(by: { $0.soldAt > $1.soldAt })

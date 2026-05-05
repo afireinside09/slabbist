@@ -15,7 +15,7 @@ final class CertLookupRepository {
         case decoding(String)
     }
 
-    struct Wire: Decodable {
+    nonisolated struct Wire: Decodable {
         let identity_id: String
         let graded_card_id: String
         let grading_service: String

@@ -96,7 +96,7 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable, Hashabl
 private extension KeyedDecodingContainer {
     /// Decodes a Double from either a JSON number or a numeric string
     /// (PostgREST's default for `numeric` types).
-    func decodeFlexibleDouble(forKey key: Key) throws -> Double {
+    nonisolated func decodeFlexibleDouble(forKey key: Key) throws -> Double {
         if let asDouble = try? decode(Double.self, forKey: key) {
             return asDouble
         }

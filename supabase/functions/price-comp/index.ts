@@ -5,9 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import type {
   CacheState, GradingService, OutlierReason, PriceCompRequest, PriceCompResponse, SoldListing,
 } from "./types.ts";
-import { getOAuthToken } from "./ebay/oauth.ts";
-import { callMarketplaceInsights } from "./ebay/marketplace-insights.ts";
+import { callBrowseApi } from "./ebay/browse.ts";
 import { runCascade } from "./ebay/cascade.ts";
+import { normalizeGrade } from "./lib/grade-normalize.ts";
 import { high, low, mean, median } from "./stats/aggregates.ts";
 import { detectOutliers, trimmedMean } from "./stats/outliers.ts";
 import { confidence } from "./stats/confidence.ts";
@@ -112,6 +112,14 @@ Deno.serve(async (req) => {
     return json(400, { error: "missing_fields" });
   }
 
+  // Strip PSA's verbose adjectives ("GEM MT 10" → "10") so the eBay
+  // query reads like a human search, the cache key matches across
+  // grader-specific verbose styles, and `parseGradedTitle`'s validator
+  // (which only ever sees the bare number from listing titles) can
+  // actually agree with us. Used everywhere downstream — only the raw
+  // body value is preserved for the missing-fields guard above.
+  const grade = normalizeGrade(body.grade);
+
   const serviceRole = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false },
   });
@@ -122,7 +130,15 @@ Deno.serve(async (req) => {
   const { data: identity, error: idErr } = await serviceRole
     .from("graded_card_identities").select("*")
     .eq("id", body.graded_card_identity_id).single();
-  if (idErr || !identity) return json(404, { code: "IDENTITY_NOT_FOUND" });
+  if (idErr || !identity) {
+    console.error("price-comp.identity_not_found", {
+      identity_id: body.graded_card_identity_id,
+      grading_service: body.grading_service,
+      grade: grade,
+      pg_error: idErr?.message ?? null,
+    });
+    return json(404, { code: "IDENTITY_NOT_FOUND" });
+  }
 
   // 2. Cache read
   const { data: marketRow } = await serviceRole
@@ -130,7 +146,7 @@ Deno.serve(async (req) => {
     .select("updated_at, sample_window_days")
     .eq("identity_id", body.graded_card_identity_id)
     .eq("grading_service", body.grading_service)
-    .eq("grade", body.grade)
+    .eq("grade", grade)
     .maybeSingle();
 
   const state: CacheState = evaluateFreshness({
@@ -146,7 +162,7 @@ Deno.serve(async (req) => {
       .select("sold_price,sold_at,title,url,source_listing_id")
       .eq("identity_id", body.graded_card_identity_id)
       .eq("grading_service", body.grading_service)
-      .eq("grade", body.grade)
+      .eq("grade", grade)
       .order("sold_at", { ascending: false })
       .limit(10);
     const raw = (sales ?? []).map((s: { sold_price: string | number; sold_at: string; title: string | null; url: string | null; source_listing_id: string | null }) => ({
@@ -164,32 +180,33 @@ Deno.serve(async (req) => {
     await recordScanEvent(serviceRole, {
       identityId: body.graded_card_identity_id,
       gradingService: body.grading_service as GradingService,
-      grade: body.grade,
+      grade: grade,
       storeId: null,
       cacheState: "hit",
     });
     return json(200, response);
   }
 
-  // 4. Miss or stale — live fetch, with stale-fallback on upstream failure
-  let token: string;
-  try {
-    token = await getOAuthToken({
-      appId: env("EBAY_APP_ID"),
-      certId: env("EBAY_CERT_ID"),
-      scope: env("EBAY_OAUTH_SCOPE", "https://api.ebay.com/oauth/api_scope/buy.marketplace.insights"),
-    });
-  } catch (e) {
-    console.error("price-comp.oauth.failed", { message: (e as Error).message });
-    return await serveStaleOrUpstreamDown(serviceRole, body, state === "stale", marketRow?.sample_window_days);
-  }
+  // 4. Miss or stale — live fetch, with stale-fallback on upstream failure.
+  // The Browse API requires an OAuth client-credentials token minted
+  // from app id + cert id, scope `api_scope` (public, no eBay
+  // approval needed). Browse returns ACTIVE listings only — sold
+  // comps are off-limits without Marketplace Insights access. See
+  // ebay/browse.ts for the full caveat.
+  const ebayAppId = env("EBAY_APP_ID");
+  const ebayCertId = env("EBAY_CERT_ID");
 
   let cascade;
   try {
-    cascade = await runCascade(identity as never, body.grading_service as GradingService, body.grade, {
+    cascade = await runCascade(identity as never, body.grading_service as GradingService, grade, {
       minResults,
-      fetchBucket: (q) => callMarketplaceInsights({
-        token, q: q.q, categoryId: q.categoryId, limit: 50,
+      fetchBucket: (q) => callBrowseApi({
+        appId: ebayAppId,
+        certId: ebayCertId,
+        q: q.q,
+        categoryId: q.categoryId,
+        limit: 50,
+        windowDays: q.windowDays,
       }),
     });
   } catch (e) {
@@ -198,10 +215,23 @@ Deno.serve(async (req) => {
   }
 
   if (cascade.listings.length === 0) {
+    console.log("price-comp.no_market_data", {
+      identity_id: body.graded_card_identity_id,
+      grading_service: body.grading_service,
+      grade: grade,
+      // The card metadata used to build cascade queries — surfacing this
+      // makes it obvious when an unusual `set_name` (PSA's brand
+      // surrogate, e.g. "POKEMON GAME") is dragging the broad query
+      // away from real eBay listing titles.
+      card_name: identity.card_name ?? null,
+      card_number: identity.card_number ?? null,
+      set_name: identity.set_name ?? null,
+      year: identity.year ?? null,
+    });
     await recordScanEvent(serviceRole, {
       identityId: body.graded_card_identity_id,
       gradingService: body.grading_service as GradingService,
-      grade: body.grade,
+      grade: grade,
       storeId: null,
       cacheState: state === "miss" ? "miss" : "stale",
     });
@@ -227,7 +257,7 @@ Deno.serve(async (req) => {
     await upsertMarket(serviceRole, {
       identityId: body.graded_card_identity_id,
       gradingService: body.grading_service as GradingService,
-      grade: body.grade,
+      grade: grade,
       listings: enriched,
       aggregates: {
         low_cents: lowCents,
@@ -256,7 +286,7 @@ Deno.serve(async (req) => {
   await recordScanEvent(serviceRole, {
     identityId: body.graded_card_identity_id,
     gradingService: body.grading_service as GradingService,
-    grade: body.grade,
+    grade: grade,
     storeId: null,
     cacheState: state === "miss" ? "miss" : "stale",
   });
@@ -283,7 +313,7 @@ async function serveStaleOrUpstreamDown(
     .select("sold_price,sold_at,title,url,source_listing_id")
     .eq("identity_id", body.graded_card_identity_id)
     .eq("grading_service", body.grading_service)
-    .eq("grade", body.grade)
+    .eq("grade", grade)
     .order("sold_at", { ascending: false })
     .limit(10);
   const raw = (sales ?? []).map((s) => ({

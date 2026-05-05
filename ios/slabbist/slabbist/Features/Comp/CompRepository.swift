@@ -21,7 +21,7 @@ final class CompRepository {
         case decoding(String)
     }
 
-    struct Wire: Decodable {
+    nonisolated struct Wire: Decodable {
         let blended_price_cents: Int64
         let mean_price_cents: Int64
         let trimmed_mean_price_cents: Int64
@@ -40,7 +40,7 @@ final class CompRepository {
         let is_stale_fallback: Bool
     }
 
-    struct WireListing: Decodable {
+    nonisolated struct WireListing: Decodable {
         let sold_price_cents: Int64
         let sold_at: Date
         let title: String

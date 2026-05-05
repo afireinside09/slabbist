@@ -17,7 +17,7 @@ import Foundation
 /// `SUPABASE_PUBLISHABLE_KEY` (both names refer to the same JWT). We
 /// prefer the new name but still honor the legacy one so existing
 /// scheme args / CI configs keep working.
-enum AppEnvironment {
+nonisolated enum AppEnvironment {
     static let supabaseURL: URL = {
         if let raw = lookup("SUPABASE_URL"), let url = URL(string: raw) {
             return url

@@ -47,4 +47,16 @@ describe("buildCascadeQueries", () => {
     const qs = buildCascadeQueries(identity, "PSA", "10");
     assertEquals(qs.every(q => q.categoryId === "183454"), true);
   });
+
+  it("strips -HOLO suffix from PSA-style card names in narrow query", () => {
+    const psaStyle: GradedCardIdentity = { ...identity, card_name: "CHARIZARD-HOLO" };
+    const qs = buildCascadeQueries(psaStyle, "PSA", "10");
+    assertEquals(qs[0].q, `"CHARIZARD 247/191" "PSA 10"`);
+  });
+
+  it("strips -HOLO suffix from PSA-style card names in broad query", () => {
+    const psaStyle: GradedCardIdentity = { ...identity, card_name: "CHARIZARD-HOLO" };
+    const qs = buildCascadeQueries(psaStyle, "PSA", "10");
+    assertEquals(qs[1].q, "CHARIZARD Surging Sparks 247/191 PSA 10");
+  });
 });

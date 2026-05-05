@@ -37,7 +37,7 @@ struct CompCardView: View {
                     .font(SlabFont.serif(size: 40))
                     .tracking(-1)
                     .foregroundStyle(AppColor.text)
-                Text("TRIMMED MEAN · \(snapshot.sampleCount) COMPS")
+                Text("AVG ASK · \(snapshot.sampleCount) LISTINGS")
                     .font(SlabFont.sans(size: 10, weight: .medium))
                     .tracking(1.4)
                     .foregroundStyle(AppColor.dim)
@@ -87,7 +87,7 @@ struct CompCardView: View {
                 .foregroundStyle(AppColor.negative)
             Text(snapshot.isStaleFallback
                  ? "Cached — live data unavailable"
-                 : "Low confidence — \(snapshot.sampleCount) comps")
+                 : "Few listings — \(snapshot.sampleCount) matches")
                 .font(SlabFont.sans(size: 12, weight: .medium))
                 .foregroundStyle(AppColor.negative)
             Spacer()

@@ -93,7 +93,7 @@ struct SlabFinderOverlay: View {
     }
 }
 
-private struct CornerBrackets: Shape {
+private nonisolated struct CornerBrackets: Shape {
     let rect: CGRect
     let color: Color   // unused in path; the View applies stroke. Kept for API symmetry.
     let lineWidth: CGFloat

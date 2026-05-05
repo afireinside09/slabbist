@@ -93,7 +93,7 @@ nonisolated struct MoverEbayListingDTO: Codable, Sendable, Identifiable, Equatab
 }
 
 private extension KeyedDecodingContainer {
-    func decodeFlexibleDouble(forKey key: Key) throws -> Double {
+    nonisolated func decodeFlexibleDouble(forKey key: Key) throws -> Double {
         if let asDouble = try? decode(Double.self, forKey: key) { return asDouble }
         if let asString = try? decode(String.self, forKey: key),
            let parsed = Double(asString) { return parsed }

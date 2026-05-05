@@ -201,7 +201,7 @@ struct LotDetailView: View {
                     Text(formattedCents(snapshot.blendedPriceCents))
                         .font(SlabFont.mono(size: 13, weight: .semibold))
                         .foregroundStyle(AppColor.text)
-                    Text("\(snapshot.sampleCount) sold")
+                    Text("\(snapshot.sampleCount) listed")
                         .font(SlabFont.mono(size: 10))
                         .foregroundStyle(AppColor.dim)
                 }

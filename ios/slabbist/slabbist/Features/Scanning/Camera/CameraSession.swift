@@ -28,7 +28,12 @@ final class CameraSession: NSObject {
     /// Observe to surface a banner / error state in the camera UI.
     private(set) var fault: SessionFault?
 
-    let captureSession = AVCaptureSession()
+    // AVCaptureSession is documented as thread-safe — `startRunning`/
+    // `stopRunning` block for several seconds, so they're called off the
+    // MainActor in `start`/`stop`. The type isn't formally `Sendable`, so
+    // `nonisolated(unsafe)` lets us read it from any actor without losing
+    // the rest of the class's MainActor isolation.
+    nonisolated(unsafe) let captureSession = AVCaptureSession()
 
     private let sampleQueue = DispatchQueue(label: "com.slabbist.camera.samples")
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -112,7 +117,7 @@ final class CameraSession: NSObject {
     private func registerSessionObservers() {
         let center = NotificationCenter.default
         center.addObserver(
-            forName: .AVCaptureSessionRuntimeError,
+            forName: AVCaptureSession.runtimeErrorNotification,
             object: captureSession,
             queue: .main
         ) { [weak self] note in
@@ -125,7 +130,7 @@ final class CameraSession: NSObject {
             }
         }
         center.addObserver(
-            forName: .AVCaptureSessionWasInterrupted,
+            forName: AVCaptureSession.wasInterruptedNotification,
             object: captureSession,
             queue: .main
         ) { [weak self] note in
@@ -138,7 +143,7 @@ final class CameraSession: NSObject {
             }
         }
         center.addObserver(
-            forName: .AVCaptureSessionInterruptionEnded,
+            forName: AVCaptureSession.interruptionEndedNotification,
             object: captureSession,
             queue: .main
         ) { [weak self] _ in
