@@ -301,6 +301,8 @@ All writes use the service-role Supabase client.
 - `supabase/functions/price-comp/lib/grade-normalize.ts` and `graded-title-parse.ts` if no remaining caller (verify in plan; `grade-normalize` is likely still useful for mapping `(grader, grade)` to a tier column key)
 - `supabase/functions/price-comp/__fixtures__/ebay/` (entire directory)
 - `ios/slabbist/slabbist/Core/Models/SoldListingMirror.swift`
+- `scraper/src/graded/ingest/ebay-sold.ts` (writes to the eBay-aggregate columns we are dropping; per scope B it goes with the rest of the comp-path scaffolding) and the corresponding CLI command registration in `scraper/src/cli.ts` (the `runEbaySoldIngest` import + its case in the command switch). Sibling ingests (`pop-reports`, `mover-listings`, the tcgcsv raw ingests) stay.
+- `scraper/tests/graded/ingest/ebay-sold.test.ts` (and any peer fixtures), if present
 
 ### Rewrite
 
@@ -313,7 +315,11 @@ All writes use the service-role Supabase client.
 - `ios/slabbist/slabbist/Features/Comp/CompRepository.swift`
 - `ios/slabbist/slabbist/Features/Comp/CompFetchService.swift` (only `persistSnapshot` + `classify` change)
 - `ios/slabbist/slabbist/Features/Scanning/ScanDetailView.swift` — listings section removed, copy updated
+- `ios/slabbist/slabbist/Features/Lots/LotDetailView.swift` — read sites for `blendedPriceCents` → `headlinePriceCents`; remove "N listed" sample-count line; remove the confidence-percent pill (`snapshot.confidence`). Total of ~5 lines.
 - `ios/slabbist/slabbist/Core/Models/GradedMarketSnapshot.swift` — reshape
+- `ios/slabbist/slabbist/Core/Persistence/ModelContainer.swift` — drop `SoldListingMirror.self` from both schema arrays (production + in-memory)
+- `ios/slabbist/slabbistTests/Features/Comp/CompRepositoryTests.swift` — rewrite assertions against the new payload
+- `ios/slabbist/slabbistTests/Features/Comp/CompFetchServiceTests.swift` — rewrite for new `Decoded` shape; in-flight de-dup test stays
 
 ### Add
 
