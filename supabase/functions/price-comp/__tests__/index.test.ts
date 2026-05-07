@@ -134,7 +134,8 @@ Deno.test("cache miss + no cached id — search, persist, return ladder", async 
     assertEquals(body.cache_hit, false);
     assert(body.price_history.length > 0);
     assertEquals(state.calls.length, 1, "single PPT call");
-    assertEquals(state.calls[0].query.get("search"), "Charizard 4/102 Base Set 1999");
+    // buildSearchQuery strips parens + drops year — keeps card name + number + set.
+    assertEquals(state.calls[0].query.get("search"), "Charizard 4/102 Base Set");
   } finally {
     await mock.close();
   }

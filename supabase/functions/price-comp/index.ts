@@ -29,11 +29,16 @@ function buildSearchQuery(identity: {
   set_name: string;
   year: number | null;
 }): string {
-  const parts: string[] = [identity.card_name];
+  // Strip parenthesized variant qualifiers (e.g.,
+  // "Charizard ex (Special Illustration Rare)" → "Charizard ex"). PPT's
+  // fuzzy search penalizes long noisy queries; the parenthesized suffix
+  // and the year both reliably kill matches in smoke testing. Send the
+  // minimal distinctive bag-of-words: cleaned name + card number + set.
+  const cleanName = identity.card_name.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  const parts: string[] = [cleanName];
   if (identity.card_number) parts.push(identity.card_number);
   parts.push(identity.set_name);
-  if (identity.year !== null) parts.push(String(identity.year));
-  return parts.join(" ");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 function buildResponse(args: {
