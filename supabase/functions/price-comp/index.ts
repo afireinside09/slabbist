@@ -140,12 +140,15 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     card = result.card;
     creditsConsumed = result.creditsConsumed;
   } else {
-    const resolved = await resolveCard(clientOpts, {
-      card_name: identity.card_name,
-      card_number: identity.card_number ?? null,
-      set_name: identity.set_name,
-      year: identity.year ?? null,
-    });
+    const resolved = await resolveCard(
+      { client: clientOpts, supabase },
+      {
+        card_name: identity.card_name,
+        card_number: identity.card_number ?? null,
+        set_name: identity.set_name,
+        year: identity.year ?? null,
+      },
+    );
     console.log("ppt.match.resolve", {
       identity_id: body.graded_card_identity_id,
       attempts: resolved.attemptLog,

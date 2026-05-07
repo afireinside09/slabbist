@@ -3,23 +3,36 @@
 //
 // Multi-tier card resolver for the PPT-backed /price-comp Edge Function.
 //
-// PSA cert set names ("M-P Promo", "SVP Black Star Promo") and card
-// numbers ("050") often disagree with TCGPlayer/PPT canonical strings
-// ("McDonald's Promos 2024", "079"). A single-shot fuzzy search misses
-// almost all of these. This resolver runs up to three cheap (1-credit)
-// candidate searches in fallback order, scores each candidate against
-// the PSA identity, and only pays for the heavy 3-credit full fetch on
-// the chosen card.
+// Tier A — Alias-driven local lookup (NEW):
+//   Map PSA's set_name → tcg_groups.group_id via a curated CSV alias
+//   table, then look up the canonical tcg_products row by
+//   (group_id, card_number, card_name). The product_id IS PPT's
+//   tcgPlayerId, so we hit PPT's /cards endpoint directly with no
+//   fuzzy search at all. Deterministic for any card whose set is in
+//   the alias map AND whose tcg_products row exists.
+//   Cost: 1 Supabase query (free) + 3 PPT credits.
+//
+// Tiers B/C/D — Cheap PPT searches with scoring (FALLBACK):
+//   PSA cert set names ("M-P Promo", "SVP Black Star Promo") and card
+//   numbers ("050") often disagree with TCGPlayer/PPT canonical strings
+//   ("McDonald's Promos 2024", "079"). A single-shot fuzzy search
+//   misses almost all of these. We run up to three cheap (1-credit)
+//   candidate searches in fallback order, score each candidate against
+//   the PSA identity, and only pay for the heavy 3-credit full fetch
+//   on the chosen card.
 //
 // Cost per cold-path resolve:
-//   T1 hit: 1 + 3 = 4 credits
-//   T2 hit: 2 + 3 = 5 credits
-//   T3 hit: 3 + 3 = 6 credits
-//   miss:   3 credits
+//   A hit:  1 Supabase + 3 PPT credits
+//   B hit:  1 + 3 = 4 PPT credits
+//   C hit:  2 + 3 = 5 PPT credits
+//   D hit:  3 + 3 = 6 PPT credits
+//   miss:   3 PPT credits
 
 import type { ClientOptions } from "./client.ts";
 import type { PPTCard } from "./parse.ts";
 import { fetchCard, searchCards, type SearchCardsArgs } from "./cards.ts";
+import { aliasForPsaSet } from "../lib/psa-aliases.ts";
+import { findTcgProductByGroupAndCard } from "../lib/tcg-products.ts";
 
 export interface IdentityForMatch {
   card_name: string;
@@ -76,22 +89,22 @@ export function buildSearchTiers(identity: IdentityForMatch): Array<{ tier: stri
   const name = cleanName(identity.card_name);
   const tiers: Array<{ tier: string; args: SearchCardsArgs }> = [];
 
-  // T1: name + number + set (PSA-cert verbatim concat; works when PPT's
+  // B: name + number + set (PSA-cert verbatim concat; works when PPT's
   // fuzzy index agrees with PSA tokens — the historical happy path).
-  const t1Parts: string[] = [name];
-  if (identity.card_number) t1Parts.push(identity.card_number);
-  t1Parts.push(identity.set_name);
-  const t1Search = t1Parts.join(" ").replace(/\s+/g, " ").trim();
-  tiers.push({ tier: "T1", args: { search: t1Search, limit: 10 } });
+  const bParts: string[] = [name];
+  if (identity.card_number) bParts.push(identity.card_number);
+  bParts.push(identity.set_name);
+  const bSearch = bParts.join(" ").replace(/\s+/g, " ").trim();
+  tiers.push({ tier: "B", args: { search: bSearch, limit: 10 } });
 
-  // T2: name + PPT &set= filter, only if a distinctive set token exists.
+  // C: name + PPT &set= filter, only if a distinctive set token exists.
   const setToken = pickDistinctiveSetToken(identity.set_name);
   if (setToken) {
-    tiers.push({ tier: "T2", args: { search: name, set: setToken, limit: 10 } });
+    tiers.push({ tier: "C", args: { search: name, set: setToken, limit: 10 } });
   }
 
-  // T3: bare name, broader limit (reranked by scoreCard).
-  tiers.push({ tier: "T3", args: { search: name, limit: 20 } });
+  // D: bare name, broader limit (reranked by scoreCard).
+  tiers.push({ tier: "D", args: { search: name, limit: 20 } });
 
   return tiers;
 }
@@ -158,25 +171,66 @@ export interface ResolveResult {
   tierMatched: string | null;
 }
 
+export interface ResolveDeps {
+  client: ClientOptions;
+  /** Supabase client used by Tier A's tcg_products lookup. */
+  supabase: unknown;
+}
+
 /**
- * Walk the search tiers in order. For each tier:
+ * Walk Tier A first (alias → tcg_products → PPT direct fetch); if that
+ * misses, walk the PPT-search tiers B/C/D in order. For each search
+ * tier:
  *   - Run the cheap searchCards() (1 credit).
- *   - For T1: if there's exactly one result, score it and accept on
- *     non-rejection. Otherwise rank+filter like T2/T3.
- *   - For T2/T3: rank all results by scoreCard, pick the highest accepted.
+ *   - For B: if there's exactly one result, score it and accept on
+ *     non-rejection. Otherwise rank+filter like C/D.
+ *   - For C/D: rank all results by scoreCard, pick the highest accepted.
  *   - Once a candidate is chosen, do the heavy fetchCard() by
  *     tcgPlayerId (3 credits) to grab ebay + history.
- * Returns null+attemptLog if nothing across all tiers passes acceptance.
+ * Returns null+attemptLog if nothing passes acceptance across all tiers.
  */
 export async function resolveCard(
-  opts: ClientOptions,
+  deps: ResolveDeps,
   identity: IdentityForMatch,
 ): Promise<ResolveResult> {
-  const tiers = buildSearchTiers(identity);
   const attemptLog: string[] = [];
 
+  // ── Tier A: alias-driven local lookup ─────────────────────────────
+  const alias = aliasForPsaSet(identity.set_name);
+  if (alias) {
+    attemptLog.push(
+      `A: alias hit set='${identity.set_name}' → group_id=${alias.groupId} (${alias.abbreviation ?? "—"})`,
+    );
+    let product = null;
+    try {
+      product = await findTcgProductByGroupAndCard(deps.supabase, {
+        groupId: alias.groupId,
+        cardNumber: identity.card_number,
+        cardName: identity.card_name,
+      });
+    } catch (e) {
+      attemptLog.push(`A: tcg_products query error: ${(e as Error).message}`);
+    }
+    if (product) {
+      attemptLog.push(
+        `A: tcg_products hit product_id=${product.productId} (${product.cardName} #${product.cardNumber})`,
+      );
+      const full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId) });
+      if (full.status === 200 && full.card) {
+        return { card: full.card, attemptLog, tierMatched: "A" };
+      }
+      attemptLog.push(`A: PPT fetchCard miss for tcgPlayerId=${product.productId} (status=${full.status})`);
+    } else {
+      attemptLog.push(`A: tcg_products miss for group_id=${alias.groupId}`);
+    }
+  } else {
+    attemptLog.push(`A: no alias for set='${identity.set_name}'`);
+  }
+
+  // ── Tiers B/C/D: cheap PPT-search fallback ────────────────────────
+  const tiers = buildSearchTiers(identity);
   for (const { tier, args } of tiers) {
-    const res = await searchCards(opts, args);
+    const res = await searchCards(deps.client, args);
     const got = res.cards.length;
     if (res.status !== 200) {
       attemptLog.push(`${tier}: search='${args.search ?? ""}' set='${args.set ?? ""}' status=${res.status}`);
@@ -189,8 +243,8 @@ export async function resolveCard(
     let topScore = 0;
     let topAccept = false;
 
-    if (tier === "T1") {
-      // T1 is high-precision: if PPT returned anything, the first card is
+    if (tier === "B") {
+      // B is high-precision: if PPT returned anything, the first card is
       // usually the canonical match. Score the top hit and accept if it
       // passes scoreCard.accept.
       const first = res.cards[0];
@@ -204,7 +258,7 @@ export async function resolveCard(
         }
       }
     } else {
-      // T2/T3: re-rank, take the highest-scoring acceptable card.
+      // C/D: re-rank, take the highest-scoring acceptable card.
       for (const c of res.cards) {
         const sc = scoreCard(c, identity);
         if (sc.score > topScore) topScore = sc.score;
@@ -219,7 +273,7 @@ export async function resolveCard(
     attemptLog.push(`${tier}: search='${args.search ?? ""}' set='${args.set ?? ""}' got ${got} hits, top score ${topScore} accept=${topAccept}`);
 
     if (chosen && chosen.tcgPlayerId) {
-      const full = await fetchCard(opts, { tcgPlayerId: String(chosen.tcgPlayerId) });
+      const full = await fetchCard(deps.client, { tcgPlayerId: String(chosen.tcgPlayerId) });
       if (full.status === 200 && full.card) {
         return { card: full.card, attemptLog, tierMatched: tier };
       }

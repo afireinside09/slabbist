@@ -58,7 +58,18 @@ interface FakeMarketRow {
   updated_at: string;
 }
 
-function fakeSupabase(state: { identity: FakeIdentity; market: FakeMarketRow | null }) {
+interface FakeTcgProductRow {
+  product_id: number;
+  group_id: number;
+  name: string;
+  card_number: string;
+}
+
+function fakeSupabase(state: {
+  identity: FakeIdentity;
+  market: FakeMarketRow | null;
+  tcgProducts?: FakeTcgProductRow[];
+}) {
   return {
     from(table: string) {
       if (table === "graded_card_identities") {
@@ -86,6 +97,44 @@ function fakeSupabase(state: { identity: FakeIdentity; market: FakeMarketRow | n
             return Promise.resolve({ error: null });
           },
         };
+      }
+      if (table === "tcg_products") {
+        // Tier A's lookup. Default to empty so cold-path tests fall
+        // through to the existing search behavior. Naive emulation of
+        // PostgREST eq + or chain.
+        let filtered = [...(state.tcgProducts ?? [])];
+        const builder: any = {
+          select(_cols: string) { return builder; },
+          eq(col: string, value: unknown) {
+            if (col === "group_id") filtered = filtered.filter((r) => r.group_id === value);
+            return builder;
+          },
+          or(filter: string) {
+            const clauses = filter.split(",");
+            filtered = filtered.filter((r) => {
+              for (const cl of clauses) {
+                const [c, op, ...rest] = cl.split(".");
+                const v = rest.join(".");
+                if (c !== "card_number") continue;
+                if (op === "eq" && r.card_number === v) return true;
+                if (op === "ilike") {
+                  const re = new RegExp("^" + v.replace(/%/g, ".*") + "$", "i");
+                  if (re.test(r.card_number)) return true;
+                }
+              }
+              return false;
+            });
+            return builder;
+          },
+          limit(n: number) {
+            filtered = filtered.slice(0, n);
+            return Promise.resolve({ data: filtered, error: null });
+          },
+          then(resolve: (v: any) => void) {
+            resolve({ data: filtered, error: null });
+          },
+        };
+        return builder;
       }
       throw new Error(`unexpected table ${table}`);
     },
@@ -497,6 +546,60 @@ Deno.test("resolver T2 fallback: T1 misses, ?set= filter resolves on overlap", a
   } finally {
     ac.abort();
     try { await server.finished; } catch {}
+  }
+});
+
+Deno.test("resolver Tier A: alias hit + tcg_products hit → direct PPT fetch, no search", async () => {
+  _resetPauseForTests();
+  const state: MockState = {
+    responses: new Map([
+      ["243172", { status: 200, body: [fullLadder] }],
+    ]),
+    defaultBody: [],
+    calls: [],
+  };
+  const mock = startMock(state);
+  try {
+    const fake = fakeSupabase({
+      identity: {
+        id: "id-A",
+        card_name: "Charizard ex",
+        card_number: "199",
+        set_name: "Scarlet & Violet 151",
+        year: 2023,
+        ppt_tcgplayer_id: null,
+        ppt_url: null,
+      },
+      market: null,
+      // Tier A's tcg_products hit: this group_id (23237 = SV: Scarlet
+      // & Violet 151) is what the alias maps to.
+      tcgProducts: [
+        { product_id: 243172, group_id: 23237, name: "Charizard ex - 199/165", card_number: "199/165" },
+      ],
+    });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-A", grading_service: "PSA", grade: "10" }),
+    });
+    const res = await handle(req, {
+      supabase: fake,
+      pptBaseUrl: mock.url,
+      pptToken: "t",
+      ttlSeconds: 86400,
+      now: () => Date.now(),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 200);
+    assertEquals(body.ppt_tcgplayer_id, "243172");
+    assertEquals(body.headline_price_cents, 18500);
+    // Tier A path: 1 PPT call (the direct fetchCard by tcgPlayerId). No
+    // searchCards calls.
+    assertEquals(state.calls.length, 1, "only the full fetchCard, no PPT search");
+    assertEquals(state.calls[0].query.get("tcgPlayerId"), "243172");
+    assertEquals(state.calls[0].query.get("includeEbay"), "true");
+  } finally {
+    await mock.close();
   }
 });
 
