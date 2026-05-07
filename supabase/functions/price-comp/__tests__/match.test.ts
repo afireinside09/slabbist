@@ -475,6 +475,137 @@ Deno.test("resolveCard: B zero hits → falls to D (C skipped on no distinctive 
   }
 });
 
+// ─── Tier A: EN-then-JP fallback ─────────────────────────────────────
+
+Deno.test("resolveCard: Tier A EN empty → retries JP → returns JP card with resolvedLanguage='japanese'", async () => {
+  _resetPauseForTests();
+  const jpCard = { tcgPlayerId: "649586", name: "Pikachu", cardNumber: "001/SV-P", setName: "SV-P Promotional Cards" };
+  // The mock server distinguishes by language param.
+  const ac = new AbortController();
+  const calls: URLSearchParams[] = [];
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    calls.push(u.searchParams);
+    const lang = u.searchParams.get("language");
+    if (u.searchParams.get("tcgPlayerId") === "649586") {
+      if (lang === "english") {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (lang === "japanese") {
+        return new Response(JSON.stringify([{ ...jpCard, ebay: { salesByGrade: { psa10: { smartMarketPrice: { price: 85.5 } } } } }]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+    }
+    return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+  try {
+    const supabase = fakeSupabaseForTcg([
+      { product_id: 649586, group_id: 22872, name: "Pikachu - 001/SV-P", card_number: "001/SV-P" },
+    ]);
+    const r = await resolveCard(
+      { client: { token: "t", baseUrl: mockUrl, now: () => Date.now() }, supabase },
+      {
+        card_name: "Pikachu",
+        card_number: "001",
+        set_name: "SV-P Promo",
+        year: 2022,
+      },
+    );
+    assertEquals(r.tierMatched, "A");
+    assertEquals(r.card?.tcgPlayerId, "649586");
+    assertEquals(r.resolvedLanguage, "japanese");
+    // EN call + JP call = 2 fetchCard calls
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].get("language"), "english");
+    assertEquals(calls[1].get("language"), "japanese");
+    assert(r.attemptLog.some((line) => line.includes("english empty") && line.includes("retrying japanese")), `expected retry log, got: ${JSON.stringify(r.attemptLog)}`);
+    assert(r.attemptLog.some((line) => line.includes("language=japanese")), `expected hit log with language, got: ${JSON.stringify(r.attemptLog)}`);
+  } finally {
+    ac.abort();
+    try { await server.finished; } catch {}
+  }
+});
+
+Deno.test("resolveCard: Tier A EN returns card → returns it immediately, no JP call, resolvedLanguage='english'", async () => {
+  _resetPauseForTests();
+  const enCard = { tcgPlayerId: "243172", name: "Charizard ex", cardNumber: "199/165", setName: "SV: Scarlet & Violet 151" };
+  const calls: URLSearchParams[] = [];
+  const ac = new AbortController();
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    calls.push(u.searchParams);
+    return new Response(JSON.stringify([{ ...enCard, ebay: { salesByGrade: { psa10: { smartMarketPrice: { price: 100 } } } } }]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+  try {
+    const supabase = fakeSupabaseForTcg([
+      { product_id: 243172, group_id: 23237, name: "Charizard ex - 199/165", card_number: "199/165" },
+    ]);
+    const r = await resolveCard(
+      { client: { token: "t", baseUrl: mockUrl, now: () => Date.now() }, supabase },
+      {
+        card_name: "Charizard ex",
+        card_number: "199",
+        set_name: "Scarlet & Violet 151",
+        year: 2023,
+      },
+    );
+    assertEquals(r.tierMatched, "A");
+    assertEquals(r.card?.tcgPlayerId, "243172");
+    assertEquals(r.resolvedLanguage, "english");
+    // Only 1 fetchCard call (EN hit; no JP needed)
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].get("language"), "english");
+  } finally {
+    ac.abort();
+    try { await server.finished; } catch {}
+  }
+});
+
+Deno.test("resolveCard: Tier A EN AND JP both null → falls through to Tier B", async () => {
+  _resetPauseForTests();
+  // Both language attempts return empty. Resolver should fall to B/C/D.
+  const cardForB = { tcgPlayerId: "888111", name: "Pikachu", cardNumber: "001/SV-P", setName: "SV-P Promotional Cards" };
+  const calls: URLSearchParams[] = [];
+  const ac = new AbortController();
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    calls.push(u.searchParams);
+    // Any tcgPlayerId fetch returns empty; search returns candidate
+    if (u.searchParams.get("tcgPlayerId")) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    // B tier search hits
+    return new Response(JSON.stringify([cardForB]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+  try {
+    const supabase = fakeSupabaseForTcg([
+      { product_id: 649586, group_id: 22872, name: "Pikachu - 001/SV-P", card_number: "001/SV-P" },
+    ]);
+    const r = await resolveCard(
+      { client: { token: "t", baseUrl: mockUrl, now: () => Date.now() }, supabase },
+      {
+        card_name: "Pikachu (Pre-Order Promo)",
+        card_number: "001",
+        set_name: "SV-P Promo",
+        year: 2022,
+      },
+    );
+    // EN + JP both empty → both logged → falls through to B/C/D
+    // Tier A should NOT return a card
+    assert(r.tierMatched !== "A" || r.card === null, "Tier A should have missed since EN+JP both null");
+    // We should see exactly 2 tcgPlayerId calls (EN + JP) before the search calls
+    const tcgCalls = calls.filter((q) => q.get("tcgPlayerId") === "649586");
+    assertEquals(tcgCalls.length, 2, "expected exactly 2 tcgPlayerId calls (EN + JP)");
+    assertEquals(tcgCalls[0].get("language"), "english");
+    assertEquals(tcgCalls[1].get("language"), "japanese");
+  } finally {
+    ac.abort();
+    try { await server.finished; } catch {}
+  }
+});
+
 Deno.test("resolveCard: no tier matches → returns null with attempt log", async () => {
   _resetPauseForTests();
   const state: MockState = {

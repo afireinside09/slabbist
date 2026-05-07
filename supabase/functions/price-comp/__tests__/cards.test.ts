@@ -218,3 +218,95 @@ Deno.test("searchCards: 5xx propagates, cards = []", async () => {
     await srv.close();
   }
 });
+
+// ─── language parameter tests ────────────────────────────────────────
+
+Deno.test("fetchCard: language=japanese sends &language=japanese", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await fetchCard({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { tcgPlayerId: "243172", language: "japanese" });
+    assertEquals(receivedQuery?.get("language"), "japanese");
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("fetchCard: language=english sends &language=english", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await fetchCard({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { tcgPlayerId: "243172", language: "english" });
+    assertEquals(receivedQuery?.get("language"), "english");
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("fetchCard: no language param omits &language= entirely (preserves PPT default)", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await fetchCard({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { tcgPlayerId: "243172" });
+    assertEquals(receivedQuery?.get("language"), null);
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("searchCards: language=japanese sends &language=japanese", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await searchCards({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { search: "Pikachu", language: "japanese" });
+    assertEquals(receivedQuery?.get("language"), "japanese");
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("searchCards: language=english sends &language=english", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await searchCards({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { search: "Pikachu", language: "english" });
+    assertEquals(receivedQuery?.get("language"), "english");
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("searchCards: no language param omits &language= entirely", async () => {
+  let receivedQuery: URLSearchParams | null = null;
+  const srv = startServer((req) => {
+    receivedQuery = new URL(req.url).searchParams;
+    return new Response(JSON.stringify([fullLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  try {
+    _resetPauseForTests();
+    await searchCards({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { search: "Pikachu" });
+    assertEquals(receivedQuery?.get("language"), null);
+  } finally {
+    await srv.close();
+  }
+});

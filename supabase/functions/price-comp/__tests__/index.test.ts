@@ -607,6 +607,111 @@ Deno.test("resolver Tier A: alias hit + tcg_products hit → direct PPT fetch, n
   }
 });
 
+// ─── warm-path EN-then-JP retry ──────────────────────────────────────
+
+Deno.test("warm path: EN returns null, JP returns card → response built from JP data", async () => {
+  _resetPauseForTests();
+  const calls: URLSearchParams[] = [];
+  const jpLadder = { ...fullLadder, tcgPlayerId: "649586" };
+  const ac = new AbortController();
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    calls.push(u.searchParams);
+    const lang = u.searchParams.get("language");
+    if (lang === "english") {
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    // japanese returns the card
+    return new Response(JSON.stringify([jpLadder]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+  try {
+    const fake = fakeSupabase({
+      identity: {
+        id: "id-jp",
+        card_name: "Pikachu",
+        card_number: "001",
+        set_name: "SV-P Promo",
+        year: 2022,
+        ppt_tcgplayer_id: "649586",
+        ppt_url: null,
+      },
+      market: null,
+    });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-jp", grading_service: "PSA", grade: "10" }),
+    });
+    const res = await handle(req, {
+      supabase: fake,
+      pptBaseUrl: mockUrl,
+      pptToken: "t",
+      ttlSeconds: 86400,
+      now: () => Date.now(),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 200);
+    assertEquals(body.ppt_tcgplayer_id, "649586");
+    // EN call + JP call = 2 PPT calls
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].get("language"), "english");
+    assertEquals(calls[1].get("language"), "japanese");
+  } finally {
+    ac.abort();
+    try { await server.finished; } catch {}
+  }
+});
+
+Deno.test("warm path: EN AND JP both null → identity ppt_tcgplayer_id cleared, returns NO_MARKET_DATA", async () => {
+  _resetPauseForTests();
+  const calls: URLSearchParams[] = [];
+  const ac = new AbortController();
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    calls.push(u.searchParams);
+    return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+  try {
+    const identity = {
+      id: "id-jp2",
+      card_name: "Pikachu",
+      card_number: "001",
+      set_name: "SV-P Promo",
+      year: 2022,
+      ppt_tcgplayer_id: "649586",
+      ppt_url: "https://www.pokemonpricetracker.com/card/pikachu",
+    };
+    const fake = fakeSupabase({ identity, market: null });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-jp2", grading_service: "PSA", grade: "10" }),
+    });
+    const res = await handle(req, {
+      supabase: fake,
+      pptBaseUrl: mockUrl,
+      pptToken: "t",
+      ttlSeconds: 86400,
+      now: () => Date.now(),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 404);
+    assertEquals(body.code, "NO_MARKET_DATA");
+    // Both languages tried
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].get("language"), "english");
+    assertEquals(calls[1].get("language"), "japanese");
+    // Cached id cleared
+    assertEquals(identity.ppt_tcgplayer_id, null);
+    assertEquals(identity.ppt_url, null);
+  } finally {
+    ac.abort();
+    try { await server.finished; } catch {}
+  }
+});
+
 Deno.test("resolver: null card_number → T1 query has no number", async () => {
   _resetPauseForTests();
   const matchCard = { tcgPlayerId: "243172", name: "Mew", cardNumber: "151", setName: "Promo" };
