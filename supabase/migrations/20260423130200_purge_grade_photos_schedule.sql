@@ -2,18 +2,25 @@
 -- Uses pg_net to issue the HTTP request. The shared secret is stored
 -- in Supabase Vault and referenced by name.
 
--- Ensure pg_net is enabled (no-op if already installed).
+-- Ensure required extensions are enabled (no-op if already installed).
 create extension if not exists pg_net;
+create extension if not exists pg_cron;
 
 -- Store the purge secret in Vault. Replace the placeholder via
 --   select vault.create_secret('<actual-secret>', 'purge_grade_photos_secret');
 -- before scheduling. The migration intentionally inserts a dummy so
 -- a missing-secret state is loud, not silent.
-select vault.create_secret(
-  'REPLACE_ME_BEFORE_RUNNING_CRON',
-  'purge_grade_photos_secret'
-)
-on conflict (name) do nothing;
+do $$
+begin
+  if not exists (
+    select 1 from vault.secrets where name = 'purge_grade_photos_secret'
+  ) then
+    perform vault.create_secret(
+      'REPLACE_ME_BEFORE_RUNNING_CRON',
+      'purge_grade_photos_secret'
+    );
+  end if;
+end $$;
 
 select cron.schedule(
   'grade-photos-daily-purge',
