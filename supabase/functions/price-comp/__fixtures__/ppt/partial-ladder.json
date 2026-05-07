@@ -1,0 +1,18 @@
+{
+  "tcgPlayerId": "999999",
+  "name": "Obscure Card",
+  "setName": "Vintage",
+  "cardNumber": "999/999",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/999999",
+  "prices": { "market": 5.00 },
+  "ebay": {
+    "salesByGrade": {
+      "ungraded": { "count": 12, "smartMarketPrice": { "price": 5.00, "confidence": "high" } },
+      "psa9":     { "count": 3,  "smartMarketPrice": { "price": 42.00, "confidence": "low" } },
+      "psa10":    { "count": 2,  "smartMarketPrice": { "price": 180.00, "confidence": "low" } }
+    },
+    "priceHistory": {
+      "psa10": {}
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "tcgPlayerId": "111",
+  "name": "Untraded Card",
+  "setName": "Test",
+  "cardNumber": "1/1",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/111",
+  "prices": {},
+  "ebay": { "salesByGrade": {}, "priceHistory": {} }
+}

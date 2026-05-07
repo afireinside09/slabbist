@@ -1,0 +1,34 @@
+{
+  "tcgPlayerId": "243172",
+  "name": "Charizard",
+  "setName": "Base Set",
+  "cardNumber": "4/102",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/243172",
+  "prices": { "market": 4.00 },
+  "ebay": {
+    "salesByGrade": {
+      "ungraded": { "count": 50, "smartMarketPrice": { "price": 4.00, "confidence": "high" } },
+      "psa7":     { "count": 20, "smartMarketPrice": { "price": 24.00, "confidence": "medium" } },
+      "psa8":     { "count": 15, "smartMarketPrice": { "price": 34.00, "confidence": "medium" } },
+      "psa9":     { "count": 10, "smartMarketPrice": { "price": 68.00, "confidence": "medium" } },
+      "psa9_5":   { "count": 5,  "smartMarketPrice": { "price": 112.00, "confidence": "low" } },
+      "psa10":    { "count": 12, "smartMarketPrice": { "price": 185.00, "confidence": "high" } },
+      "bgs10":    { "count": 4,  "smartMarketPrice": { "price": 215.00, "confidence": "low" } },
+      "cgc10":    { "count": 6,  "smartMarketPrice": { "price": 168.00, "confidence": "medium" } },
+      "sgc10":    { "count": 3,  "smartMarketPrice": { "price": 165.00, "confidence": "low" } }
+    },
+    "priceHistory": {
+      "psa10": {
+        "2025-11-08": { "average": 162.00, "count": 1 },
+        "2025-11-15": { "average": 168.50, "count": 2 },
+        "2025-11-22": { "average": 175.00, "count": 1 },
+        "2025-12-01": { "average": 180.00, "count": 1 },
+        "2026-05-01": { "average": 185.00, "count": 1 }
+      },
+      "psa9": {
+        "2025-11-08": { "average": 60.00, "count": 1 },
+        "2026-05-01": { "average": 68.00, "count": 1 }
+      }
+    }
+  }
+}
