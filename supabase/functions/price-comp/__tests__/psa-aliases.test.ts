@@ -10,10 +10,11 @@ Deno.test("aliasForPsaSet: 'Base Set' returns group_id 604", () => {
   assertEquals(a?.confidence, "medium");
 });
 
-Deno.test("aliasForPsaSet: 'SV-P Promo' maps to SV: Scarlet & Violet Promo Cards (22872)", () => {
+Deno.test("aliasForPsaSet: 'SV-P Promo' maps to SV: Scarlet & Violet Promo Cards (22872) with alt 23779", () => {
   const a = aliasForPsaSet("SV-P Promo");
   assertEquals(a?.groupId, 22872);
   assertEquals(a?.abbreviation, "SVP");
+  assertEquals(a?.altGroupId, 23779);
 });
 
 Deno.test("aliasForPsaSet: 'Terastal Festival ex' maps to SV8a Terastal Fest ex (23909)", () => {

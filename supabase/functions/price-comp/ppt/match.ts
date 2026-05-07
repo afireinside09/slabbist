@@ -196,32 +196,47 @@ export async function resolveCard(
   const attemptLog: string[] = [];
 
   // ── Tier A: alias-driven local lookup ─────────────────────────────
+  // Walks the primary group_id first, and if that misses (either no
+  // tcg_products row OR PPT has no English-language card with that
+  // tcgPlayerId), retries against the CSV's alt_2_id. PSA set names
+  // commonly span an English+Japanese TCGPlayer pair (e.g. PSA's
+  // "SV-P Promo" covers both 22872 and 23779), so falling back to the
+  // alt buys real coverage.
   const alias = aliasForPsaSet(identity.set_name);
   if (alias) {
     attemptLog.push(
       `A: alias hit set='${identity.set_name}' → group_id=${alias.groupId} (${alias.abbreviation ?? "—"})`,
     );
-    let product = null;
-    try {
-      product = await findTcgProductByGroupAndCard(deps.supabase, {
-        groupId: alias.groupId,
-        cardNumber: identity.card_number,
-        cardName: identity.card_name,
-      });
-    } catch (e) {
-      attemptLog.push(`A: tcg_products query error: ${(e as Error).message}`);
+    const groupsToTry: Array<{ id: number; label: string }> = [
+      { id: alias.groupId, label: "primary" },
+    ];
+    if (alias.altGroupId && alias.altGroupId !== alias.groupId) {
+      groupsToTry.push({ id: alias.altGroupId, label: "alt" });
     }
-    if (product) {
-      attemptLog.push(
-        `A: tcg_products hit product_id=${product.productId} (${product.cardName} #${product.cardNumber})`,
-      );
-      const full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId) });
-      if (full.status === 200 && full.card) {
-        return { card: full.card, attemptLog, tierMatched: "A" };
+    for (const g of groupsToTry) {
+      let product = null;
+      try {
+        product = await findTcgProductByGroupAndCard(deps.supabase, {
+          groupId: g.id,
+          cardNumber: identity.card_number,
+          cardName: identity.card_name,
+        });
+      } catch (e) {
+        attemptLog.push(`A[${g.label}=${g.id}]: tcg_products query error: ${(e as Error).message}`);
+        continue;
       }
-      attemptLog.push(`A: PPT fetchCard miss for tcgPlayerId=${product.productId} (status=${full.status})`);
-    } else {
-      attemptLog.push(`A: tcg_products miss for group_id=${alias.groupId}`);
+      if (product) {
+        attemptLog.push(
+          `A[${g.label}=${g.id}]: tcg_products hit product_id=${product.productId} (${product.cardName} #${product.cardNumber})`,
+        );
+        const full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId) });
+        if (full.status === 200 && full.card) {
+          return { card: full.card, attemptLog, tierMatched: "A" };
+        }
+        attemptLog.push(`A[${g.label}=${g.id}]: PPT fetchCard miss for tcgPlayerId=${product.productId} (status=${full.status})`);
+      } else {
+        attemptLog.push(`A[${g.label}=${g.id}]: tcg_products miss`);
+      }
     }
   } else {
     attemptLog.push(`A: no alias for set='${identity.set_name}'`);

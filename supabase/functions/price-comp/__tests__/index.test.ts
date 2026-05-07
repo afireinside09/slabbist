@@ -337,6 +337,10 @@ Deno.test("zero search hits — 404 PRODUCT_NOT_RESOLVED, no persistence", async
     const body = await res.json();
     assertEquals(res.status, 404);
     assertEquals(body.code, "PRODUCT_NOT_RESOLVED");
+    // Resolver attempt log surfaced for debugging — at least one tier
+    // line per attempted tier (A no-alias + B + D = 3 lines minimum).
+    assert(Array.isArray(body.attempt_log));
+    assert(body.attempt_log.length >= 3, `expected attempt_log >= 3 lines, got ${body.attempt_log.length}`);
   } finally {
     await mock.close();
   }

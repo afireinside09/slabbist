@@ -155,7 +155,11 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
       tier: resolved.tierMatched,
     });
     if (!resolved.card) {
-      return json(404, { code: "PRODUCT_NOT_RESOLVED" });
+      // Surface attemptLog in 404 body — cheap (~1KB) and worth its
+      // weight: lets the iOS / smoke harness diagnose tier misses
+      // without round-tripping through edge logs. We only emit this on
+      // failure paths, so it's never on the happy-path payload.
+      return json(404, { code: "PRODUCT_NOT_RESOLVED", attempt_log: resolved.attemptLog });
     }
     card = resolved.card;
     resolverTier = resolved.tierMatched;

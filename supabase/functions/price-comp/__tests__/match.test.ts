@@ -300,6 +300,45 @@ Deno.test("resolveCard: Tier A — alias hits + tcg_products hits → returns PP
   }
 });
 
+Deno.test("resolveCard: Tier A — primary group misses, alt group hits → returns alt's product", async () => {
+  _resetPauseForTests();
+  // SV-P Promo aliases to primary 22872 (English) with alt 23779 (Japanese).
+  // English group has no #001 Pikachu; Japanese has product 587758.
+  const fullCard = { tcgPlayerId: "587758", name: "Pikachu - 001/SV-P", cardNumber: "001/SV-P", setName: "SV-P Promotional Cards" };
+  const state: MockState = {
+    responses: new Map([
+      ["tcgPlayerId:587758", { status: 200, body: [{ ...fullCard, ebay: {} }] }],
+    ]),
+    default: { status: 200, body: [] },
+    calls: [],
+  };
+  const mock = startMock(state);
+  try {
+    const supabase = fakeSupabaseForTcg([
+      // Group 22872 has nothing matching #001 — only #085 cards. The OR
+      // filter (card_number variants of "001") will return zero rows.
+      { product_id: 518861, group_id: 22872, name: "Pikachu with Grey Felt Hat", card_number: "085" },
+      // alt group 23779 has it.
+      { product_id: 587758, group_id: 23779, name: "Pikachu - 001/SV-P", card_number: "001/SV-P" },
+    ]);
+    const r = await resolveCard(
+      { client: { token: "t", baseUrl: mock.url, now: () => Date.now() }, supabase },
+      {
+        card_name: "Pikachu (Pre-Order Promo)",
+        card_number: "001",
+        set_name: "SV-P Promo",
+        year: 2022,
+      },
+    );
+    assertEquals(r.tierMatched, "A");
+    assertEquals(r.card?.tcgPlayerId, "587758");
+    assert(r.attemptLog.some((line) => line.includes("A[primary=22872]: tcg_products miss")), "expected primary miss log");
+    assert(r.attemptLog.some((line) => line.includes("A[alt=23779]: tcg_products hit product_id=587758")), "expected alt hit log");
+  } finally {
+    await mock.close();
+  }
+});
+
 Deno.test("resolveCard: Tier A — alias hits but tcg_products misses → falls through to B", async () => {
   _resetPauseForTests();
   // B-tier match path: search returns the canonical card.
