@@ -3,12 +3,11 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GradingService, PriceCompRequest, PriceCompResponse, CacheState } from "./types.ts";
-import type { LadderPrices, PCProductRow } from "./pricecharting/parse.ts";
-import { extractLadder, pickTier, productUrl, ladderHasAnyPrice } from "./pricecharting/parse.ts";
-import { searchProducts } from "./pricecharting/search.ts";
-import { getProduct } from "./pricecharting/product.ts";
+import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, priceHistoryForTier, type LadderPrices, type PriceHistoryPoint } from "./ppt/parse.ts";
+import { gradeKeyFor } from "./lib/grade-key.ts";
+import { fetchCard } from "./ppt/cards.ts";
 import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
-import { persistIdentityProductId, clearIdentityProductId } from "./persistence/identity-product-id.ts";
+import { persistIdentityPPTId, clearIdentityPPTId } from "./persistence/identity-product-id.ts";
 import { evaluateFreshness } from "./cache/freshness.ts";
 
 function json(status: number, body: unknown): Response {
@@ -24,21 +23,14 @@ function env(name: string, fallback?: string): string {
   throw new Error(`missing env: ${name}`);
 }
 
-function ladderToCents(ladder: LadderPrices): LadderPrices {
-  // ladder is already in pennies (PriceCharting native unit) — pass through.
-  // The function name is for clarity at the call site; no transform needed.
-  return ladder;
-}
-
 function buildSearchQuery(identity: {
   card_name: string;
   card_number: string | null;
   set_name: string;
   year: number | null;
 }): string {
-  const parts: string[] = [];
-  parts.push(`"${identity.card_name}"`);
-  if (identity.card_number) parts.push(`"${identity.card_number}"`);
+  const parts: string[] = [identity.card_name];
+  if (identity.card_number) parts.push(identity.card_number);
   parts.push(identity.set_name);
   if (identity.year !== null) parts.push(String(identity.year));
   return parts.join(" ");
@@ -49,8 +41,9 @@ function buildResponse(args: {
   headlineCents: number | null;
   service: GradingService;
   grade: string;
-  productId: string;
-  productUrl: string;
+  priceHistory: PriceHistoryPoint[];
+  tcgPlayerId: string;
+  pptUrl: string;
   cacheHit: boolean;
   isStaleFallback: boolean;
 }): PriceCompResponse {
@@ -58,17 +51,18 @@ function buildResponse(args: {
     headline_price_cents: args.headlineCents,
     grading_service: args.service,
     grade: args.grade,
-    loose_price_cents:     args.ladderCents.loose,
-    grade_7_price_cents:   args.ladderCents.grade_7,
-    grade_8_price_cents:   args.ladderCents.grade_8,
-    grade_9_price_cents:   args.ladderCents.grade_9,
-    grade_9_5_price_cents: args.ladderCents.grade_9_5,
-    psa_10_price_cents:    args.ladderCents.psa_10,
-    bgs_10_price_cents:    args.ladderCents.bgs_10,
-    cgc_10_price_cents:    args.ladderCents.cgc_10,
-    sgc_10_price_cents:    args.ladderCents.sgc_10,
-    pricecharting_product_id: args.productId,
-    pricecharting_url: args.productUrl,
+    loose_price_cents:    args.ladderCents.loose,
+    psa_7_price_cents:    args.ladderCents.psa_7,
+    psa_8_price_cents:    args.ladderCents.psa_8,
+    psa_9_price_cents:    args.ladderCents.psa_9,
+    psa_9_5_price_cents:  args.ladderCents.psa_9_5,
+    psa_10_price_cents:   args.ladderCents.psa_10,
+    bgs_10_price_cents:   args.ladderCents.bgs_10,
+    cgc_10_price_cents:   args.ladderCents.cgc_10,
+    sgc_10_price_cents:   args.ladderCents.sgc_10,
+    price_history: args.priceHistory,
+    ppt_tcgplayer_id: args.tcgPlayerId,
+    ppt_url: args.pptUrl,
     fetched_at: new Date().toISOString(),
     cache_hit: args.cacheHit,
     is_stale_fallback: args.isStaleFallback,
@@ -77,8 +71,8 @@ function buildResponse(args: {
 
 export interface HandleDeps {
   supabase: SupabaseClient | unknown;
-  pricechartingBaseUrl: string;
-  pricechartingToken: string;
+  pptBaseUrl: string;
+  pptToken: string;
   ttlSeconds: number;
   now: () => number;
 }
@@ -117,80 +111,69 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
 
   if (state === "hit" && cached) {
     return json(200, buildResponse({
-      ladderCents: ladderToCents(cached.ladderCents),
+      ladderCents: cached.ladderCents,
       headlineCents: cached.headlinePriceCents,
       service: body.grading_service,
       grade: body.grade,
-      productId: cached.pricechartingProductId ?? identity.pricecharting_product_id ?? "",
-      productUrl: cached.pricechartingUrl ?? identity.pricecharting_url ?? "",
+      priceHistory: cached.priceHistory,
+      tcgPlayerId: cached.pptTCGPlayerId ?? identity.ppt_tcgplayer_id ?? "",
+      pptUrl: cached.pptUrl ?? identity.ppt_url ?? "",
       cacheHit: true,
       isStaleFallback: false,
     }));
   }
 
-  // 3. Resolve PriceCharting product id (hybrid)
-  const clientOpts = {
-    token: deps.pricechartingToken,
-    baseUrl: deps.pricechartingBaseUrl,
-    now: deps.now,
-  };
+  // 3. Live fetch — single call
+  const clientOpts = { token: deps.pptToken, baseUrl: deps.pptBaseUrl, now: deps.now };
+  const tcgPlayerId = identity.ppt_tcgplayer_id as string | null;
+  const fetchArgs = tcgPlayerId
+    ? { tcgPlayerId }
+    : { search: buildSearchQuery(identity) };
+  const result = await fetchCard(clientOpts, fetchArgs);
 
-  let productId = identity.pricecharting_product_id as string | null;
-  if (!productId) {
-    const q = buildSearchQuery(identity);
-    const search = await searchProducts(clientOpts, q);
-    if (search.status >= 500) {
-      return await staleOrUpstreamDown(cached, body, "5xx_search");
-    }
-    if (search.status === 401 || search.status === 403) {
-      console.error("pc.auth_invalid", { phase: "search" });
-      return json(502, { code: "AUTH_INVALID" });
-    }
-    if (search.products.length === 0) {
-      console.log("pc.match.zero_hits", { q });
-      return json(404, { code: "PRODUCT_NOT_RESOLVED" });
-    }
-    const top = search.products[0];
-    productId = String(top.id ?? "");
-    if (!productId) return json(404, { code: "PRODUCT_NOT_RESOLVED" });
-    const url = productUrl(top);
-    try {
-      await persistIdentityProductId(supabase, body.graded_card_identity_id, productId, url);
-      console.log("pc.match.first_resolved", { identity_id: body.graded_card_identity_id, product_id: productId });
-    } catch (e) {
-      console.error("pc.persist.identity_failed", { message: (e as Error).message });
-    }
-  }
-
-  // 4. Live fetch product
-  const product = await getProduct(clientOpts, productId);
-  if (product.status === 401 || product.status === 403) {
-    console.error("pc.auth_invalid", { phase: "product" });
+  if (result.status === 401 || result.status === 403) {
+    console.error("ppt.auth_invalid", { phase: tcgPlayerId ? "tcgPlayerId" : "search" });
     return json(502, { code: "AUTH_INVALID" });
   }
-  if (product.status === 404) {
-    // Cached id pointing at a deleted product. Clear it so the next scan
-    // re-runs search.
-    if (identity.pricecharting_product_id) {
-      try { await clearIdentityProductId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+  if (result.status === 429 || result.status >= 500) {
+    return await staleOrUpstreamDown(cached, body, `${result.status}`);
+  }
+  if (!result.card) {
+    if (tcgPlayerId) {
+      // Cached id refers to a deleted card. Clear it so the next scan re-runs search.
+      try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+      return json(404, { code: "NO_MARKET_DATA" });
     }
-    return json(404, { code: "NO_MARKET_DATA" });
-  }
-  if (product.status === 429 || product.status >= 500) {
-    return await staleOrUpstreamDown(cached, body, `${product.status}_product`);
-  }
-  if (!product.product) {
-    return json(404, { code: "NO_MARKET_DATA" });
+    console.log("ppt.match.zero_hits", { search: (fetchArgs as { search: string }).search });
+    return json(404, { code: "PRODUCT_NOT_RESOLVED" });
   }
 
-  const row: PCProductRow = product.product;
-  const ladder = extractLadder(row);
+  const card = result.card;
+  const ladder = extractLadder(card);
+  // Sparkline tracks the requested tier's history (e.g., the PSA 10 series
+  // when the user scanned a PSA 10). Falls back to PSA 10 history when the
+  // requested grader is unsupported (TAG, sub-PSA-7) so the card still
+  // shows a meaningful trend line. Empty / missing → empty array.
+  const requestedTierKey = gradeKeyFor(body.grading_service, body.grade);
+  const historyTierKey = requestedTierKey ?? "psa_10";
+  const history = parsePriceHistory(priceHistoryForTier(card, historyTierKey));
   if (!ladderHasAnyPrice(ladder)) {
-    console.log("pc.product.no_prices", { product_id: productId });
+    console.log("ppt.product.no_prices", { tcgPlayerId: card.tcgPlayerId });
     return json(404, { code: "NO_MARKET_DATA" });
   }
-  const headlineCents = pickTier(row, body.grading_service, body.grade);
-  const url = identity.pricecharting_url ?? productUrl(row);
+  const headlineCents = pickTier(card, body.grading_service, body.grade);
+  const resolvedTCGPlayerId = String(card.tcgPlayerId ?? tcgPlayerId ?? "");
+  const url = identity.ppt_url ?? productUrl(card);
+
+  // First-time match — persist tcgPlayerId on identity
+  if (!tcgPlayerId && resolvedTCGPlayerId) {
+    try {
+      await persistIdentityPPTId(supabase, body.graded_card_identity_id, resolvedTCGPlayerId, url);
+      console.log("ppt.match.first_resolved", { identity_id: body.graded_card_identity_id, tcgPlayerId: resolvedTCGPlayerId });
+    } catch (e) {
+      console.error("ppt.persist.identity_failed", { message: (e as Error).message });
+    }
+  }
 
   try {
     await upsertMarketLadder(supabase, {
@@ -199,18 +182,22 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
       grade: body.grade,
       headlinePriceCents: headlineCents,
       ladderCents: ladder,
-      pricechartingProductId: productId,
-      pricechartingUrl: url,
+      priceHistory: history,
+      pptTCGPlayerId: resolvedTCGPlayerId,
+      pptUrl: url,
     });
   } catch (e) {
-    console.error("pc.persist.market_failed", { message: (e as Error).message });
+    console.error("ppt.persist.market_failed", { message: (e as Error).message });
   }
 
   console.log("price-comp.live", {
     identity_id: body.graded_card_identity_id,
-    product_id: productId,
+    tcgPlayerId: resolvedTCGPlayerId,
     cache_state: state,
+    matched: tcgPlayerId ? "cached_id" : "searched",
     headline_present: headlineCents !== null,
+    history_points: history.length,
+    credits_consumed: result.creditsConsumed ?? null,
   });
 
   return json(200, buildResponse({
@@ -218,8 +205,9 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     headlineCents,
     service: body.grading_service,
     grade: body.grade,
-    productId,
-    productUrl: url,
+    priceHistory: history,
+    tcgPlayerId: resolvedTCGPlayerId,
+    pptUrl: url,
     cacheHit: false,
     isStaleFallback: false,
   }));
@@ -230,30 +218,30 @@ async function staleOrUpstreamDown(
   body: PriceCompRequest,
   marker: string,
 ): Promise<Response> {
-  console.error("pc.upstream_5xx", { marker });
+  console.error("ppt.upstream_5xx", { marker });
   if (!cached) return json(503, { code: "UPSTREAM_UNAVAILABLE" });
   return json(200, buildResponse({
     ladderCents: cached.ladderCents,
     headlineCents: cached.headlinePriceCents,
     service: body.grading_service,
     grade: body.grade,
-    productId: cached.pricechartingProductId ?? "",
-    productUrl: cached.pricechartingUrl ?? "",
+    priceHistory: cached.priceHistory,
+    tcgPlayerId: cached.pptTCGPlayerId ?? "",
+    pptUrl: cached.pptUrl ?? "",
     cacheHit: true,
     isStaleFallback: true,
   }));
 }
 
-// Production entrypoint. Tests import `handle` directly with injected deps.
 Deno.serve(async (req) => {
   const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false },
   });
   return await handle(req, {
     supabase,
-    pricechartingBaseUrl: "https://www.pricecharting.com",
-    pricechartingToken: env("PRICECHARTING_API_TOKEN"),
-    ttlSeconds: Number(env("PRICECHARTING_FRESHNESS_TTL_SECONDS", "86400")),
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: env("POKEMONPRICETRACKER_API_TOKEN"),
+    ttlSeconds: Number(env("POKEMONPRICETRACKER_FRESHNESS_TTL_SECONDS", "86400")),
     now: () => Date.now(),
   });
 });
