@@ -163,22 +163,30 @@ final class CompFetchService {
         grade: String,
         context: ModelContext
     ) {
+        let historyJSON: String? = {
+            guard !decoded.priceHistory.isEmpty else { return nil }
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            guard let data = try? encoder.encode(decoded.priceHistory) else { return nil }
+            return String(data: data, encoding: .utf8)
+        }()
         let snapshot = GradedMarketSnapshot(
             identityId: identityId,
             gradingService: service,
             grade: grade,
             headlinePriceCents: decoded.headlinePriceCents,
             loosePriceCents: decoded.loosePriceCents,
-            grade7PriceCents: decoded.grade7PriceCents,
-            grade8PriceCents: decoded.grade8PriceCents,
-            grade9PriceCents: decoded.grade9PriceCents,
-            grade9_5PriceCents: decoded.grade9_5PriceCents,
+            psa7PriceCents: decoded.psa7PriceCents,
+            psa8PriceCents: decoded.psa8PriceCents,
+            psa9PriceCents: decoded.psa9PriceCents,
+            psa9_5PriceCents: decoded.psa9_5PriceCents,
             psa10PriceCents: decoded.psa10PriceCents,
             bgs10PriceCents: decoded.bgs10PriceCents,
             cgc10PriceCents: decoded.cgc10PriceCents,
             sgc10PriceCents: decoded.sgc10PriceCents,
-            pricechartingProductId: decoded.pricechartingProductId,
-            pricechartingURL: decoded.pricechartingURL,
+            pptTCGPlayerId: decoded.pptTCGPlayerId,
+            pptURL: decoded.pptURL,
+            priceHistoryJSON: historyJSON,
             fetchedAt: decoded.fetchedAt,
             cacheHit: decoded.cacheHit,
             isStaleFallback: decoded.isStaleFallback
@@ -199,11 +207,11 @@ final class CompFetchService {
         if let typed = error as? CompRepository.Error {
             switch typed {
             case .noMarketData:
-                return (.noData, "PriceCharting has no comp for this slab yet.")
+                return (.noData, "Pokemon Price Tracker has no comp for this slab yet.")
             case .productNotResolved:
-                return (.noData, "We couldn't find this card on PriceCharting.")
+                return (.noData, "We couldn't find this card on Pokemon Price Tracker.")
             case .upstreamUnavailable:
-                return (.failed, "PriceCharting lookup unavailable — try again.")
+                return (.failed, "Pokemon Price Tracker lookup unavailable — try again.")
             case .identityNotFound:
                 return (.failed, "Card identity not on file — re-scan to refresh the cert.")
             case .authInvalid:
