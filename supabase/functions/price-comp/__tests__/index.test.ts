@@ -133,9 +133,14 @@ Deno.test("cache miss + no cached id — search, persist, return ladder", async 
     assertEquals(body.ppt_tcgplayer_id, "243172");
     assertEquals(body.cache_hit, false);
     assert(body.price_history.length > 0);
-    assertEquals(state.calls.length, 1, "single PPT call");
-    // buildSearchQuery strips parens + drops year — keeps card name + number + set.
+    // Multi-tier resolver: T1 search (1 credit, no ebay/history) +
+    // full fetchCard by tcgPlayerId (3 credits) = 2 PPT calls on the
+    // happy path.
+    assertEquals(state.calls.length, 2, "T1 search + full fetch by tcgPlayerId");
     assertEquals(state.calls[0].query.get("search"), "Charizard 4/102 Base Set");
+    assertEquals(state.calls[0].query.get("includeEbay"), null, "T1 search must not pay for ebay");
+    assertEquals(state.calls[1].query.get("tcgPlayerId"), "243172");
+    assertEquals(state.calls[1].query.get("includeEbay"), "true");
   } finally {
     await mock.close();
   }
@@ -388,11 +393,16 @@ Deno.test("cached id + 404 from PPT — clears the cached id, returns NO_MARKET_
   }
 });
 
-Deno.test("buildSearchQuery: strips parenthesized variant suffix from card_name", async () => {
+Deno.test("resolver T1: parens stripped from card_name in T1 query, full fetch follows", async () => {
   _resetPauseForTests();
+  // Match the SIR-tagged Charizard against a card whose name+number agree.
+  const matchCard = { tcgPlayerId: "243172", name: "Charizard ex", cardNumber: "199/165", setName: "Scarlet & Violet 151" };
   const state: MockState = {
-    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
-    defaultBody: [fullLadder],
+    responses: new Map([
+      ["Charizard ex 199 Scarlet & Violet 151", { status: 200, body: [matchCard] }],
+      ["243172", { status: 200, body: [fullLadder] }],
+    ]),
+    defaultBody: [],
     calls: [],
   };
   const mock = startMock(state);
@@ -414,30 +424,55 @@ Deno.test("buildSearchQuery: strips parenthesized variant suffix from card_name"
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
     });
-    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
-    // Parens stripped, year dropped, internal whitespace collapsed.
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    assertEquals(res.status, 200);
+    // T1 hits → only T1 is run (no T2/T3 fall-through). Then full fetch.
+    assertEquals(state.calls.length, 2);
     assertEquals(state.calls[0].query.get("search"), "Charizard ex 199 Scarlet & Violet 151");
+    assertEquals(state.calls[0].query.get("limit"), "10");
+    assertEquals(state.calls[0].query.get("includeEbay"), null);
+    assertEquals(state.calls[1].query.get("tcgPlayerId"), "243172");
   } finally {
     await mock.close();
   }
 });
 
-Deno.test("buildSearchQuery: drops year token from query", async () => {
+Deno.test("resolver T2 fallback: T1 misses, ?set= filter resolves on overlap", async () => {
   _resetPauseForTests();
+  // Identity: Charizard V #050 from "Champion's Path ETB Promo".
+  // T1 returns nothing. T2 ?set=champion (or champions) returns a
+  // Champion's Path candidate whose number disagrees ("079" vs "050")
+  // but whose set tokens overlap by >=2.
+  const t2Card = { tcgPlayerId: "999111", name: "Charizard V", cardNumber: "079", setName: "Champion's Path" };
   const state: MockState = {
-    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
-    defaultBody: [fullLadder],
+    responses: new Map(),
+    defaultBody: [],
     calls: [],
   };
-  const mock = startMock(state);
+  // Custom router: T1 = empty, T2 with set=champion(s) = [t2Card], T3 = ignored.
+  const ac = new AbortController();
+  const server = Deno.serve({ port: 0, signal: ac.signal }, (req) => {
+    const u = new URL(req.url);
+    state.calls.push({ url: u.pathname, query: u.searchParams });
+    const tcg = u.searchParams.get("tcgPlayerId");
+    const set = u.searchParams.get("set");
+    if (tcg === "999111") {
+      return new Response(JSON.stringify([{ ...t2Card, ebay: { salesByGrade: { psa10: { smartMarketPrice: { price: 250 } } } } }]), { status: 200 });
+    }
+    if (set && (set === "champion" || set === "champions")) {
+      return new Response(JSON.stringify([t2Card]), { status: 200 });
+    }
+    return new Response(JSON.stringify([]), { status: 200 });
+  });
+  const mockUrl = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
   try {
     const fake = fakeSupabase({
       identity: {
-        id: "id-1",
-        card_name: "Pikachu",
-        card_number: "025",
-        set_name: "Base Set",
-        year: 1999,
+        id: "id-2",
+        card_name: "Charizard V",
+        card_number: "050",
+        set_name: "Champion's Path ETB Promo",
+        year: 2020,
         ppt_tcgplayer_id: null,
         ppt_url: null,
       },
@@ -446,29 +481,41 @@ Deno.test("buildSearchQuery: drops year token from query", async () => {
     const req = new Request("http://localhost/price-comp", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
+      body: JSON.stringify({ graded_card_identity_id: "id-2", grading_service: "PSA", grade: "10" }),
     });
-    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
-    const search = state.calls[0].query.get("search") ?? "";
-    assert(!search.includes("1999"), `query should not contain year, got: ${search}`);
-    assertEquals(search, "Pikachu 025 Base Set");
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mockUrl, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const body = await res.json();
+    assertEquals(res.status, 200);
+    assertEquals(body.ppt_tcgplayer_id, "999111");
+    // T1 (no hit) + T2 (hit) + full fetch = 3 calls.
+    assertEquals(state.calls.length, 3);
+    assertEquals(state.calls[0].query.get("search"), "Charizard V 050 Champion's Path ETB Promo");
+    assertEquals(state.calls[1].query.get("search"), "Charizard V");
+    const t2Set = state.calls[1].query.get("set") ?? "";
+    assert(t2Set === "champion" || t2Set === "champions", `unexpected T2 set: ${t2Set}`);
+    assertEquals(state.calls[2].query.get("tcgPlayerId"), "999111");
   } finally {
-    await mock.close();
+    ac.abort();
+    try { await server.finished; } catch {}
   }
 });
 
-Deno.test("buildSearchQuery: omits null card_number cleanly", async () => {
+Deno.test("resolver: null card_number → T1 query has no number", async () => {
   _resetPauseForTests();
+  const matchCard = { tcgPlayerId: "243172", name: "Mew", cardNumber: "151", setName: "Promo" };
   const state: MockState = {
-    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
-    defaultBody: [fullLadder],
+    responses: new Map([
+      ["Mew Promo", { status: 200, body: [matchCard] }],
+      ["243172", { status: 200, body: [fullLadder] }],
+    ]),
+    defaultBody: [],
     calls: [],
   };
   const mock = startMock(state);
   try {
     const fake = fakeSupabase({
       identity: {
-        id: "id-1",
+        id: "id-3",
         card_name: "Mew",
         card_number: null,
         set_name: "Promo",
@@ -481,9 +528,14 @@ Deno.test("buildSearchQuery: omits null card_number cleanly", async () => {
     const req = new Request("http://localhost/price-comp", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
+      body: JSON.stringify({ graded_card_identity_id: "id-3", grading_service: "PSA", grade: "10" }),
     });
     await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    // T1 with name+set only. Card-name match alone doesn't pass scoreCard
+    // accept (overlap 0 since "Promo" is a stopword), so T1 candidate is
+    // rejected → fall through to T3 (T2 skipped, no distinctive token in
+    // "Promo"). T3 also rejects. End result: PRODUCT_NOT_RESOLVED is fine
+    // here; we just want to assert the T1 query shape.
     assertEquals(state.calls[0].query.get("search"), "Mew Promo");
   } finally {
     await mock.close();

@@ -3,9 +3,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GradingService, PriceCompRequest, PriceCompResponse, CacheState } from "./types.ts";
-import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, priceHistoryForTier, type LadderPrices, type PriceHistoryPoint } from "./ppt/parse.ts";
+import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, priceHistoryForTier, type LadderPrices, type PriceHistoryPoint, type PPTCard } from "./ppt/parse.ts";
 import { gradeKeyFor } from "./lib/grade-key.ts";
 import { fetchCard } from "./ppt/cards.ts";
+import { resolveCard } from "./ppt/match.ts";
 import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
 import { persistIdentityPPTId, clearIdentityPPTId } from "./persistence/identity-product-id.ts";
 import { evaluateFreshness } from "./cache/freshness.ts";
@@ -21,24 +22,6 @@ function env(name: string, fallback?: string): string {
   if (v !== undefined && v !== "") return v;
   if (fallback !== undefined) return fallback;
   throw new Error(`missing env: ${name}`);
-}
-
-function buildSearchQuery(identity: {
-  card_name: string;
-  card_number: string | null;
-  set_name: string;
-  year: number | null;
-}): string {
-  // Strip parenthesized variant qualifiers (e.g.,
-  // "Charizard ex (Special Illustration Rare)" → "Charizard ex"). PPT's
-  // fuzzy search penalizes long noisy queries; the parenthesized suffix
-  // and the year both reliably kill matches in smoke testing. Send the
-  // minimal distinctive bag-of-words: cleaned name + card number + set.
-  const cleanName = identity.card_name.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-  const parts: string[] = [cleanName];
-  if (identity.card_number) parts.push(identity.card_number);
-  parts.push(identity.set_name);
-  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 function buildResponse(args: {
@@ -128,32 +111,52 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     }));
   }
 
-  // 3. Live fetch — single call
+  // 3. Live fetch
+  //   Warm path  (tcgPlayerId cached on identity): single fetchCard.
+  //   Cold path  (no tcgPlayerId yet): multi-tier resolver runs cheap
+  //     searchCards() candidates, scores them, then fetchCards the
+  //     winner. See ppt/match.ts.
   const clientOpts = { token: deps.pptToken, baseUrl: deps.pptBaseUrl, now: deps.now };
   const tcgPlayerId = identity.ppt_tcgplayer_id as string | null;
-  const fetchArgs = tcgPlayerId
-    ? { tcgPlayerId }
-    : { search: buildSearchQuery(identity) };
-  const result = await fetchCard(clientOpts, fetchArgs);
 
-  if (result.status === 401 || result.status === 403) {
-    console.error("ppt.auth_invalid", { phase: tcgPlayerId ? "tcgPlayerId" : "search" });
-    return json(502, { code: "AUTH_INVALID" });
-  }
-  if (result.status === 429 || result.status >= 500) {
-    return await staleOrUpstreamDown(cached, body, `${result.status}`);
-  }
-  if (!result.card) {
-    if (tcgPlayerId) {
+  let card: PPTCard;
+  let creditsConsumed: number | undefined;
+  let resolverTier: string | null = null;
+
+  if (tcgPlayerId) {
+    const result = await fetchCard(clientOpts, { tcgPlayerId });
+    if (result.status === 401 || result.status === 403) {
+      console.error("ppt.auth_invalid", { phase: "tcgPlayerId" });
+      return json(502, { code: "AUTH_INVALID" });
+    }
+    if (result.status === 429 || result.status >= 500) {
+      return await staleOrUpstreamDown(cached, body, `${result.status}`);
+    }
+    if (!result.card) {
       // Cached id refers to a deleted card. Clear it so the next scan re-runs search.
       try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
       return json(404, { code: "NO_MARKET_DATA" });
     }
-    console.log("ppt.match.zero_hits", { search: (fetchArgs as { search: string }).search });
-    return json(404, { code: "PRODUCT_NOT_RESOLVED" });
+    card = result.card;
+    creditsConsumed = result.creditsConsumed;
+  } else {
+    const resolved = await resolveCard(clientOpts, {
+      card_name: identity.card_name,
+      card_number: identity.card_number ?? null,
+      set_name: identity.set_name,
+      year: identity.year ?? null,
+    });
+    console.log("ppt.match.resolve", {
+      identity_id: body.graded_card_identity_id,
+      attempts: resolved.attemptLog,
+      tier: resolved.tierMatched,
+    });
+    if (!resolved.card) {
+      return json(404, { code: "PRODUCT_NOT_RESOLVED" });
+    }
+    card = resolved.card;
+    resolverTier = resolved.tierMatched;
   }
-
-  const card = result.card;
   const ladder = extractLadder(card);
   // Sparkline tracks the requested tier's history (e.g., the PSA 10 series
   // when the user scanned a PSA 10). Falls back to PSA 10 history when the
@@ -199,10 +202,10 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     identity_id: body.graded_card_identity_id,
     tcgPlayerId: resolvedTCGPlayerId,
     cache_state: state,
-    matched: tcgPlayerId ? "cached_id" : "searched",
+    matched: tcgPlayerId ? "cached_id" : (resolverTier ? `resolved_${resolverTier}` : "searched"),
     headline_present: headlineCents !== null,
     history_points: history.length,
-    credits_consumed: result.creditsConsumed ?? null,
+    credits_consumed: creditsConsumed ?? null,
   });
 
   return json(200, buildResponse({
