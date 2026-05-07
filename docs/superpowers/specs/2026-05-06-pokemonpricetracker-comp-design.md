@@ -2,20 +2,24 @@
 
 **Sub-project:** #4 (Comp engine v1) — replatform
 **Date:** 2026-05-06
-**Status:** Design draft; awaiting user review
+**Status:** Design draft, revised; awaiting user review
 **Supersedes:** [`2026-05-05-pricecharting-comp-design.md`](./2026-05-05-pricecharting-comp-design.md) for the scan-time comp path
+
+## Update history
+
+- **2026-05-06 r2** — Original draft scoped the ladder to PSA-only based on a partial reading of PPT's docs. PPT in fact publishes cross-grader eBay sales averages under `ebay.grades.{psa_10, psa_9_5, bgs_10, cgc_10, sgc_10, raw, …}`. Spec revised to restore BGS/CGC/SGC headline support and the cross-grader ladder rail; "non-PSA → null headline + caveat" plumbing removed throughout.
 
 ## Summary
 
-Replaces the PriceCharting-backed `/price-comp` Edge Function with a Pokemon Price Tracker (PPT) backed equivalent. PriceCharting just landed (2026-05-05) but is being ripped out: PPT's API is significantly cheaper at our scan volume, exposes a Pokémon-native data model (PSA 1–10 + a TCGPlayer raw price), and ships a 6-month price history in the same call we use for the headline. Everything PriceCharting-specific in the function, the database, and the iOS client is removed; no compatibility shims. The `/price-comp` URL, the iOS outbox kind, and the overall hybrid match-then-cache architecture are preserved.
+Replaces the PriceCharting-backed `/price-comp` Edge Function with a Pokemon Price Tracker (PPT) backed equivalent. PriceCharting just landed (2026-05-05) but is being ripped out: PPT's API is significantly cheaper at our scan volume, exposes a Pokémon-native data model (PSA / BGS / CGC / SGC tiers + a TCGPlayer raw price, all sourced from real eBay sales), and ships a 6-month price history in the same call we use for the headline. Everything PriceCharting-specific in the function, the database, and the iOS client is removed; no compatibility shims. The `/price-comp` URL, the iOS outbox kind, and the overall hybrid match-then-cache architecture are preserved.
 
-A v1.1 follow-up may broaden the ladder beyond Raw + PSA 7/8/9/10 if signal demands; v1 ships the curated rail plus a 6-month sparkline driven by PPT's `priceHistory` payload.
+v1 ships the same ladder shape we already display: Raw + PSA 7/8/9/9.5/10 + BGS 10 + CGC 10 + SGC 10 (9 cells). The only behavioral upgrade is a 6-month sparkline drawn from PPT's `priceHistory` payload, which is inlined in the same call as the prices.
 
 ## Goals
 
 1. A scan of a graded Pokémon card returns a defensible comp in one round-trip using PPT as the source of truth.
 2. The iOS-facing endpoint URL (`/price-comp`) and outbox kind stay unchanged so iOS routing is reused.
-3. The headline number for `(PSA, "10")`, `(PSA, "9")`, etc. comes from PPT's `ebay.{tier}.avg` graded prices; raw/loose comes from PPT's TCGPlayer `prices.market`.
+3. The headline for any of `(PSA, "7"|"8"|"9"|"9.5"|"10")`, `(BGS, "10")`, `(CGC, "10")`, `(SGC, "10")` resolves from PPT's `ebay.grades.{key}` payload. Raw/loose comes from PPT's TCGPlayer `prices.market` (or `ebay.grades.raw` if higher-confidence — verified in plan probe).
 4. A 6-month price history sparkline renders in the comp card from PPT's `priceHistory` payload.
 5. A real-listings escape hatch — every comp deep-links to the PPT product page so users can verify against actual sales.
 6. First-scan latency is amortized by caching the resolved PPT card identifier on the identity row (one search per identity, ever).
@@ -23,7 +27,9 @@ A v1.1 follow-up may broaden the ladder beyond Raw + PSA 7/8/9/10 if signal dema
 
 ## Non-goals
 
-- BGS, CGC, SGC, TAG headline values. PPT does not publish them. A request for `(BGS, "10")` returns `headline_price_cents: null` with the ladder still populated; iOS shows the same caveat row used today for missing-tier responses.
+- TAG headline values. PPT search results don't surface TAG-graded eBay sales. A `(TAG, *)` request returns `headline_price_cents: null` with the rest of the ladder populated; iOS shows the same caveat row used today for missing-tier responses. (TAG is a low-volume grader with negligible eBay supply, so this is unlikely to surface to users in practice.)
+- Sub-PSA-7 tiers in v1 (PSA 1–6). Persist + display Raw + PSA 7/8/9/9.5/10 + BGS 10 + CGC 10 + SGC 10 — the same nine-cell shape today's UI already supports.
+- Non-PSA half-grades (BGS 9.5, CGC 9.5, SGC 9.5) in v1, even though PPT may publish them. Reserved for v1.1 once we know the data is reliably populated.
 - Sparkline pre-warm via the scraper. v1 fetches history on demand inside the existing live-fetch path.
 - A "force-rematch" UX for correcting a wrong cached PPT card id. Reserved as a follow-up.
 - Bulk pre-warming the popular-watchlist via `POST /api/v2/cards/bulk-price`. Reserved for v1.1 if cost telemetry justifies it.
@@ -32,7 +38,7 @@ A v1.1 follow-up may broaden the ladder beyond Raw + PSA 7/8/9/10 if signal dema
 
 ## API surface (Pokemon Price Tracker)
 
-Authoritative reference: <https://www.pokemonpricetracker.com/docs>. All field names quoted in this spec are best-effort from public documentation pages and search results; the implementation plan **must** include a probe step that hits the live API with the issued token and fixes any field-name drift in this spec before code lands.
+Authoritative reference: <https://www.pokemonpricetracker.com/docs#model/ebaydata>. All field names quoted in this spec are best-effort from public documentation pages and search results; the implementation plan **must** include a probe step that hits the live API with the issued token and fixes any field-name drift in this spec before code lands.
 
 - Base URL: `https://www.pokemonpricetracker.com`
 - Auth: `Authorization: Bearer <token>`. Header `X-API-Version: v1` (per docs).
@@ -44,9 +50,28 @@ Authoritative reference: <https://www.pokemonpricetracker.com/docs>. All field n
   - Response is a card array (or single object — verify in plan probe). Each card carries:
     - `tcgPlayerId` — the stable identifier we cache on the identity row
     - `name`, `set`, `number`
-    - `prices.market` — TCGPlayer market in dollars; this maps to `loose_price_cents` (raw)
-    - `ebay.{psa1..psa10}.avg` — PSA-graded eBay averages in dollars; maps to `psa_{n}_price_cents`
-    - `priceHistory` — series of `{date, price}` points; we persist exactly the entries returned (PPT decimates to ~30 points over 180 days when `maxDataPoints=30`)
+    - `prices.market` — TCGPlayer market in dollars; primary source for `loose_price_cents` (raw)
+    - `ebay` — graded eBay sales aggregate (the **EbayData** model) with shape:
+      ```jsonc
+      "ebay": {
+        "average":       445.50,    // optional rollup, ignored
+        "recent_sales":  28,        // optional sample-count rollup, ignored
+        "grades": {
+          "raw":      420.00,
+          "psa_7":     58.00,
+          "psa_8":     85.00,
+          "psa_9":    310.00,
+          "psa_9_5":  680.00,       // PSA half-grade — verify availability in probe
+          "psa_10":  1250.00,
+          "bgs_10":  2100.00,
+          "cgc_10":  1480.00,
+          "sgc_10":  1320.00
+          // additional keys may appear (psa_1..psa_6, bgs_9_5, cgc_9_5, etc.) — ignored in v1
+        }
+      }
+      ```
+      All `ebay.grades.{key}` values are eBay-sales averages in **USD dollars (float)**.
+    - `priceHistory` — series of `{date, price}` points (PPT decimates to ~30 points over 180 days when `maxDataPoints=30`); we persist exactly the entries returned. Verify field names in plan probe (`date` vs `ts`, `price` vs `value`).
     - A canonical product page URL — verify the field name in the probe (`url`, `productUrl`, or derivable from `tcgPlayerId`)
 - Credit cost per fresh fetch: **3 credits** (1 base + 1 `includeHistory` + 1 `includeEbay`). At 20k/day → ~6,600 fresh fetches/day; with the 24h cache TTL, vastly more scans.
 - Rate-limit response: `429`. We treat it the same way the current PriceCharting client does — 60 second module-scope pause, surface 429 to caller.
@@ -73,11 +98,15 @@ iOS  ──────►  /price-comp (Edge Function, Deno)
                  │           → if zero hits: 404 PRODUCT_NOT_RESOLVED (no persistence)
                  │
                  ├─ extract:
-                 │     ├─ loose_price_cents      ← prices.market * 100
-                 │     ├─ psa_7..psa_10_price_cents ← ebay.psa{n}.avg * 100
-                 │     ├─ price_history          ← priceHistory.map({date, cents})
-                 │     ├─ headline_price_cents   ← pickTier(ebay, grading_service, grade)
-                 │     └─ ppt_url                ← canonical product page
+                 │     ├─ loose_price_cents          ← prices.market * 100  (fallback: ebay.grades.raw)
+                 │     ├─ psa_7..psa_10_price_cents  ← ebay.grades.psa_{n} * 100
+                 │     ├─ psa_9_5_price_cents        ← ebay.grades.psa_9_5 * 100  (if present)
+                 │     ├─ bgs_10_price_cents         ← ebay.grades.bgs_10 * 100
+                 │     ├─ cgc_10_price_cents         ← ebay.grades.cgc_10 * 100
+                 │     ├─ sgc_10_price_cents         ← ebay.grades.sgc_10 * 100
+                 │     ├─ price_history              ← priceHistory.map({date, cents})
+                 │     ├─ headline_price_cents       ← pickTier(ebay.grades, grading_service, grade)
+                 │     └─ ppt_url                    ← canonical product page
                  │
                  ├─ upsert graded_market with the full row
                  │
@@ -114,7 +143,7 @@ The PriceCharting index `graded_card_identities_pc_product_idx` is dropped autom
 
 ### Migration: reshape `graded_market` for PPT
 
-PPT publishes PSA 1–10 (whole grades, no half-grade) plus a TCGPlayer raw price. The v1 ladder displays Raw + PSA 7/8/9/10, so we persist exactly those columns. PSA 1–6 are lost data we can re-introduce in v1.1 by a column-addition migration if signal warrants.
+PPT publishes per-(grader, grade) eBay-sales averages under `ebay.grades.{key}`. The v1 ladder mirrors the nine-cell shape the current iOS UI already supports: Raw + PSA 7/8/9/9.5/10 + BGS 10 + CGC 10 + SGC 10. The PriceCharting-era generic `grade_7/8/9/9_5_price` columns (which were "any grader at this grade") are replaced by PSA-specific columns; `bgs_10_price`, `cgc_10_price`, `sgc_10_price` carry over with their existing semantics. PSA 1–6 and non-PSA half-grades are lost data we can re-introduce in v1.1 by a column-addition migration if signal warrants.
 
 ```sql
 alter table public.graded_market
@@ -123,10 +152,7 @@ alter table public.graded_market
   drop column if exists grade_7_price,
   drop column if exists grade_8_price,
   drop column if exists grade_9_price,
-  drop column if exists grade_9_5_price,
-  drop column if exists bgs_10_price,
-  drop column if exists cgc_10_price,
-  drop column if exists sgc_10_price;
+  drop column if exists grade_9_5_price;
 
 alter table public.graded_market
   add column if not exists ppt_tcgplayer_id text,
@@ -134,6 +160,7 @@ alter table public.graded_market
   add column if not exists psa_7_price      numeric(12,2),
   add column if not exists psa_8_price      numeric(12,2),
   add column if not exists psa_9_price      numeric(12,2),
+  add column if not exists psa_9_5_price    numeric(12,2),
   add column if not exists price_history    jsonb;
 
 -- Source column already exists from the PriceCharting migration; flip default
@@ -144,7 +171,7 @@ alter table public.graded_market alter column source set default 'pokemonpricetr
 
 The implementation plan must verify whether any non-comp consumer reads `low_price` / `median_price` / `high_price`. If nothing else reads them, drop them in this migration as well; if a consumer remains, leave them and have the new code write `low_price = high_price = median_price = headline_price`. Default is to drop, mirroring the previous spec's stance.
 
-The `psa_10_price` column already exists from yesterday's PriceCharting migration; this migration leaves it in place.
+`psa_10_price`, `bgs_10_price`, `cgc_10_price`, `sgc_10_price`, and `loose_price` already exist from yesterday's PriceCharting migration; this migration leaves them in place and only swaps their write-source from PriceCharting product fields to PPT `ebay.grades.{key}` fields.
 
 ### Migration: drop PriceCharting secret variables (handled outside SQL)
 
@@ -154,9 +181,9 @@ Not a SQL migration — listed in the secrets section below.
 
 `GradedMarketSnapshot` reshape:
 
-- Remove: `grade7PriceCents`, `grade8PriceCents`, `grade9PriceCents`, `grade9_5PriceCents`, `bgs10PriceCents`, `cgc10PriceCents`, `sgc10PriceCents`, `pricechartingProductId`, `pricechartingURL`.
-- Add: `psa7PriceCents`, `psa8PriceCents`, `psa9PriceCents` (Int64?); `pptTCGPlayerId` (String?), `pptURL` (URL?), `priceHistoryJSON` (String?).
-- Keep: `id`, `identityId`, `gradingService`, `grade`, `headlinePriceCents`, `loosePriceCents`, `psa10PriceCents`, `fetchedAt`, `cacheHit`, `isStaleFallback`.
+- Remove: `grade7PriceCents`, `grade8PriceCents`, `grade9PriceCents`, `grade9_5PriceCents`, `pricechartingProductId`, `pricechartingURL`.
+- Add: `psa7PriceCents`, `psa8PriceCents`, `psa9PriceCents`, `psa9_5PriceCents` (Int64?); `pptTCGPlayerId` (String?), `pptURL` (URL?), `priceHistoryJSON` (String?).
+- Keep: `id`, `identityId`, `gradingService`, `grade`, `headlinePriceCents`, `loosePriceCents`, `psa10PriceCents`, `bgs10PriceCents`, `cgc10PriceCents`, `sgc10PriceCents`, `fetchedAt`, `cacheHit`, `isStaleFallback`.
 
 `priceHistoryJSON` is a SwiftData-friendly JSON-string blob, decoded on demand to `[PriceHistoryPoint]` for the sparkline view. We store as String rather than `[Data]` because SwiftData is fussy about heterogeneous arrays and the points are read-only render input.
 
@@ -180,7 +207,7 @@ Body: {
 
 ```jsonc
 {
-  "headline_price_cents":  18500,    // tier price for the requested (grader, grade); null if unsupported (e.g. BGS) or absent
+  "headline_price_cents":  18500,    // tier price for the requested (grader, grade); null only if PPT has no value for that exact tier
   "grading_service":       "PSA",
   "grade":                 "10",
 
@@ -188,7 +215,11 @@ Body: {
   "psa_7_price_cents":     2400,
   "psa_8_price_cents":     3400,
   "psa_9_price_cents":     6800,
+  "psa_9_5_price_cents":  11200,
   "psa_10_price_cents":   18500,
+  "bgs_10_price_cents":   21500,
+  "cgc_10_price_cents":   16800,
+  "sgc_10_price_cents":   16500,
 
   "price_history": [
     { "ts": "2025-11-08T00:00:00Z", "price_cents": 16200 },
@@ -205,7 +236,7 @@ Body: {
 }
 ```
 
-A null `headline_price_cents` does **not** put iOS into the empty-state branch — the snapshot is still resolved (`compFetchState = .resolved`) and the ladder still renders any non-null tiers. The hero number renders `—` with a small caveat row ("No Pokemon Price Tracker headline for BGS 10 — see PSA tiers below"). The empty-state branch fires only when every PSA tier and `loose_price` are null, which the Edge Function returns as `404 NO_MARKET_DATA`.
+A null `headline_price_cents` does **not** put iOS into the empty-state branch — the snapshot is still resolved (`compFetchState = .resolved`) and the ladder still renders any non-null tiers. The hero number renders `—` with a small caveat row ("Pokemon Price Tracker has no PSA 10 sales for this card yet — showing the rest of the ladder."). The empty-state branch fires only when every tier and `loose_price` are null, which the Edge Function returns as `404 NO_MARKET_DATA`.
 
 ### Error responses
 
@@ -259,10 +290,10 @@ Order within a single Edge Function invocation:
 1. Cache-read: `readMarketLadder(identity_id, grader, grade)`. Hit-within-TTL short-circuits.
 2. Resolve fetch URL — by `tcgPlayerId` if cached on identity; otherwise by `search`.
 3. Single `GET /api/v2/cards?...&includeEbay=true&includeHistory=true`. Parse:
-   - `prices.market` (dollars, float) → `loose_price_cents` (cents, int).
-   - `ebay.psa{7,8,9,10}.avg` (dollars, float) → `psa_{7,8,9,10}_price_cents`.
+   - `prices.market` (dollars, float) → `loose_price_cents` (cents, int). Fallback to `ebay.grades.raw` if `prices.market` is missing.
+   - `ebay.grades.psa_7|psa_8|psa_9|psa_9_5|psa_10|bgs_10|cgc_10|sgc_10` (dollars, float) → matching `*_price_cents` columns.
    - `priceHistory[]` → array of `{ts, price_cents}`. Verify field names in plan probe (`date` vs `ts`, `price` vs `value`).
-   - `headline_price_cents = pickTier(ebay, grading_service, grade)` — returns null for BGS/CGC/SGC.
+   - `headline_price_cents = pickTier(ebay.grades, grading_service, grade)` — picks the column matching `(grader, grade)`. Returns null only when PPT did not publish that specific tier for the card (e.g. a card with no BGS sales) or when the requested `(grader, grade)` is outside the v1 column set (TAG, sub-PSA-7, non-PSA half-grades).
 4. If first-time match (we used `search`): upsert `ppt_tcgplayer_id` + `ppt_url` onto `graded_card_identities`.
 5. Upsert one `graded_market` row for `(identity_id, grading_service, grade)` with all per-tier columns + `ppt_tcgplayer_id`, `ppt_url`, `price_history` (JSONB), `source = 'pokemonpricetracker'`, `updated_at = now()`.
 6. Return response payload built from the upserted row (cache-hit and live-fetch responses are byte-identical in shape).
@@ -277,10 +308,10 @@ All writes use the service-role Supabase client.
 | PPT 429 rate-limit | Same as 5xx; additionally pause all live fetches in this isolate for 60 seconds (module-scope timestamp). |
 | PPT 401 / 403 | `502 AUTH_INVALID`. Log at ERROR (token issue). No retry beyond one. |
 | Search returns zero hits | `404 PRODUCT_NOT_RESOLVED`. No persistence. |
-| Top hit returns a card with no PSA-tier averages and no `prices.market` | `404 NO_MARKET_DATA`. Identity is updated with the resolved id (so a future refresh can work without a re-search). |
-| Requested grade tier missing, others present | Respond 200 with `headline_price_cents: null` and the ladder populated. iOS renders the headline cell as `—` with a caveat row. |
+| Top hit returns a card with no `ebay.grades` keys and no `prices.market` | `404 NO_MARKET_DATA`. Identity is updated with the resolved id (so a future refresh can work without a re-search). |
+| Requested tier present in `ebay.grades` but value is null/zero | Treated as missing. Respond 200 with `headline_price_cents: null` and the ladder populated. iOS renders the headline cell as `—` with a caveat row. |
+| Requested `(grader, grade)` outside the v1 column set (TAG, PSA 1–6, non-PSA half-grades) | `headline_price_cents: null`; the rest of the ladder still renders. iOS caveat row says "Pokemon Price Tracker hasn't logged sales for `<grader> <grade>` yet — showing the rest of the ladder." |
 | Every tier missing AND `loose_price` missing | `404 NO_MARKET_DATA`. iOS empty-state branch renders. |
-| Requested grader is BGS/CGC/SGC/TAG | `headline_price_cents: null`. The ladder still renders Raw + PSA 7/8/9/10 if available. iOS caveat row says "Pokemon Price Tracker doesn't publish BGS/CGC/SGC prices — showing the PSA ladder for cross-reference." |
 | Cached id refers to a deleted PPT card | Live fetch returns 404 / empty array → return `404 NO_MARKET_DATA` and clear the cached id on the identity row so the next scan re-runs search. |
 | `priceHistory` empty / missing for a card we have prices for | Sparkline section hides; rest of the card renders normally. Not an error. |
 
@@ -290,8 +321,8 @@ All writes use the service-role Supabase client.
 
 - **Hero row** — headline price (`headlinePriceCents`) + a small kicker showing `<grader> <grade>`. The kicker no longer mentions the data source explicitly; it's referenced once in the footer. Cleaner card.
 - **Sparkline rail** — new SwiftUI `Path`-based mini-chart between the hero and the ladder, drawn from `priceHistory`. ~32pt tall, no axis labels, accent stroke in `AppColor.gold`. Hides when `priceHistory` is empty / missing.
-- **Grade ladder rail** — horizontal scroll of cells: Raw / PSA 7 / PSA 8 / PSA 9 / PSA 10. Cells render only for non-null tiers. The cell matching `(grading_service, grade)` (only for PSA) gets a gold border. Empty list (every tier null) hides the rail entirely.
-- **Caveat row** — handles two cases: `isStaleFallback` (existing) and "non-PSA grader requested" (new copy: "Showing PSA tiers — Pokemon Price Tracker doesn't publish BGS/CGC/SGC prices.").
+- **Grade ladder rail** — horizontal scroll of cells (in this order): Raw / PSA 7 / PSA 8 / PSA 9 / PSA 9.5 / PSA 10 / BGS 10 / CGC 10 / SGC 10. Cells render only for non-null tiers. The cell matching `(grading_service, grade)` gets a gold border (works for any of the supported `(grader, grade)` pairs). Empty list (every tier null) hides the rail entirely.
+- **Caveat row** — surfaces in three cases: (a) `isStaleFallback`, (b) requested `(grader, grade)` is outside the v1 column set (TAG / PSA 1–6 / non-PSA half-grade) so headline is `null` but the ladder is otherwise populated, (c) requested tier is in the column set but PPT had no value for it. Copy variants handle each case with one-liners; no PSA-only language.
 - **Footer** — "Powered by Pokemon Price Tracker · View card →" deep-links to `pptURL`. Source attribution lives here, not in the hero kicker.
 
 ### `ScanDetailView`
@@ -305,7 +336,7 @@ All writes use the service-role Supabase client.
 
 ### `CompRepository`
 
-- `Wire` / `Decoded` reshape to match the new payload (PSA-only tiers, `ppt_*` fields, `price_history` array, no `pricecharting_*`, no `bgs_10_*` / `cgc_10_*` / `sgc_10_*`, no `grade_9_5_*`, no `grade_7_*` / `grade_8_*` / `grade_9_*`).
+- `Wire` / `Decoded` reshape to match the new payload: drop `pricecharting_*`, drop the generic `grade_7_*` / `grade_8_*` / `grade_9_*` / `grade_9_5_*` slots, add per-PSA fields `psa_7_price_cents`, `psa_8_price_cents`, `psa_9_price_cents`, `psa_9_5_price_cents`, add `ppt_tcgplayer_id`, `ppt_url`, `price_history` array. Keep `psa_10_price_cents`, `bgs_10_price_cents`, `cgc_10_price_cents`, `sgc_10_price_cents`, `loose_price_cents`.
 - `Error` cases unchanged in shape (`noMarketData`, `productNotResolved`, `identityNotFound`, `authInvalid`, `upstreamUnavailable`, `httpStatus`, `decoding`). Only the internal source-name semantics shift.
 
 ### `CompFetchService`
@@ -328,12 +359,12 @@ All writes use the service-role Supabase client.
 
 - `supabase/functions/price-comp/pricecharting/` (entire directory: `client.ts`, `parse.ts`, `product.ts`, `search.ts`)
 - `supabase/functions/price-comp/__fixtures__/` PriceCharting fixture subdirectory (if present)
-- `supabase/functions/price-comp/lib/grade-key.ts` is **rewritten** (PSA-only mapping), not deleted
+- `supabase/functions/price-comp/lib/grade-key.ts` is **rewritten** (maps `(grader, grade)` to a column key in the new PSA + BGS/CGC/SGC set), not deleted
 
 ### Rewrite
 
 - `supabase/functions/price-comp/index.ts` — new orchestrator (single live-fetch path, no two-call dance)
-- `supabase/functions/price-comp/types.ts` — new request/response/internal types (`ppt_*`, PSA-only tiers, `price_history`)
+- `supabase/functions/price-comp/types.ts` — new request/response/internal types (`ppt_*`, the cross-grader tier set, `price_history`)
 - `supabase/functions/price-comp/persistence/market.ts` — write per-tier columns + JSONB price_history
 - `supabase/functions/price-comp/persistence/identity-product-id.ts` — rename helpers `persistIdentity{TCGPlayerId,Url}` / `clearIdentity{TCGPlayerId,Url}`; column rename
 - `supabase/functions/price-comp/cache/freshness.ts` — same logic, no behavioral change
@@ -369,7 +400,7 @@ Migration filenames are split per-concern so the implementation plan can sequenc
 - **PPT client**:
   - `Authorization: Bearer <token>` and `X-API-Version: v1` headers attached.
   - Dollar-float prices parsed correctly (e.g., `17.32` → `1732`).
-  - Missing `ebay.psaN.avg` field → `null`.
+  - Missing `ebay.grades.{key}` entry → `null`.
   - `401` triggers single retry then surfaces as `AUTH_INVALID`.
   - `429` triggers in-isolate pause flag.
 - **Hybrid match**:
@@ -379,13 +410,16 @@ Migration filenames are split per-concern so the implementation plan can sequenc
   - First-time match persists `ppt_tcgplayer_id` + `ppt_url` onto identity.
 - **Grade → tier mapping**:
   - `(PSA, "10")` → `psa_10_price`
+  - `(PSA, "9.5")` → `psa_9_5_price`
   - `(PSA, "9")` → `psa_9_price`
   - `(PSA, "8")` → `psa_8_price`
   - `(PSA, "7")` → `psa_7_price`
-  - `(BGS, "10")` → headline null, ladder populated
-  - `(CGC, "10")` → headline null
-  - `(SGC, "10")` → headline null
-  - `(PSA, "9.5")` → headline null in v1 (PPT does not publish a `psa_9_5` field) — verify in plan probe; if PPT does publish it, fold into the column set before code lands
+  - `(BGS, "10")` → `bgs_10_price`
+  - `(CGC, "10")` → `cgc_10_price`
+  - `(SGC, "10")` → `sgc_10_price`
+  - `(TAG, *)` → headline null, ladder still populated
+  - `(PSA, "6")` and below → headline null, ladder still populated
+  - `(BGS|CGC|SGC, "9.5")` → headline null in v1 (deferred to v1.1)
 - **Cache freshness**: fresh / stale / missing branches; stale + upstream-up → live; stale + upstream-down → cached + `is_stale_fallback`.
 - **History parsing**: well-formed array → cents-int points, malformed entries dropped, empty array → empty array (not null).
 
@@ -399,18 +433,21 @@ Migration filenames are split per-concern so the implementation plan can sequenc
 
 ### iOS (Swift Testing)
 
-- Decode tests for the full new payload (all PSA tiers populated, partial tiers, headline-null for BGS, missing `priceHistory`, missing `ppt_url`).
+- Decode tests for the full new payload (all tiers populated, partial tiers, headline-null for `(TAG, *)`, missing `priceHistory`, missing `ppt_url`).
 - `CompFetchService.persistSnapshot` writes the right tier columns + `priceHistoryJSON`.
 - `CompFetchService` flip-matching unchanged — same in-flight de-dup behavior.
-- `CompCardView` snapshot tests: full ladder, partial ladder, sparkline-present, sparkline-empty, headline-null caveat row, gold-border placement on PSA tier.
+- `CompCardView` snapshot tests: full ladder, partial ladder, sparkline-present, sparkline-empty, headline-null caveat row, gold-border placement on each of `(PSA, 7..10/9.5)`, `(BGS, 10)`, `(CGC, 10)`, `(SGC, 10)`.
 - Migration test: existing SwiftData store with old `GradedMarketSnapshot` rows opens cleanly under the new schema (destructive seed if lightweight migration not feasible).
 
 ### Manual end-to-end
 
-- One simulator flow on a known PSA 10 (e.g., Charizard Base Set) to verify live path → ladder → sparkline → deep-link.
+- One simulator flow on a known PSA 10 (e.g., Charizard Base Set) to verify live path → full ladder → sparkline → deep-link.
 - One simulator flow on a known PSA 9 to verify the PSA 9 tier mapping.
-- One simulator flow on a known BGS 10 to verify headline-null + caveat row + ladder still renders.
+- One simulator flow on a known PSA 9.5 to verify the half-grade column.
+- One simulator flow on a known BGS 10 to verify the BGS tier mapping (headline pulls from `bgs_10_price`).
+- One simulator flow on a known CGC 10 to verify the CGC tier mapping.
 - One simulator flow on a never-seen identity to verify search → tcgPlayerId persistence → second scan uses `?tcgPlayerId=`.
+- One simulator flow on a TAG-graded slab to verify headline-null + caveat row + ladder still renders.
 - Airplane-mode flow to verify outbox retry on `503`.
 
 ## Observability
@@ -445,12 +482,12 @@ Plus targeted error markers: `ppt.auth_invalid`, `ppt.upstream_5xx`, `ppt.match.
 
 ## Open follow-ups (for implementation plan or post-launch)
 
-- Plan probe step (mandatory): hit `GET /api/v2/cards?search=charizard&limit=1&includeEbay=true&includeHistory=true&days=180&maxDataPoints=30` against production PPT, capture the response, and reconcile this spec's field names against the live shape before coding. Save the capture as the first `__fixtures__/ppt/` fixture.
+- Plan probe step (mandatory): hit `GET /api/v2/cards?search=charizard&limit=1&includeEbay=true&includeHistory=true&days=180&maxDataPoints=30` against production PPT, capture the response, and reconcile this spec's field names against the live shape before coding. Save the capture as the first `__fixtures__/ppt/` fixture. Specifically verify: (a) the `ebay.grades` key naming (`psa_10` vs `psa10` vs `PSA10`), (b) whether `ebay.grades.psa_9_5` is published for cards with PSA 9.5 sales, (c) the `priceHistory` element shape, (d) the canonical product URL field.
 - A "force-rematch" UX so a user can correct a wrong cached `ppt_tcgplayer_id` without DB access.
 - Pre-warm cron in the scraper for the highest-scanned identities — drops cold-path latency to zero. Reserved.
 - Tune `POKEMONPRICETRACKER_FRESHNESS_TTL_SECONDS` against observed re-scan cadence and credit telemetry.
-- Verify PSA 9.5 availability on PPT; if present, fold `psa_9_5_price` back into the column set in v1.1.
-- Decide whether to persist PSA 1–6 columns for future ladder expansion or to keep YAGNI scope.
+- v1.1: add columns for non-PSA half-grades (`bgs_9_5_price`, `cgc_9_5_price`, `sgc_9_5_price`) and sub-PSA-7 tiers if signal demands.
+- Decide whether to persist a JSONB `ebay_grades_full` blob alongside the enumerated columns to future-proof against schema additions without further migrations.
 - Decide whether to drop `low_price` / `median_price` / `high_price` from `graded_market` entirely (depends on remaining consumers — verify in plan).
 
 ## Cross-cutting references
