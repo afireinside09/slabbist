@@ -2,31 +2,28 @@
 // @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function persistIdentityProductId(
+export async function persistIdentityPPTId(
   supabase: SupabaseClient,
   identityId: string,
-  productId: string,
-  productUrl: string,
+  tcgPlayerId: string,
+  pptUrl: string,
 ): Promise<void> {
   const { error } = await supabase
     .from("graded_card_identities")
-    .update({
-      pricecharting_product_id: productId,
-      pricecharting_url: productUrl,
-    })
+    .update({ ppt_tcgplayer_id: tcgPlayerId, ppt_url: pptUrl })
     .eq("id", identityId);
   if (error) throw new Error(`graded_card_identities update: ${error.message}`);
 }
 
-// Used to clear a stale id when the cached product is deleted upstream
-// (PriceCharting 404 on /api/product?id=…). Next scan re-runs search.
-export async function clearIdentityProductId(
+// Used to clear a stale id when the cached card is deleted upstream
+// (PPT 404 / empty array). Next scan re-runs search.
+export async function clearIdentityPPTId(
   supabase: SupabaseClient,
   identityId: string,
 ): Promise<void> {
   const { error } = await supabase
     .from("graded_card_identities")
-    .update({ pricecharting_product_id: null, pricecharting_url: null })
+    .update({ ppt_tcgplayer_id: null, ppt_url: null })
     .eq("id", identityId);
   if (error) throw new Error(`graded_card_identities clear: ${error.message}`);
 }
