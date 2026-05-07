@@ -122,9 +122,11 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
   let card: PPTCard;
   let creditsConsumed: number | undefined;
   let resolverTier: string | null = null;
+  let resolvedLanguage: "english" | "japanese" = "english";
 
+  let warmPathLanguage: "english" | "japanese" | undefined;
   if (tcgPlayerId) {
-    const result = await fetchCard(clientOpts, { tcgPlayerId });
+    let result = await fetchCard(clientOpts, { tcgPlayerId, language: "english" });
     if (result.status === 401 || result.status === 403) {
       console.error("ppt.auth_invalid", { phase: "tcgPlayerId" });
       return json(502, { code: "AUTH_INVALID" });
@@ -132,13 +134,31 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     if (result.status === 429 || result.status >= 500) {
       return await staleOrUpstreamDown(cached, body, `${result.status}`);
     }
+    if (result.status === 200 && !result.card) {
+      // English returned no card — try japanese before clearing the cached id.
+      const jpResult = await fetchCard(clientOpts, { tcgPlayerId, language: "japanese" });
+      if (jpResult.status === 429 || jpResult.status >= 500) {
+        return await staleOrUpstreamDown(cached, body, `${jpResult.status}`);
+      }
+      if (jpResult.status === 200 && jpResult.card) {
+        result = jpResult;
+        warmPathLanguage = "japanese";
+      } else {
+        // Both languages null — cached id refers to a deleted/missing card.
+        try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+        return json(404, { code: "NO_MARKET_DATA" });
+      }
+    } else {
+      warmPathLanguage = "english";
+    }
     if (!result.card) {
-      // Cached id refers to a deleted card. Clear it so the next scan re-runs search.
+      // Non-200 status from english fetch that wasn't 429/5xx (e.g. 404).
       try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
       return json(404, { code: "NO_MARKET_DATA" });
     }
     card = result.card;
     creditsConsumed = result.creditsConsumed;
+    resolvedLanguage = warmPathLanguage ?? "english";
   } else {
     const resolved = await resolveCard(
       { client: clientOpts, supabase },
@@ -163,6 +183,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     }
     card = resolved.card;
     resolverTier = resolved.tierMatched;
+    resolvedLanguage = resolved.resolvedLanguage ?? "english";
   }
   const ladder = extractLadder(card);
   // Sparkline tracks the requested tier's history (e.g., the PSA 10 series
@@ -210,6 +231,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     tcgPlayerId: resolvedTCGPlayerId,
     cache_state: state,
     matched: tcgPlayerId ? "cached_id" : (resolverTier ? `resolved_${resolverTier}` : "searched"),
+    resolved_language: resolvedLanguage,
     headline_present: headlineCents !== null,
     history_points: history.length,
     credits_consumed: creditsConsumed ?? null,
