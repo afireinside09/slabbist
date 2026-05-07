@@ -42,10 +42,17 @@ function cleanName(name: string): string {
  * Strips punctuation, splits on whitespace. Numeric-only tokens are
  * preserved (e.g. "151" survives) but later filters may drop short
  * tokens depending on caller need.
+ *
+ * Possessive `'s` is stripped to the bare stem ("Champion's" →
+ * "champion", "McDonald's" → "mcdonald") because PPT's `&set=` filter
+ * is substring-based, NOT stem-aware: `set=mcdonald` finds "McDonald's
+ * Promos 2024" but `set=mcdonalds` returns 0 hits (verified live
+ * 2026-05-07).
  */
 function tokenize(s: string): string[] {
   return s
     .toLowerCase()
+    .replace(/['’]s\b/g, "")
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9\s]+/g, " ")
     .split(/\s+/)
@@ -69,8 +76,8 @@ export function buildSearchTiers(identity: IdentityForMatch): Array<{ tier: stri
   const name = cleanName(identity.card_name);
   const tiers: Array<{ tier: string; args: SearchCardsArgs }> = [];
 
-  // T1: name + number + set (current strategy, kept as fallback for cases
-  // where PPT's fuzzy search agrees with the PSA cert tokens).
+  // T1: name + number + set (PSA-cert verbatim concat; works when PPT's
+  // fuzzy index agrees with PSA tokens — the historical happy path).
   const t1Parts: string[] = [name];
   if (identity.card_number) t1Parts.push(identity.card_number);
   t1Parts.push(identity.set_name);
