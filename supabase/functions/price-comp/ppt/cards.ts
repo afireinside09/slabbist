@@ -3,6 +3,28 @@
 import { get, type ClientOptions, _resetPause } from "./client.ts";
 import type { PPTCard } from "./parse.ts";
 
+/**
+ * PPT returns a few different envelope shapes depending on endpoint:
+ *   - Bare array:                  [card, card, …]
+ *   - Wrapped array:               { data: [card, card, …] }
+ *   - Single-object wrapped:       { data: card }   ← used by tcgPlayerId-by-id
+ *   - Empty:                       [] / { data: [] } / { data: null }
+ *
+ * Normalize all of those down to a card[] so callers don't have to care.
+ * Anything else returns [] (defensive — matches the previous behavior
+ * for unknown shapes).
+ */
+function unwrapCardList(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === "object") {
+    const data = (body as { data?: unknown }).data;
+    if (Array.isArray(data)) return data;
+    // Single object under data (tcgPlayerId-by-id) → wrap to 1-array.
+    if (data && typeof data === "object") return [data];
+  }
+  return [];
+}
+
 export interface FetchCardArgs {
   search?: string;
   tcgPlayerId?: string;
@@ -33,12 +55,7 @@ export async function fetchCard(opts: ClientOptions, args: FetchCardArgs): Promi
   }
   const res = await get(opts, "/api/v2/cards", params);
   if (res.status !== 200) return { status: res.status, card: null, creditsConsumed: res.creditsConsumed };
-  const body = res.body;
-  let arr: unknown;
-  if (Array.isArray(body)) arr = body;
-  else if (body && typeof body === "object" && Array.isArray((body as { data?: unknown }).data)) arr = (body as { data: unknown[] }).data;
-  else arr = [];
-  const list = arr as unknown[];
+  const list = unwrapCardList(res.body);
   const card = (list.length > 0 ? list[0] : null) as PPTCard | null;
   return { status: 200, card, creditsConsumed: res.creditsConsumed };
 }
@@ -72,11 +89,6 @@ export async function searchCards(opts: ClientOptions, args: SearchCardsArgs): P
   if (args.set) params.set = args.set;
   const res = await get(opts, "/api/v2/cards", params);
   if (res.status !== 200) return { status: res.status, cards: [], creditsConsumed: res.creditsConsumed };
-  const body = res.body;
-  let arr: unknown;
-  if (Array.isArray(body)) arr = body;
-  else if (body && typeof body === "object" && Array.isArray((body as { data?: unknown }).data)) arr = (body as { data: unknown[] }).data;
-  else arr = [];
-  const cards = (arr as unknown[]).filter((x) => x && typeof x === "object") as PPTCard[];
+  const cards = unwrapCardList(res.body).filter((x) => x && typeof x === "object") as PPTCard[];
   return { status: 200, cards, creditsConsumed: res.creditsConsumed };
 }

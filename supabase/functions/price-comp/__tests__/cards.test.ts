@@ -76,6 +76,21 @@ Deno.test("fetchCard: response wrapper { data: [card] } also supported", async (
   }
 });
 
+Deno.test("fetchCard: single-object wrapper { data: <obj> } (PPT's tcgPlayerId-by-id shape)", async () => {
+  // PPT returns a SINGLE OBJECT under "data" when fetching by tcgPlayerId
+  // (verified live 2026-05-07). The plural-array unwrap path was missing
+  // this and silently returned null cards on every warm-path scan.
+  const srv = startServer(() => new Response(JSON.stringify({ data: fullLadder }), { status: 200 }));
+  try {
+    _resetPauseForTests();
+    const r = await fetchCard({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { tcgPlayerId: "243172" });
+    assertEquals(r.status, 200);
+    assert(r.card?.tcgPlayerId === "243172");
+  } finally {
+    await srv.close();
+  }
+});
+
 Deno.test("fetchCard: 5xx propagates, card = null", async () => {
   const srv = startServer(() => new Response("down", { status: 503 }));
   try {
@@ -117,6 +132,20 @@ Deno.test("searchCards: response wrapper { data: [...] } also supported", async 
     assertEquals(r.status, 200);
     assertEquals(r.cards.length, 1);
     assert(r.cards[0]?.tcgPlayerId === "243172");
+  } finally {
+    await srv.close();
+  }
+});
+
+Deno.test("searchCards: single-object wrapper { data: <obj> } unwraps to single-card array", async () => {
+  // Mirrors PPT's tcgPlayerId-by-id response shape, defensively handled
+  // in case PPT ever returns a single-object data field for a search.
+  const srv = startServer(() => new Response(JSON.stringify({ data: fullLadder }), { status: 200 }));
+  try {
+    _resetPauseForTests();
+    const r = await searchCards({ token: "t", baseUrl: srv.url, now: () => Date.now() }, { search: "Charizard" });
+    assertEquals(r.status, 200);
+    assertEquals(r.cards.length, 1);
   } finally {
     await srv.close();
   }
