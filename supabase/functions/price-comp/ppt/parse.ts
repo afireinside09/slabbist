@@ -116,7 +116,11 @@ export function parsePriceHistory(raw: unknown): PriceHistoryPoint[] {
     if (avg === null || avg === undefined) continue;
     const num = typeof avg === "number" ? avg : Number(avg);
     if (!Number.isFinite(num) || num <= 0) continue;
-    out.push({ ts: date, price_cents: Math.round(num * 100) });
+    // PPT keys are bare YYYY-MM-DD strings. iOS decodes price_history.ts
+    // with JSONDecoder.dateDecodingStrategy = .iso8601, which requires an
+    // RFC 3339 datetime. Anchor every point at midnight UTC so the wire
+    // shape is decodable on both sides.
+    out.push({ ts: `${date}T00:00:00Z`, price_cents: Math.round(num * 100) });
   }
   out.sort((a, b) => a.ts.localeCompare(b.ts));
   return out;
@@ -143,7 +147,20 @@ export function priceHistoryForTier(card: PPTCard, tierKey: TierKey | null): unk
  * the URL points off-domain.
  */
 export function productUrl(card: PPTCard): string {
-  if (typeof card.tcgPlayerUrl === "string" && card.tcgPlayerUrl) return card.tcgPlayerUrl;
+  // Validate the upstream tcgPlayerUrl: must be https on tcgplayer.com.
+  // Anything else (HTTP, hijacked host, malformed) falls back to a URL
+  // we synthesize ourselves from tcgPlayerId so we never deep-link a
+  // user to an attacker-controlled destination.
+  if (typeof card.tcgPlayerUrl === "string" && card.tcgPlayerUrl) {
+    try {
+      const u = new URL(card.tcgPlayerUrl);
+      if (u.protocol === "https:" && (u.hostname === "tcgplayer.com" || u.hostname.endsWith(".tcgplayer.com"))) {
+        return card.tcgPlayerUrl;
+      }
+    } catch {
+      // malformed — fall through
+    }
+  }
   if (card.tcgPlayerId) {
     return `https://www.tcgplayer.com/product/${encodeURIComponent(card.tcgPlayerId)}`;
   }

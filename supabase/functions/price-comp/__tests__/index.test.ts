@@ -387,3 +387,105 @@ Deno.test("cached id + 404 from PPT — clears the cached id, returns NO_MARKET_
     await mock.close();
   }
 });
+
+Deno.test("buildSearchQuery: strips parenthesized variant suffix from card_name", async () => {
+  _resetPauseForTests();
+  const state: MockState = {
+    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
+    defaultBody: [fullLadder],
+    calls: [],
+  };
+  const mock = startMock(state);
+  try {
+    const fake = fakeSupabase({
+      identity: {
+        id: "id-1",
+        card_name: "Charizard ex (Special Illustration Rare)",
+        card_number: "199",
+        set_name: "Scarlet & Violet 151",
+        year: 2023,
+        ppt_tcgplayer_id: null,
+        ppt_url: null,
+      },
+      market: null,
+    });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
+    });
+    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    // Parens stripped, year dropped, internal whitespace collapsed.
+    assertEquals(state.calls[0].query.get("search"), "Charizard ex 199 Scarlet & Violet 151");
+  } finally {
+    await mock.close();
+  }
+});
+
+Deno.test("buildSearchQuery: drops year token from query", async () => {
+  _resetPauseForTests();
+  const state: MockState = {
+    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
+    defaultBody: [fullLadder],
+    calls: [],
+  };
+  const mock = startMock(state);
+  try {
+    const fake = fakeSupabase({
+      identity: {
+        id: "id-1",
+        card_name: "Pikachu",
+        card_number: "025",
+        set_name: "Base Set",
+        year: 1999,
+        ppt_tcgplayer_id: null,
+        ppt_url: null,
+      },
+      market: null,
+    });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
+    });
+    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const search = state.calls[0].query.get("search") ?? "";
+    assert(!search.includes("1999"), `query should not contain year, got: ${search}`);
+    assertEquals(search, "Pikachu 025 Base Set");
+  } finally {
+    await mock.close();
+  }
+});
+
+Deno.test("buildSearchQuery: omits null card_number cleanly", async () => {
+  _resetPauseForTests();
+  const state: MockState = {
+    responses: new Map([["__default__", { status: 200, body: [fullLadder] }]]),
+    defaultBody: [fullLadder],
+    calls: [],
+  };
+  const mock = startMock(state);
+  try {
+    const fake = fakeSupabase({
+      identity: {
+        id: "id-1",
+        card_name: "Mew",
+        card_number: null,
+        set_name: "Promo",
+        year: null,
+        ppt_tcgplayer_id: null,
+        ppt_url: null,
+      },
+      market: null,
+    });
+    const req = new Request("http://localhost/price-comp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
+    });
+    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    assertEquals(state.calls[0].query.get("search"), "Mew Promo");
+  } finally {
+    await mock.close();
+  }
+});

@@ -99,15 +99,22 @@ Deno.test("ladderHasAnyPrice: full → true, empty → false", () => {
   assert(!ladderHasAnyPrice(extractLadder(empty)));
 });
 
-Deno.test("parsePriceHistory: date-keyed dict → chronologically-sorted [{ts, price_cents}]", () => {
+Deno.test("parsePriceHistory: date-keyed dict → chronologically-sorted [{ts, price_cents}] anchored at midnight UTC", () => {
   const psa10History = full.ebay.priceHistory.psa10;
   assertEquals(parsePriceHistory(psa10History), [
-    { ts: "2025-11-08", price_cents: 16200 },
-    { ts: "2025-11-15", price_cents: 16850 },
-    { ts: "2025-11-22", price_cents: 17500 },
-    { ts: "2025-12-01", price_cents: 18000 },
-    { ts: "2026-05-01", price_cents: 18500 },
+    { ts: "2025-11-08T00:00:00Z", price_cents: 16200 },
+    { ts: "2025-11-15T00:00:00Z", price_cents: 16850 },
+    { ts: "2025-11-22T00:00:00Z", price_cents: 17500 },
+    { ts: "2025-12-01T00:00:00Z", price_cents: 18000 },
+    { ts: "2026-05-01T00:00:00Z", price_cents: 18500 },
   ]);
+});
+
+Deno.test("parsePriceHistory: emitted ts decodes as a JS Date (RFC 3339)", () => {
+  const out = parsePriceHistory(full.ebay.priceHistory.psa10);
+  for (const p of out) {
+    assert(!Number.isNaN(Date.parse(p.ts)), `ts ${p.ts} should parse as a Date`);
+  }
 });
 
 Deno.test("parsePriceHistory: empty dict → []", () => {
@@ -134,8 +141,8 @@ Deno.test("parsePriceHistory: malformed entries dropped silently", () => {
   };
   const out = parsePriceHistory(series);
   assertEquals(out.length, 2);
-  assertEquals(out[0].ts, "2025-11-08");
-  assertEquals(out[1].ts, "2026-05-01");
+  assertEquals(out[0].ts, "2025-11-08T00:00:00Z");
+  assertEquals(out[1].ts, "2026-05-01T00:00:00Z");
 });
 
 Deno.test("priceHistoryForTier: (PSA, '10') returns the psa10 series", () => {
@@ -165,4 +172,24 @@ Deno.test("productUrl: derives a TCGPlayer URL from tcgPlayerId when tcgPlayerUr
   const card = { tcgPlayerId: "243172", name: "Charizard" };
   const url = productUrl(card);
   assertEquals(url, "https://www.tcgplayer.com/product/243172");
+});
+
+Deno.test("productUrl: rejects http (non-https) tcgPlayerUrl, falls back to synthesized", () => {
+  const card = { tcgPlayerId: "243172", tcgPlayerUrl: "http://www.tcgplayer.com/product/243172" };
+  assertEquals(productUrl(card), "https://www.tcgplayer.com/product/243172");
+});
+
+Deno.test("productUrl: rejects off-host tcgPlayerUrl, falls back to synthesized", () => {
+  const card = { tcgPlayerId: "243172", tcgPlayerUrl: "https://attacker.example.com/charizard" };
+  assertEquals(productUrl(card), "https://www.tcgplayer.com/product/243172");
+});
+
+Deno.test("productUrl: rejects malformed tcgPlayerUrl, falls back to synthesized", () => {
+  const card = { tcgPlayerId: "243172", tcgPlayerUrl: "not a url" };
+  assertEquals(productUrl(card), "https://www.tcgplayer.com/product/243172");
+});
+
+Deno.test("productUrl: accepts subdomain on tcgplayer.com", () => {
+  const card = { tcgPlayerId: "243172", tcgPlayerUrl: "https://infinite.tcgplayer.com/product/243172" };
+  assertEquals(productUrl(card), "https://infinite.tcgplayer.com/product/243172");
 });
