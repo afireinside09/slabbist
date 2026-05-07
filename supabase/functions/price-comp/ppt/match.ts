@@ -169,6 +169,7 @@ export interface ResolveResult {
   card: PPTCard | null;
   attemptLog: string[];
   tierMatched: string | null;
+  resolvedLanguage?: "english" | "japanese";
 }
 
 export interface ResolveDeps {
@@ -229,9 +230,16 @@ export async function resolveCard(
         attemptLog.push(
           `A[${g.label}=${g.id}]: tcg_products hit product_id=${product.productId} (${product.cardName} #${product.cardNumber})`,
         );
-        const full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId) });
+        let full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId), language: "english" });
+        let resolvedLanguage: "english" | "japanese" = "english";
+        if (full.status === 200 && !full.card) {
+          attemptLog.push(`A[${g.label}=${g.id}]: PPT english empty for tcgPlayerId=${product.productId}, retrying japanese`);
+          full = await fetchCard(deps.client, { tcgPlayerId: String(product.productId), language: "japanese" });
+          resolvedLanguage = "japanese";
+        }
         if (full.status === 200 && full.card) {
-          return { card: full.card, attemptLog, tierMatched: "A" };
+          attemptLog.push(`A[${g.label}=${g.id}]: PPT hit (language=${resolvedLanguage}) tcgPlayerId=${product.productId}`);
+          return { card: full.card, attemptLog, tierMatched: "A", resolvedLanguage };
         }
         attemptLog.push(`A[${g.label}=${g.id}]: PPT fetchCard miss for tcgPlayerId=${product.productId} (status=${full.status})`);
       } else {

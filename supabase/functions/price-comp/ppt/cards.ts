@@ -28,6 +28,7 @@ function unwrapCardList(body: unknown): unknown[] {
 export interface FetchCardArgs {
   search?: string;
   tcgPlayerId?: string;
+  language?: "english" | "japanese";
 }
 
 export interface FetchCardResult {
@@ -53,6 +54,9 @@ export async function fetchCard(opts: ClientOptions, args: FetchCardArgs): Promi
   } else {
     return { status: 400, card: null };
   }
+  if (args.language) {
+    params.language = args.language;
+  }
   const res = await get(opts, "/api/v2/cards", params);
   if (res.status !== 200) return { status: res.status, card: null, creditsConsumed: res.creditsConsumed };
   const list = unwrapCardList(res.body);
@@ -64,6 +68,7 @@ export interface SearchCardsArgs {
   search?: string;
   set?: string;
   limit?: number;
+  language?: "english" | "japanese";
 }
 
 export interface SearchCardsResult {
@@ -87,6 +92,7 @@ export async function searchCards(opts: ClientOptions, args: SearchCardsArgs): P
   };
   if (args.search) params.search = args.search;
   if (args.set) params.set = args.set;
+  if (args.language) params.language = args.language;
   const res = await get(opts, "/api/v2/cards", params);
   if (res.status !== 200) return { status: res.status, cards: [], creditsConsumed: res.creditsConsumed };
   const cards = unwrapCardList(res.body).filter((x) => x && typeof x === "object") as PPTCard[];
