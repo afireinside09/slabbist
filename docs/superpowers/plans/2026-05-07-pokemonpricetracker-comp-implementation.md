@@ -497,9 +497,15 @@ EOF
 **Files:**
 - Create: `supabase/functions/price-comp/ppt/parse.ts`
 - Test: `supabase/functions/price-comp/__tests__/parse.test.ts` (rewritten)
-- Reference: `supabase/functions/price-comp/__fixtures__/ppt/charizard-base-set.json` (from Task 0)
+- Reference: `supabase/functions/price-comp/__fixtures__/ppt/charizard-base-set.json` (live capture from Task 0; Base Set 2 reprint, useful for partial-ladder semantics)
 
-- [ ] **Step 1: Add fixtures matching the v1 ladder shape**
+> **API shape lock-in (per spec r3 + Task 0 fixture):**
+> - Bare card object lives at `data[0]` of the live response wrapper. The fixtures below store the bare card; the wrapper-unwrap happens in `ppt/cards.ts` (Task 9), not here.
+> - Per-tier price path: `card.ebay.salesByGrade.{key}.smartMarketPrice.price` (USD float). Keys are compact: `psa10`, `psa9_5`, `bgs10`, `cgc10`, `sgc10`, `ungraded`.
+> - Graded sparkline data: `card.ebay.priceHistory.{gradeKey}` is a **date-keyed dict** (`"YYYY-MM-DD": { average: <float>, count: <int>, … }`), not a flat array. Convert to a chronologically-sorted `[{ts, price_cents}]`.
+> - Canonical URL: `card.tcgPlayerUrl` (TCGPlayer page; PPT does not expose a PPT-native product URL). Stored in our `ppt_url` column for spec-name continuity.
+
+- [ ] **Step 1: Add synthetic fixtures matching the v1 ladder shape**
 
 Create `supabase/functions/price-comp/__fixtures__/ppt/full-ladder.json`:
 
@@ -507,30 +513,36 @@ Create `supabase/functions/price-comp/__fixtures__/ppt/full-ladder.json`:
 {
   "tcgPlayerId": "243172",
   "name": "Charizard",
-  "set": "Base Set",
-  "number": "4/102",
-  "url": "https://www.pokemonpricetracker.com/card/charizard-base-set",
+  "setName": "Base Set",
+  "cardNumber": "4/102",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/243172",
   "prices": { "market": 4.00 },
   "ebay": {
-    "grades": {
-      "raw":     4.00,
-      "psa_7":  24.00,
-      "psa_8":  34.00,
-      "psa_9":  68.00,
-      "psa_9_5":112.00,
-      "psa_10":185.00,
-      "bgs_10":215.00,
-      "cgc_10":168.00,
-      "sgc_10":165.00
+    "salesByGrade": {
+      "ungraded": { "count": 50, "smartMarketPrice": { "price": 4.00, "confidence": "high" } },
+      "psa7":     { "count": 20, "smartMarketPrice": { "price": 24.00, "confidence": "medium" } },
+      "psa8":     { "count": 15, "smartMarketPrice": { "price": 34.00, "confidence": "medium" } },
+      "psa9":     { "count": 10, "smartMarketPrice": { "price": 68.00, "confidence": "medium" } },
+      "psa9_5":   { "count": 5,  "smartMarketPrice": { "price": 112.00, "confidence": "low" } },
+      "psa10":    { "count": 12, "smartMarketPrice": { "price": 185.00, "confidence": "high" } },
+      "bgs10":    { "count": 4,  "smartMarketPrice": { "price": 215.00, "confidence": "low" } },
+      "cgc10":    { "count": 6,  "smartMarketPrice": { "price": 168.00, "confidence": "medium" } },
+      "sgc10":    { "count": 3,  "smartMarketPrice": { "price": 165.00, "confidence": "low" } }
+    },
+    "priceHistory": {
+      "psa10": {
+        "2025-11-08": { "average": 162.00, "count": 1 },
+        "2025-11-15": { "average": 168.50, "count": 2 },
+        "2025-11-22": { "average": 175.00, "count": 1 },
+        "2025-12-01": { "average": 180.00, "count": 1 },
+        "2026-05-01": { "average": 185.00, "count": 1 }
+      },
+      "psa9": {
+        "2025-11-08": { "average": 60.00, "count": 1 },
+        "2026-05-01": { "average": 68.00, "count": 1 }
+      }
     }
-  },
-  "priceHistory": [
-    { "date": "2025-11-08", "price": 162.00 },
-    { "date": "2025-11-15", "price": 168.50 },
-    { "date": "2025-11-22", "price": 175.00 },
-    { "date": "2025-12-01", "price": 180.00 },
-    { "date": "2026-05-01", "price": 185.00 }
-  ]
+  }
 }
 ```
 
@@ -540,18 +552,20 @@ Create `supabase/functions/price-comp/__fixtures__/ppt/partial-ladder.json`:
 {
   "tcgPlayerId": "999999",
   "name": "Obscure Card",
-  "set": "Vintage",
-  "number": "999/999",
-  "url": "https://www.pokemonpricetracker.com/card/obscure-card",
+  "setName": "Vintage",
+  "cardNumber": "999/999",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/999999",
   "prices": { "market": 5.00 },
   "ebay": {
-    "grades": {
-      "raw":    5.00,
-      "psa_9": 42.00,
-      "psa_10":180.00
+    "salesByGrade": {
+      "ungraded": { "count": 12, "smartMarketPrice": { "price": 5.00, "confidence": "high" } },
+      "psa9":     { "count": 3,  "smartMarketPrice": { "price": 42.00, "confidence": "low" } },
+      "psa10":    { "count": 2,  "smartMarketPrice": { "price": 180.00, "confidence": "low" } }
+    },
+    "priceHistory": {
+      "psa10": {}
     }
-  },
-  "priceHistory": []
+  }
 }
 ```
 
@@ -561,16 +575,15 @@ Create `supabase/functions/price-comp/__fixtures__/ppt/no-prices.json`:
 {
   "tcgPlayerId": "111",
   "name": "Untraded Card",
-  "set": "Test",
-  "number": "1/1",
-  "url": "https://www.pokemonpricetracker.com/card/untraded",
+  "setName": "Test",
+  "cardNumber": "1/1",
+  "tcgPlayerUrl": "https://www.tcgplayer.com/product/111",
   "prices": {},
-  "ebay": { "grades": {} },
-  "priceHistory": []
+  "ebay": { "salesByGrade": {}, "priceHistory": {} }
 }
 ```
 
-> **Note:** If Task 0's probe revealed a different field structure than `ebay.grades.{key}` or `priceHistory[].{date,price}`, regenerate these fixtures to match the live shape before continuing. The `parse.ts` impl below assumes this exact shape.
+> **Note:** These are synthetic fixtures (the live Task 0 capture only covers a subset of tiers because Base Set 2 has no recent PSA 10 / BGS 10 / CGC 10 / SGC 10 sales). Their shape mirrors the live response's `data[0]` exactly; if the implementer finds shape drift between this and the captured `charizard-base-set.json`, the live capture wins — fix the synthetic fixtures + parse.ts.
 
 - [ ] **Step 2: Rewrite `__tests__/parse.test.ts`**
 
@@ -584,6 +597,7 @@ import {
   pickTier,
   ladderHasAnyPrice,
   parsePriceHistory,
+  priceHistoryForTier,
   productUrl,
 } from "../ppt/parse.ts";
 
@@ -597,7 +611,7 @@ const empty = JSON.parse(
   await Deno.readTextFile(new URL("../__fixtures__/ppt/no-prices.json", import.meta.url)),
 );
 
-Deno.test("extractLadder: full ladder, dollars→cents", () => {
+Deno.test("extractLadder: full ladder, dollars→cents from salesByGrade.{key}.smartMarketPrice.price", () => {
   assertEquals(extractLadder(full), {
     loose:    400,
     psa_7:   2400,
@@ -629,29 +643,46 @@ Deno.test("extractLadder: no-prices card → all null", () => {
   for (const v of Object.values(ladder)) assertEquals(v, null);
 });
 
-Deno.test("extractLadder: prices.market preferred over ebay.grades.raw for loose", () => {
-  const card = { prices: { market: 7.50 }, ebay: { grades: { raw: 4.00 } } };
+Deno.test("extractLadder: prices.market preferred over ebay.salesByGrade.ungraded for loose", () => {
+  const card = {
+    prices: { market: 7.50 },
+    ebay: { salesByGrade: { ungraded: { smartMarketPrice: { price: 4.00 } } } },
+  };
   assertEquals(extractLadder(card).loose, 750);
 });
 
-Deno.test("extractLadder: falls back to ebay.grades.raw when prices.market absent", () => {
-  const card = { prices: {}, ebay: { grades: { raw: 4.00 } } };
+Deno.test("extractLadder: falls back to ebay.salesByGrade.ungraded.smartMarketPrice when prices.market absent", () => {
+  const card = {
+    prices: {},
+    ebay: { salesByGrade: { ungraded: { smartMarketPrice: { price: 4.00 } } } },
+  };
   assertEquals(extractLadder(card).loose, 400);
 });
 
-Deno.test("pickTier: (PSA, '10') picks psa_10", () => {
+Deno.test("extractLadder: a tier with smartMarketPrice = null is treated as missing", () => {
+  const card = {
+    ebay: {
+      salesByGrade: {
+        psa10: { count: 0, smartMarketPrice: { price: null } },
+      },
+    },
+  };
+  assertEquals(extractLadder(card).psa_10, null);
+});
+
+Deno.test("pickTier: (PSA, '10') picks psa10", () => {
   assertEquals(pickTier(full, "PSA", "10"), 18500);
 });
 
-Deno.test("pickTier: (BGS, '10') picks bgs_10", () => {
+Deno.test("pickTier: (BGS, '10') picks bgs10", () => {
   assertEquals(pickTier(full, "BGS", "10"), 21500);
 });
 
-Deno.test("pickTier: (PSA, '9.5') picks psa_9_5", () => {
+Deno.test("pickTier: (PSA, '9.5') picks psa9_5", () => {
   assertEquals(pickTier(full, "PSA", "9.5"), 11200);
 });
 
-Deno.test("pickTier: (TAG, '10') returns null", () => {
+Deno.test("pickTier: (TAG, '10') returns null in v1", () => {
   assertEquals(pickTier(full, "TAG", "10"), null);
 });
 
@@ -660,8 +691,9 @@ Deno.test("ladderHasAnyPrice: full → true, empty → false", () => {
   assert(!ladderHasAnyPrice(extractLadder(empty)));
 });
 
-Deno.test("parsePriceHistory: well-formed array → cents-int points", () => {
-  assertEquals(parsePriceHistory(full.priceHistory), [
+Deno.test("parsePriceHistory: date-keyed dict → chronologically-sorted [{ts, price_cents}]", () => {
+  const psa10History = full.ebay.priceHistory.psa10;
+  assertEquals(parsePriceHistory(psa10History), [
     { ts: "2025-11-08", price_cents: 16200 },
     { ts: "2025-11-15", price_cents: 16850 },
     { ts: "2025-11-22", price_cents: 17500 },
@@ -670,30 +702,61 @@ Deno.test("parsePriceHistory: well-formed array → cents-int points", () => {
   ]);
 });
 
-Deno.test("parsePriceHistory: empty array → []", () => {
-  assertEquals(parsePriceHistory([]), []);
+Deno.test("parsePriceHistory: empty dict → []", () => {
+  assertEquals(parsePriceHistory({}), []);
+});
+
+Deno.test("parsePriceHistory: missing input → []", () => {
+  assertEquals(parsePriceHistory(undefined), []);
+  assertEquals(parsePriceHistory(null), []);
+});
+
+Deno.test("parsePriceHistory: array input (wrong shape) → []", () => {
+  assertEquals(parsePriceHistory([{ date: "2025-11-08", price: 100 }]), []);
 });
 
 Deno.test("parsePriceHistory: malformed entries dropped silently", () => {
-  const series = [
-    { date: "2025-11-08", price: 162.00 },
-    { date: "bad-date", price: "not-a-number" },
-    null,
-    { price: 100 },           // missing date
-    { date: "2025-11-15", price: null },
-    { date: "2025-12-01", price: 180.00 },
-  ];
-  assertEquals(parsePriceHistory(series).length, 2);
+  const series = {
+    "2025-11-08": { average: 162.00, count: 1 },
+    "bad-date":   { average: 100, count: 1 },
+    "2025-11-15": { count: 2 },                     // missing average
+    "2025-11-22": { average: null, count: 1 },      // null average
+    "2025-12-01": { average: "not-a-number" },      // non-numeric
+    "2026-05-01": { average: 180.00, count: 1 },
+  };
+  const out = parsePriceHistory(series);
+  assertEquals(out.length, 2);
+  assertEquals(out[0].ts, "2025-11-08");
+  assertEquals(out[1].ts, "2026-05-01");
 });
 
-Deno.test("productUrl: returns card.url when present", () => {
-  assertEquals(productUrl(full), "https://www.pokemonpricetracker.com/card/charizard-base-set");
+Deno.test("priceHistoryForTier: (PSA, '10') returns the psa10 series", () => {
+  const series = priceHistoryForTier(full, "psa_10");
+  assertEquals(typeof series, "object");
+  // Spot-check: the series contains the 2026-05-01 daily aggregate.
+  assert((series as Record<string, unknown>)["2026-05-01"], "psa10 series includes 2026-05-01");
 });
 
-Deno.test("productUrl: derives a sensible URL from tcgPlayerId when card.url is missing", () => {
+Deno.test("priceHistoryForTier: (BGS, '10') returns null when no bgs10 history exists", () => {
+  assertEquals(priceHistoryForTier(full, "bgs_10"), null);
+});
+
+Deno.test("priceHistoryForTier: 'loose' returns null", () => {
+  assertEquals(priceHistoryForTier(full, "loose"), null);
+});
+
+Deno.test("priceHistoryForTier: null tier returns null", () => {
+  assertEquals(priceHistoryForTier(full, null), null);
+});
+
+Deno.test("productUrl: returns card.tcgPlayerUrl when present", () => {
+  assertEquals(productUrl(full), "https://www.tcgplayer.com/product/243172");
+});
+
+Deno.test("productUrl: derives a TCGPlayer URL from tcgPlayerId when tcgPlayerUrl is missing", () => {
   const card = { tcgPlayerId: "243172", name: "Charizard" };
   const url = productUrl(card);
-  assert(url.startsWith("https://www.pokemonpricetracker.com/"), "URL should be on the PPT domain");
+  assertEquals(url, "https://www.tcgplayer.com/product/243172");
 });
 ```
 
@@ -715,15 +778,32 @@ Create `supabase/functions/price-comp/ppt/parse.ts`:
 import type { GradingService } from "../types.ts";
 import { gradeKeyFor, type TierKey } from "../lib/grade-key.ts";
 
+export interface PPTSmartMarketPrice {
+  price?: number | null;
+  confidence?: string;
+}
+
+export interface PPTSalesByGradeEntry {
+  count?: number;
+  averagePrice?: number;
+  smartMarketPrice?: PPTSmartMarketPrice;
+}
+
+export interface PPTEbay {
+  salesByGrade?: Record<string, PPTSalesByGradeEntry | undefined>;
+  // priceHistory is keyed by gradeKey ("psa10", "bgs10", "ungraded", …);
+  // each value is a date-keyed dict of daily aggregates.
+  priceHistory?: Record<string, Record<string, { average?: number; count?: number } | undefined> | undefined>;
+}
+
 export interface PPTCard {
   tcgPlayerId?: string;
   name?: string;
-  set?: string;
-  number?: string;
-  url?: string;
+  setName?: string;
+  cardNumber?: string;
+  tcgPlayerUrl?: string;
   prices?: { market?: number };
-  ebay?: { grades?: Record<string, number | null | undefined> };
-  priceHistory?: Array<{ date?: string; price?: number | string | null } | null | undefined>;
+  ebay?: PPTEbay;
 }
 
 export interface LadderPrices {
@@ -743,15 +823,17 @@ export interface PriceHistoryPoint {
   price_cents: number;
 }
 
-const TIER_TO_GRADES_KEY: Record<Exclude<keyof LadderPrices, "loose">, string> = {
-  psa_7:   "psa_7",
-  psa_8:   "psa_8",
-  psa_9:   "psa_9",
-  psa_9_5: "psa_9_5",
-  psa_10:  "psa_10",
-  bgs_10:  "bgs_10",
-  cgc_10:  "cgc_10",
-  sgc_10:  "sgc_10",
+// Maps our internal TierKey → PPT's compact key in `salesByGrade` /
+// `priceHistory`. PPT uses `psa10` not `psa_10`, `ungraded` not `raw`.
+const TIER_TO_PPT_KEY: Record<Exclude<keyof LadderPrices, "loose">, string> = {
+  psa_7:   "psa7",
+  psa_8:   "psa8",
+  psa_9:   "psa9",
+  psa_9_5: "psa9_5",
+  psa_10:  "psa10",
+  bgs_10:  "bgs10",
+  cgc_10:  "cgc10",
+  sgc_10:  "sgc10",
 };
 
 function dollarsToCents(v: number | null | undefined): number | null {
@@ -760,17 +842,22 @@ function dollarsToCents(v: number | null | undefined): number | null {
   return Math.round(v * 100);
 }
 
+function smartMarketCents(entry: PPTSalesByGradeEntry | undefined): number | null {
+  if (!entry) return null;
+  return dollarsToCents(entry.smartMarketPrice?.price);
+}
+
 export function extractLadder(card: PPTCard): LadderPrices {
-  const grades = card.ebay?.grades ?? {};
-  const looseFromMarket = dollarsToCents(card.prices?.market);
-  const looseFromRaw    = dollarsToCents(grades["raw"]);
+  const sbg = card.ebay?.salesByGrade ?? {};
+  const looseFromMarket   = dollarsToCents(card.prices?.market);
+  const looseFromUngraded = smartMarketCents(sbg["ungraded"]);
   const out: LadderPrices = {
-    loose:   looseFromMarket ?? looseFromRaw,
+    loose:   looseFromMarket ?? looseFromUngraded,
     psa_7:   null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null,
     bgs_10:  null, cgc_10: null, sgc_10: null,
   };
-  for (const [tier, key] of Object.entries(TIER_TO_GRADES_KEY) as Array<[keyof LadderPrices, string]>) {
-    out[tier] = dollarsToCents(grades[key]);
+  for (const [tier, key] of Object.entries(TIER_TO_PPT_KEY) as Array<[keyof LadderPrices, string]>) {
+    out[tier] = smartMarketCents(sbg[key]);
   }
   return out;
 }
@@ -786,29 +873,56 @@ export function ladderHasAnyPrice(ladder: LadderPrices): boolean {
   return Object.values(ladder).some((v) => v !== null);
 }
 
+/**
+ * Converts a PPT `ebay.priceHistory.{gradeKey}` date-keyed dict
+ * (e.g. `{ "2026-05-05": { average: 1190.0, count: 1 }, … }`) into a
+ * chronologically-sorted array of `{ts, price_cents}`. Tolerates missing
+ * keys, malformed entries, and wrong shapes by returning `[]`.
+ */
 export function parsePriceHistory(raw: unknown): PriceHistoryPoint[] {
-  if (!Array.isArray(raw)) return [];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
   const out: PriceHistoryPoint[] = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== "object") continue;
-    const date = (entry as { date?: unknown }).date;
-    const price = (entry as { price?: unknown }).price;
-    if (typeof date !== "string" || !date) continue;
+  for (const [date, agg] of Object.entries(raw as Record<string, unknown>)) {
+    if (!date) continue;
     const parsedDate = Date.parse(date);
     if (Number.isNaN(parsedDate)) continue;
-    const num = typeof price === "number" ? price : Number(price);
+    if (!agg || typeof agg !== "object") continue;
+    const avg = (agg as { average?: unknown }).average;
+    if (avg === null || avg === undefined) continue;
+    const num = typeof avg === "number" ? avg : Number(avg);
     if (!Number.isFinite(num) || num <= 0) continue;
     out.push({ ts: date, price_cents: Math.round(num * 100) });
   }
+  out.sort((a, b) => a.ts.localeCompare(b.ts));
   return out;
 }
 
+/**
+ * Returns the raw `ebay.priceHistory.{gradeKey}` dict for the given
+ * internal TierKey, or `null` if no series exists for that tier (or if
+ * the tier is `loose` / `null`). Caller passes the result to
+ * `parsePriceHistory()` to convert into the wire shape.
+ */
+export function priceHistoryForTier(card: PPTCard, tierKey: TierKey | null): unknown {
+  if (!tierKey || tierKey === "loose") return null;
+  const pptKey = TIER_TO_PPT_KEY[tierKey as Exclude<keyof LadderPrices, "loose">];
+  if (!pptKey) return null;
+  const series = card.ebay?.priceHistory?.[pptKey];
+  return series ?? null;
+}
+
+/**
+ * Canonical product page URL for the card. Currently the TCGPlayer URL —
+ * PPT does not expose a PPT-native product page URL on the card object.
+ * The `ppt_url` column name is kept for spec-name continuity even though
+ * the URL points off-domain.
+ */
 export function productUrl(card: PPTCard): string {
-  if (typeof card.url === "string" && card.url) return card.url;
+  if (typeof card.tcgPlayerUrl === "string" && card.tcgPlayerUrl) return card.tcgPlayerUrl;
   if (card.tcgPlayerId) {
-    return `https://www.pokemonpricetracker.com/card/${encodeURIComponent(card.tcgPlayerId)}`;
+    return `https://www.tcgplayer.com/product/${encodeURIComponent(card.tcgPlayerId)}`;
   }
-  return "https://www.pokemonpricetracker.com";
+  return "https://www.tcgplayer.com";
 }
 ```
 
@@ -831,9 +945,12 @@ git add supabase/functions/price-comp/ppt/parse.ts \
 git commit -m "$(cat <<'EOF'
 edge: add ppt/parse.ts with ladder + history extractors
 
-extractLadder maps ebay.grades.{key} to LadderPrices in cents.
-parsePriceHistory normalizes the priceHistory array to {ts, price_cents}.
-loose price prefers prices.market then falls back to ebay.grades.raw.
+extractLadder maps ebay.salesByGrade.{key}.smartMarketPrice.price to
+LadderPrices in cents. parsePriceHistory turns a PPT date-keyed history
+dict into a chronologically-sorted [{ts, price_cents}] array.
+priceHistoryForTier picks the right per-grade series. loose price
+prefers prices.market then falls back to salesByGrade.ungraded.
+productUrl returns tcgPlayerUrl (no PPT-native product URL exists).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1496,6 +1613,8 @@ EOF
 **Files:**
 - Modify: `supabase/functions/price-comp/index.ts`
 
+> **Match-quality note from Task 0 r3:** PPT's fuzzy search with `limit=1` can return the wrong printing for cards with many reprints (the probe searched "charizard base set" and got *Base Set 2*, not the original). The plan keeps `limit=1` for v1 simplicity but the implementer should add a defensive heuristic: if the returned card's `setName` is empty/missing OR the returned card looks like a pattern-mismatch on number, log `ppt.match.set_mismatch` (don't reject the result — a "force-rematch" UX is reserved). This makes drift visible in logs.
+
 - [ ] **Step 1: Replace the file**
 
 ```typescript
@@ -1504,7 +1623,8 @@ EOF
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GradingService, PriceCompRequest, PriceCompResponse, CacheState } from "./types.ts";
-import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, type LadderPrices, type PriceHistoryPoint } from "./ppt/parse.ts";
+import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, priceHistoryForTier, type LadderPrices, type PriceHistoryPoint } from "./ppt/parse.ts";
+import { gradeKeyFor } from "./lib/grade-key.ts";
 import { fetchCard } from "./ppt/cards.ts";
 import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
 import { persistIdentityPPTId, clearIdentityPPTId } from "./persistence/identity-product-id.ts";
@@ -1650,7 +1770,13 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
 
   const card = result.card;
   const ladder = extractLadder(card);
-  const history = parsePriceHistory(card.priceHistory ?? []);
+  // Sparkline tracks the requested tier's history (e.g., the PSA 10 series
+  // when the user scanned a PSA 10). Falls back to PSA 10 history when the
+  // requested grader is unsupported (TAG, sub-PSA-7) so the card still
+  // shows a meaningful trend line. Empty / missing → empty array.
+  const requestedTierKey = gradeKeyFor(body.grading_service, body.grade);
+  const historyTierKey = requestedTierKey ?? "psa_10";
+  const history = parsePriceHistory(priceHistoryForTier(card, historyTierKey));
   if (!ladderHasAnyPrice(ladder)) {
     console.log("ppt.product.no_prices", { tcgPlayerId: card.tcgPlayerId });
     return json(404, { code: "NO_MARKET_DATA" });
@@ -3389,7 +3515,24 @@ Expected: only the two POKEMONPRICETRACKER secrets present.
 
 **Files:** none.
 
-- [ ] **Step 1: Deploy**
+- [ ] **Step 1: Verify the PPT account is on the paid API tier (BLOCKER)**
+
+Per Task 0 r3 finding, the probe token may have been on the free plan (100 calls/day, 3-day history). Production needs the paid API tier ($9.99/mo, 20k/day, 6-month history) or scans will rate-limit within the first day and the sparkline will be 3 days wide.
+
+```bash
+TOKEN=$(cat ~/.slabbist/ppt-token | tr -d '\n\r')
+curl -sS -G 'https://www.pokemonpricetracker.com/api/v2/cards' \
+  --data-urlencode 'search=charizard' \
+  --data-urlencode 'limit=1' \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H 'X-API-Version: v1' \
+  -D /tmp/ppt-tier-headers.txt -o /dev/null
+grep -iE 'x-ratelimit-(daily-limit|daily-remaining)' /tmp/ppt-tier-headers.txt
+```
+
+Expected: `x-ratelimit-daily-limit: 20000` (or higher for Business tier). If it shows `100`, the account is still on free — STOP and ask the user to upgrade, then re-run this step.
+
+- [ ] **Step 2: Deploy**
 
 ```bash
 supabase functions deploy price-comp 2>&1 | tail -20
@@ -3397,7 +3540,7 @@ supabase functions deploy price-comp 2>&1 | tail -20
 
 Expected: deployment success.
 
-- [ ] **Step 2: Tail logs and run a curl smoke test**
+- [ ] **Step 3: Tail logs and run a curl smoke test**
 
 In one terminal:
 ```bash
