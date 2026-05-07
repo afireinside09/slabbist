@@ -160,7 +160,7 @@ struct ScanDetailView: View {
             kicker: "Fetching",
             symbol: "arrow.triangle.2.circlepath",
             symbolTint: AppColor.gold,
-            title: "Fetching PriceCharting comp…",
+            title: "Fetching Pokemon Price Tracker comp…",
             detail: "This usually takes a couple of seconds. Tap retry if it's stuck.",
             showsProgress: true,
             cta: ("Retry comp fetch", retry)
@@ -186,8 +186,8 @@ struct ScanDetailView: View {
             kicker: "No comp",
             symbol: "magnifyingglass",
             symbolTint: AppColor.muted,
-            title: "PriceCharting has no comp for this slab",
-            detail: "Either we couldn't find this card on PriceCharting, or there's no published price for this tier yet. Try retrying later.",
+            title: "Pokemon Price Tracker has no comp for this slab",
+            detail: "Either we couldn't find this card on Pokemon Price Tracker, or there's no published price for this tier yet. Try retrying later.",
             showsProgress: false,
             cta: ("Retry comp fetch", retry)
         )
