@@ -6,7 +6,7 @@ import SwiftData
 @Suite("CompRepository")
 @MainActor
 struct CompRepositoryTests {
-    @Test("decodes a full PriceCharting ladder response")
+    @Test("decodes a full PPT cross-grader ladder response")
     func decodesFullLadder() async throws {
         let json = """
         {
@@ -14,17 +14,21 @@ struct CompRepositoryTests {
           "grading_service": "PSA",
           "grade": "10",
           "loose_price_cents": 400,
-          "grade_7_price_cents": 2400,
-          "grade_8_price_cents": 3400,
-          "grade_9_price_cents": 6800,
-          "grade_9_5_price_cents": 11200,
+          "psa_7_price_cents": 2400,
+          "psa_8_price_cents": 3400,
+          "psa_9_price_cents": 6800,
+          "psa_9_5_price_cents": 11200,
           "psa_10_price_cents": 18500,
           "bgs_10_price_cents": 21500,
           "cgc_10_price_cents": 16800,
           "sgc_10_price_cents": 16500,
-          "pricecharting_product_id": "12345678",
-          "pricecharting_url": "https://www.pricecharting.com/game/pokemon-surging-sparks/pikachu-ex-247-191",
-          "fetched_at": "2026-05-05T22:14:03Z",
+          "price_history": [
+            { "ts": "2025-11-08T00:00:00Z", "price_cents": 16200 },
+            { "ts": "2025-11-15T00:00:00Z", "price_cents": 16850 }
+          ],
+          "ppt_tcgplayer_id": "243172",
+          "ppt_url": "https://www.pokemonpricetracker.com/card/charizard-base-set",
+          "fetched_at": "2026-05-07T22:14:03Z",
           "cache_hit": false,
           "is_stale_fallback": false
         }
@@ -33,8 +37,11 @@ struct CompRepositoryTests {
         #expect(decoded.headlinePriceCents == 18500)
         #expect(decoded.psa10PriceCents == 18500)
         #expect(decoded.bgs10PriceCents == 21500)
+        #expect(decoded.psa9_5PriceCents == 11200)
         #expect(decoded.loosePriceCents == 400)
-        #expect(decoded.pricechartingProductId == "12345678")
+        #expect(decoded.priceHistory.count == 2)
+        #expect(decoded.priceHistory.first?.priceCents == 16200)
+        #expect(decoded.pptTCGPlayerId == "243172")
         #expect(decoded.cacheHit == false)
     }
 
@@ -43,28 +50,30 @@ struct CompRepositoryTests {
         let json = """
         {
           "headline_price_cents": null,
-          "grading_service": "BGS",
+          "grading_service": "TAG",
           "grade": "10",
           "loose_price_cents": 500,
-          "grade_7_price_cents": null,
-          "grade_8_price_cents": null,
-          "grade_9_price_cents": 4200,
-          "grade_9_5_price_cents": null,
+          "psa_7_price_cents": null,
+          "psa_8_price_cents": null,
+          "psa_9_price_cents": 4200,
+          "psa_9_5_price_cents": null,
           "psa_10_price_cents": 18000,
           "bgs_10_price_cents": null,
           "cgc_10_price_cents": null,
           "sgc_10_price_cents": null,
-          "pricecharting_product_id": "98765432",
-          "pricecharting_url": "https://www.pricecharting.com/game/pokemon-vintage/obscure-card-999-999",
-          "fetched_at": "2026-05-05T22:14:03Z",
+          "price_history": [],
+          "ppt_tcgplayer_id": "98765432",
+          "ppt_url": "https://www.pokemonpricetracker.com/card/obscure",
+          "fetched_at": "2026-05-07T22:14:03Z",
           "cache_hit": true,
           "is_stale_fallback": false
         }
         """.data(using: .utf8)!
         let decoded = try CompRepository.decode(data: json)
         #expect(decoded.headlinePriceCents == nil)
-        #expect(decoded.bgs10PriceCents == nil)
         #expect(decoded.psa10PriceCents == 18000)
+        #expect(decoded.bgs10PriceCents == nil)
+        #expect(decoded.priceHistory.isEmpty)
     }
 
     @Test("404 NO_MARKET_DATA surfaces as a typed error")

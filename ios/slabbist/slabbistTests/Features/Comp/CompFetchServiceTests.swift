@@ -4,11 +4,11 @@ import Foundation
 
 @Suite("CompFetchService.classify")
 struct CompFetchServiceClassifyTests {
-    @Test("noMarketData maps to no_data with a PriceCharting-flavored message")
+    @Test("noMarketData maps to no_data with a Pokemon Price Tracker-flavored message")
     func mapsNoMarketData() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.noMarketData)
         #expect(state == .noData)
-        #expect(message.localizedCaseInsensitiveContains("pricecharting"))
+        #expect(message.localizedCaseInsensitiveContains("pokemon price tracker"))
     }
 
     @Test("productNotResolved also maps to no_data, with distinct copy")
@@ -18,11 +18,11 @@ struct CompFetchServiceClassifyTests {
         #expect(message.localizedCaseInsensitiveContains("couldn't find"))
     }
 
-    @Test("upstreamUnavailable maps to failed with PriceCharting wording")
+    @Test("upstreamUnavailable maps to failed with Pokemon Price Tracker wording")
     func mapsUpstream() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.upstreamUnavailable)
         #expect(state == .failed)
-        #expect(message.localizedCaseInsensitiveContains("pricecharting"))
+        #expect(message.localizedCaseInsensitiveContains("pokemon price tracker"))
     }
 
     @Test("authInvalid maps to failed with operator-actionable copy")
