@@ -18,16 +18,17 @@ final class CompRepository {
         let grading_service: String
         let grade: String
         let loose_price_cents: Int64?
-        let grade_7_price_cents: Int64?
-        let grade_8_price_cents: Int64?
-        let grade_9_price_cents: Int64?
-        let grade_9_5_price_cents: Int64?
+        let psa_7_price_cents: Int64?
+        let psa_8_price_cents: Int64?
+        let psa_9_price_cents: Int64?
+        let psa_9_5_price_cents: Int64?
         let psa_10_price_cents: Int64?
         let bgs_10_price_cents: Int64?
         let cgc_10_price_cents: Int64?
         let sgc_10_price_cents: Int64?
-        let pricecharting_product_id: String
-        let pricecharting_url: String
+        let price_history: [PriceHistoryPoint]
+        let ppt_tcgplayer_id: String
+        let ppt_url: String
         let fetched_at: Date
         let cache_hit: Bool
         let is_stale_fallback: Bool
@@ -38,16 +39,17 @@ final class CompRepository {
         let gradingService: String
         let grade: String
         let loosePriceCents: Int64?
-        let grade7PriceCents: Int64?
-        let grade8PriceCents: Int64?
-        let grade9PriceCents: Int64?
-        let grade9_5PriceCents: Int64?
+        let psa7PriceCents: Int64?
+        let psa8PriceCents: Int64?
+        let psa9PriceCents: Int64?
+        let psa9_5PriceCents: Int64?
         let psa10PriceCents: Int64?
         let bgs10PriceCents: Int64?
         let cgc10PriceCents: Int64?
         let sgc10PriceCents: Int64?
-        let pricechartingProductId: String
-        let pricechartingURL: URL?
+        let priceHistory: [PriceHistoryPoint]
+        let pptTCGPlayerId: String
+        let pptURL: URL?
         let fetchedAt: Date
         let cacheHit: Bool
         let isStaleFallback: Bool
@@ -74,16 +76,17 @@ final class CompRepository {
             gradingService: wire.grading_service,
             grade: wire.grade,
             loosePriceCents: wire.loose_price_cents,
-            grade7PriceCents: wire.grade_7_price_cents,
-            grade8PriceCents: wire.grade_8_price_cents,
-            grade9PriceCents: wire.grade_9_price_cents,
-            grade9_5PriceCents: wire.grade_9_5_price_cents,
+            psa7PriceCents: wire.psa_7_price_cents,
+            psa8PriceCents: wire.psa_8_price_cents,
+            psa9PriceCents: wire.psa_9_price_cents,
+            psa9_5PriceCents: wire.psa_9_5_price_cents,
             psa10PriceCents: wire.psa_10_price_cents,
             bgs10PriceCents: wire.bgs_10_price_cents,
             cgc10PriceCents: wire.cgc_10_price_cents,
             sgc10PriceCents: wire.sgc_10_price_cents,
-            pricechartingProductId: wire.pricecharting_product_id,
-            pricechartingURL: URL(string: wire.pricecharting_url),
+            priceHistory: wire.price_history,
+            pptTCGPlayerId: wire.ppt_tcgplayer_id,
+            pptURL: URL(string: wire.ppt_url),
             fetchedAt: wire.fetched_at,
             cacheHit: wire.cache_hit,
             isStaleFallback: wire.is_stale_fallback
@@ -110,9 +113,6 @@ final class CompRepository {
     ) async throws -> Decoded {
         var request = URLRequest(url: baseURL.appendingPathComponent("/price-comp"))
         request.httpMethod = "POST"
-        // PriceCharting calls are sub-second on a warm cache, low-single-digit
-        // seconds on a cold path (search + product). 30s leaves headroom
-        // without leaving the spinner stuck for a full minute.
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         if let token = await authTokenProvider() {
