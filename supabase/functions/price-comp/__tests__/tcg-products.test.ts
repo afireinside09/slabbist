@@ -208,3 +208,179 @@ Deno.test("findTcgProduct: null card_number → still matches on name overlap", 
   // is unique → product 88.
   assertEquals(got?.productId, 88);
 });
+
+// ── Bug A: zero-pad asymmetry ────────────────────────────────────────
+
+Deno.test("findTcgProduct: PSA '4' matches '04/62' (zero-padded tcg row, Fossil Dragonite case)", async () => {
+  // PSA writes card_number = "4"; TCGPlayer stores "04/62".
+  // buildCardNumberVariants("4") must emit "04/%" or equivalent.
+  const stub = fakeSupabase([
+    { product_id: 106520, group_id: 500, name: "Dragonite (4)", card_number: "04/62" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 500,
+    cardNumber: "4",
+    cardName: "Dragonite",
+  });
+  assert(got !== null, "should resolve Fossil Dragonite via zero-padded variant");
+  assertEquals(got!.productId, 106520);
+  // The OR filter must include a variant that matches "04/62".
+  const filter = stub.lastQuery.orFilter ?? "";
+  const hasVariant = filter.includes("card_number.ilike.04/%") ||
+    filter.includes("card_number.ilike.04%") ||
+    filter.includes("card_number.eq.04");
+  assert(hasVariant, `filter must contain a 2-digit zero-padded variant; got: ${filter}`);
+});
+
+Deno.test("findTcgProduct: PSA '020' matches '20/198' AND filter includes a stripped variant", async () => {
+  // Existing test already covers matching — this is the query-shape counterpart.
+  const stub = fakeSupabase([
+    { product_id: 444222, group_id: 99, name: "Charizard - 20/198", card_number: "20/198" },
+  ]);
+  await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 99,
+    cardNumber: "020",
+    cardName: "Charizard",
+  });
+  const filter = stub.lastQuery.orFilter ?? "";
+  assert(filter.includes("card_number.ilike.20/%"), `missing 20/% variant in: ${filter}`);
+});
+
+Deno.test("findTcgProduct: PSA '020' filter also includes zero-padded bare-prefix variant", async () => {
+  // When PSA sends a padded number, verify 020% variant is present for
+  // tcg_products rows like "020/198" (already covered by ilike.020/%).
+  const stub = fakeSupabase([
+    { product_id: 1, group_id: 1, name: "X", card_number: "020/198" },
+  ]);
+  await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 1,
+    cardNumber: "020",
+    cardName: "X",
+  });
+  const filter = stub.lastQuery.orFilter ?? "";
+  assert(filter.includes("card_number.ilike.020/%"), `missing 020/% in: ${filter}`);
+});
+
+Deno.test("findTcgProduct: PSA '020' generates variant that matches '20/198' — query shape test", async () => {
+  // Verify '20/%' appears (the stripped slash-prefix variant).
+  const stub = fakeSupabase([
+    { product_id: 555, group_id: 10, name: "Card - 20/198", card_number: "20/198" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 10,
+    cardNumber: "020",
+    cardName: "Card",
+  });
+  assert(got !== null);
+  assertEquals(got!.productId, 555);
+});
+
+Deno.test("findTcgProduct: PSA '4' generates '04/%' variant (2-digit zero-pad)", async () => {
+  // Query shape: calling with a 1-digit number must produce 2- and 3-digit
+  // zero-padded variants so the OR filter matches rows like "04/62" and "004/XXX".
+  const stub = fakeSupabase([
+    { product_id: 9, group_id: 9, name: "Test - 04/62", card_number: "04/62" },
+  ]);
+  await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 9,
+    cardNumber: "4",
+    cardName: "Test",
+  });
+  const filter = stub.lastQuery.orFilter ?? "";
+  assert(filter.includes("card_number.ilike.04/%"), `missing 04/% in: ${filter}`);
+  assert(filter.includes("card_number.ilike.004/%"), `missing 004/% in: ${filter}`);
+});
+
+Deno.test("findTcgProduct: PSA '199' matches '199/165' and no zero-pad variants needed (3 digits)", async () => {
+  // 3-digit number already canonical; zero-padding to 4 digits would be
+  // unusual — just confirm the existing happy path still passes.
+  const stub = fakeSupabase([
+    { product_id: 243172, group_id: 23237, name: "Charizard ex - 199/165", card_number: "199/165" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 23237,
+    cardNumber: "199",
+    cardName: "Charizard ex",
+  });
+  assert(got !== null);
+  assertEquals(got!.productId, 243172);
+});
+
+Deno.test("findTcgProduct: null card_number skips OR filter entirely", async () => {
+  // When card_number is null, no orFilter should be set (the query goes
+  // straight to limit without a .or() call).
+  const stub = fakeSupabase([
+    { product_id: 77, group_id: 5, name: "Bulbasaur", card_number: "001/151" },
+  ]);
+  await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 5,
+    cardNumber: null,
+    cardName: "Bulbasaur",
+  });
+  assertEquals(stub.lastQuery.orFilter, null, "orFilter should be null when card_number is null");
+});
+
+// ── Bug C: null card_number — name-only fallback strictness ──────────
+
+Deno.test("findTcgProduct: null card_number, single-name match → returns it", async () => {
+  const stub = fakeSupabase([
+    { product_id: 11, group_id: 3, name: "Charizard V", card_number: "018/100" },
+    { product_id: 22, group_id: 3, name: "Pikachu V", card_number: "042/100" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 3,
+    cardNumber: null,
+    cardName: "Charizard V",
+  });
+  assert(got !== null, "unique name match should resolve");
+  assertEquals(got!.productId, 11);
+});
+
+Deno.test("findTcgProduct: null card_number, multiple-name matches in same group → returns null (ambiguous)", async () => {
+  // Two rows both match the name "Charizard" — must not guess.
+  const stub = fakeSupabase([
+    { product_id: 10, group_id: 3, name: "Charizard", card_number: "004/102" },
+    { product_id: 20, group_id: 3, name: "Charizard", card_number: "005/102" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 3,
+    cardNumber: null,
+    cardName: "Charizard",
+  });
+  assertEquals(got, null, "ambiguous multi-match with null card_number should return null");
+});
+
+Deno.test("findTcgProduct: null card_number, no name match → returns null", async () => {
+  const stub = fakeSupabase([
+    { product_id: 33, group_id: 7, name: "Venusaur", card_number: "015/151" },
+    { product_id: 44, group_id: 7, name: "Blastoise", card_number: "007/151" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 7,
+    cardNumber: null,
+    cardName: "Charizard",
+  });
+  assertEquals(got, null, "no name match with null card_number should return null");
+});
+
+// Fuzzy name case: PSA "Charizard Mega ex" vs TCGPlayer "Mega Charizard ex - 028/132".
+// Decision: we do NOT accept this as a match. The contiguous-substring rule
+// requires the PSA name to appear inside the tcg_products name (or vice versa)
+// after paren-stripping and lowercasing. "charizard mega ex" is NOT a
+// contiguous substring of "mega charizard ex" (word order differs), and
+// "mega charizard ex" is NOT a substring of "charizard mega ex". This avoids
+// false positives on alternate names / regional variants. The alias table is
+// the right place to handle these name-order discrepancies.
+Deno.test("findTcgProduct: null card_number, word-order mismatch (Charizard Mega ex) → returns null", async () => {
+  const stub = fakeSupabase([
+    { product_id: 55, group_id: 8, name: "Mega Charizard ex - 028/132", card_number: "028/132" },
+  ]);
+  const got = await findTcgProductByGroupAndCard(stub.client, {
+    groupId: 8,
+    cardNumber: null,
+    cardName: "Charizard Mega ex",
+  });
+  // Substring check: "charizard mega ex" ∉ "mega charizard ex" (word order)
+  // and "mega charizard ex" ∉ "charizard mega ex". Should NOT resolve.
+  assertEquals(got, null, "word-order mismatch should not resolve when card_number is null");
+});

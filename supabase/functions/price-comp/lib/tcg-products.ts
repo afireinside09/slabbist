@@ -72,18 +72,53 @@ function cleanName(name: string): string {
 }
 
 function buildCardNumberVariants(raw: string): string[] {
-  // Inputs come from PSA cert (e.g. "020", "199", "SWSH285"). Build the
-  // list of likely card_number column shapes in tcg_products.
+  // Inputs come from PSA cert (e.g. "4", "020", "199", "SWSH285"). Build
+  // the list of likely card_number column shapes in tcg_products.
+  //
+  // We generate three forms for each zero-padding level (original,
+  // stripped, 2-digit-padded, 3-digit-padded) so that PSA "4" matches
+  // tcg_products rows like "04/62" and "004/XXX", and PSA "020" matches
+  // both "020/198" and "20/198".
   const variants = new Set<string>();
   const trimmed = raw.trim();
   if (!trimmed) return [];
-  variants.add(trimmed);                 // exact: "020"
-  variants.add(`${trimmed}/%`);          // slash-prefix: "020/%"
-  const stripped = stripLeadingZeros(trimmed);
-  if (stripped !== trimmed) {
-    variants.add(`${stripped}/%`);       // "20/%"
-    variants.add(`${stripped}%`);        // "20%"
+
+  // Only the numeric prefix (before any slash) matters for padding logic.
+  const slashIdx = trimmed.indexOf("/");
+  const prefix = slashIdx >= 0 ? trimmed.slice(0, slashIdx) : trimmed;
+  const isNumeric = /^\d+$/.test(prefix);
+
+  // Helper: add exact + slash-prefix + bare-prefix variants for one value.
+  function addVariants(v: string) {
+    variants.add(v);          // exact (e.g. "04")
+    variants.add(`${v}/%`);   // slash-prefix  (e.g. "04/%")
+    variants.add(`${v}%`);    // bare prefix   (e.g. "04%")
   }
+
+  // 1. The original PSA value and its prefix forms.
+  addVariants(trimmed);
+
+  if (isNumeric) {
+    const stripped = stripLeadingZeros(prefix);
+
+    // 2. Leading-zeros-stripped variants (e.g. "020" → "20").
+    if (stripped !== prefix) {
+      addVariants(stripped);
+    }
+
+    // 3. Zero-padded to 2 digits.
+    if (prefix.length < 2) {
+      const pad2 = prefix.padStart(2, "0");
+      addVariants(pad2);
+    }
+
+    // 4. Zero-padded to 3 digits.
+    if (prefix.length < 3) {
+      const pad3 = prefix.padStart(3, "0");
+      addVariants(pad3);
+    }
+  }
+
   return Array.from(variants);
 }
 
@@ -130,6 +165,7 @@ export async function findTcgProductByGroupAndCard(
   const psaName = cleanName(cardName);
 
   let best: { row: CandidateRow; score: number } | null = null;
+  let bestCount = 0; // how many rows share the top score (tie-breaking)
   for (const row of rows) {
     let score = 0;
     const rowNum = normalizeForCompare(row.card_number);
@@ -138,16 +174,27 @@ export async function findTcgProductByGroupAndCard(
     if (rowName && psaName) {
       if (rowName.includes(psaName) || psaName.includes(rowName)) score += 2;
     }
-    if (best === null || score > best.score) best = { row, score };
+    if (best === null || score > best.score) {
+      best = { row, score };
+      bestCount = 1;
+    } else if (score === best.score) {
+      bestCount += 1;
+    }
   }
 
   if (!best) return null;
 
   // Threshold: when we have a PSA card_number we require an exact match
   // (+5) — name overlap alone (+2) is too weak to bind on. When PSA's
-  // card_number is null, we accept on name overlap alone (+2).
+  // card_number is null, we accept on name overlap alone (+2), but we
+  // require the name match to be unambiguous — if multiple candidates
+  // share the same top score we return null rather than guess.
   const minScore = cardNumber ? 5 : 2;
   if (best.score < minScore) return null;
+
+  // When card_number is null, name is the sole signal; an ambiguous tie
+  // is worse than no match (false positives are more harmful than misses).
+  if (!cardNumber && bestCount > 1) return null;
 
   return {
     productId: best.row.product_id,
