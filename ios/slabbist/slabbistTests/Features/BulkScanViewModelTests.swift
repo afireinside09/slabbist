@@ -18,7 +18,7 @@ struct BulkScanViewModelTests {
         context.insert(lot)
         try context.save()
 
-        let vm = BulkScanViewModel(context: context, lot: lot, currentUserId: userId)
+        let vm = BulkScanViewModel(context: context, kicker: OutboxKicker { }, lot: lot, currentUserId: userId)
         let candidate = CertCandidate(grader: .PSA, certNumber: "12345678",
                                       confidence: 0.92, rawText: "PSA MINT 12345678")
         try vm.record(candidate: candidate)
@@ -48,7 +48,7 @@ struct BulkScanViewModelTests {
         context.insert(lot)
         try context.save()
 
-        let vm = BulkScanViewModel(context: context, lot: lot, currentUserId: userId)
+        let vm = BulkScanViewModel(context: context, kicker: OutboxKicker { }, lot: lot, currentUserId: userId)
         let candidate = CertCandidate(grader: .BGS, certNumber: "0123456789", confidence: 0.91,
                                        rawText: "BECKETT 9.5 GEM MINT 0123456789")
         try vm.record(candidate: candidate)
@@ -75,7 +75,7 @@ struct BulkScanViewModelTests {
         context.insert(lot)
         try context.save()
 
-        let vm = BulkScanViewModel(context: context, lot: lot, currentUserId: userId)
+        let vm = BulkScanViewModel(context: context, kicker: OutboxKicker { }, lot: lot, currentUserId: userId)
         let c = CertCandidate(grader: .PSA, certNumber: "12345678", confidence: 0.95, rawText: "PSA 12345678")
         try vm.record(candidate: c)
         try vm.record(candidate: c)

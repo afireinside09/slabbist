@@ -6,11 +6,13 @@ import SwiftData
 @Observable
 final class LotsViewModel {
     private let context: ModelContext
+    private let kicker: OutboxKicker
     let currentUserId: UUID
     let currentStoreId: UUID
 
-    init(context: ModelContext, currentUserId: UUID, currentStoreId: UUID) {
+    init(context: ModelContext, kicker: OutboxKicker, currentUserId: UUID, currentStoreId: UUID) {
         self.context = context
+        self.kicker = kicker
         self.currentUserId = currentUserId
         self.currentStoreId = currentStoreId
     }
@@ -20,7 +22,7 @@ final class LotsViewModel {
     /// is signed out or their `Store` hasn't synced yet (e.g. fresh
     /// signup waiting for the outbox worker). The call site decides
     /// what to show while this is `nil`.
-    static func resolve(context: ModelContext, session: SessionStore) -> LotsViewModel? {
+    static func resolve(context: ModelContext, kicker: OutboxKicker, session: SessionStore) -> LotsViewModel? {
         guard let userId = session.userId else { return nil }
         let ownerId = userId
         var descriptor = FetchDescriptor<Store>(
@@ -31,7 +33,7 @@ final class LotsViewModel {
             AppLog.lots.warning("no local Store for user \(userId, privacy: .public); view model deferred")
             return nil
         }
-        return LotsViewModel(context: context, currentUserId: userId, currentStoreId: store.id)
+        return LotsViewModel(context: context, kicker: kicker, currentUserId: userId, currentStoreId: store.id)
     }
 
     @discardableResult
@@ -72,6 +74,7 @@ final class LotsViewModel {
         context.insert(outboxItem)
 
         try context.save()
+        kicker.kick()
         return lot
     }
 
@@ -100,6 +103,7 @@ final class LotsViewModel {
             nextAttemptAt: now
         ))
         try context.save()
+        kicker.kick()
     }
 
     /// Delete a single scan locally and enqueue the server-side delete.
@@ -131,6 +135,7 @@ final class LotsViewModel {
         )
         context.insert(outboxItem)
         try context.save()
+        kicker.kick()
     }
 
     /// Delete an entire lot — cascades to all of its scans locally so the
@@ -185,6 +190,7 @@ final class LotsViewModel {
         context.delete(lot)
 
         try context.save()
+        kicker.kick()
     }
 
     func listOpenLots() throws -> [Lot] {

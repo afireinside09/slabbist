@@ -16,6 +16,7 @@ struct LotsListView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
     @Environment(StoreHydrator.self) private var hydrator
+    @Environment(OutboxKicker.self) private var kicker
 
     @State private var showingNewLot = false
     @State private var lots: [Lot] = []
@@ -301,7 +302,7 @@ struct LotsListView: View {
             return
         }
         await hydrator.hydrateIfNeeded(userId: userId)
-        viewModel = LotsViewModel.resolve(context: context, session: session)
+        viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session)
         refresh()
     }
 

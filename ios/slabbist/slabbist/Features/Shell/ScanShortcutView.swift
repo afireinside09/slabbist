@@ -8,6 +8,7 @@ struct ScanShortcutView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
     @Environment(StoreHydrator.self) private var hydrator
+    @Environment(OutboxKicker.self) private var kicker
 
     @State private var viewModel: LotsViewModel?
     @State private var resolvedLot: Lot?
@@ -154,7 +155,7 @@ struct ScanShortcutView: View {
             return
         }
         await hydrator.hydrateIfNeeded(userId: userId)
-        viewModel = LotsViewModel.resolve(context: context, session: session)
+        viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session)
         refresh()
     }
 

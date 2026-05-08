@@ -10,6 +10,7 @@ struct LotDetailView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(OutboxKicker.self) private var kicker
     @Query private var scans: [Scan]
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
@@ -57,7 +58,7 @@ struct LotDetailView: View {
     }
 
     private func deleteScan(_ scan: Scan) {
-        guard let viewModel = LotsViewModel.resolve(context: context, session: session) else {
+        guard let viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session) else {
             AppLog.scans.error("delete scan: no LotsViewModel — user signed out?")
             return
         }
@@ -91,32 +92,30 @@ struct LotDetailView: View {
 
     private var aggregateStrip: some View {
         SlabCard {
-            HStack(alignment: .top, spacing: Spacing.l) {
-                aggregateColumn(
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                HeroValueBlock(
                     kicker: "Estimated",
-                    value: formattedCents(aggregateValueCents),
-                    detail: aggregateValueDetail
+                    cents: aggregateValueCents,
+                    caption: aggregateValueDetail,
+                    size: 54
                 )
-                Spacer()
-                aggregateColumn(
-                    kicker: "Latest comp",
-                    value: latestComp.map { Self.relative.localizedString(for: $0, relativeTo: Date()) } ?? "—",
-                    detail: latestComp == nil ? "Awaiting first lookup" : "across this lot"
-                )
+                SlabCardDivider()
+                HStack(alignment: .firstTextBaseline) {
+                    KickerLabel("Latest comp")
+                    Spacer()
+                    Text(latestCompLabel)
+                        .font(SlabFont.mono(size: 13, weight: .medium))
+                        .foregroundStyle(latestComp == nil ? AppColor.dim : AppColor.text)
+                }
             }
             .padding(.horizontal, Spacing.l)
-            .padding(.vertical, Spacing.md)
+            .padding(.vertical, Spacing.l)
         }
     }
 
-    private func aggregateColumn(kicker: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            KickerLabel(kicker)
-            Text(value).slabRowTitle()
-            Text(detail)
-                .font(SlabFont.sans(size: 11))
-                .foregroundStyle(AppColor.dim)
-        }
+    private var latestCompLabel: String {
+        guard let date = latestComp else { return "Awaiting first lookup" }
+        return Self.relative.localizedString(for: date, relativeTo: Date())
     }
 
     private var slabsSection: some View {

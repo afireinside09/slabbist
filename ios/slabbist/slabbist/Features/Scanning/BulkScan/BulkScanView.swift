@@ -129,6 +129,7 @@ struct BulkScanView: View {
     let lot: Lot
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(OutboxKicker.self) private var kicker
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var cameraSession = CameraSession()
@@ -388,6 +389,7 @@ struct BulkScanView: View {
         let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
         let viewModel = BulkScanViewModel(
             context: context,
+            kicker: kicker,
             lot: lot,
             currentUserId: userId,
             compRepository: comp,

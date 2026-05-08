@@ -7,6 +7,7 @@ import OSLog
 @Observable
 final class BulkScanViewModel {
     private let context: ModelContext
+    private let kicker: OutboxKicker
     let lot: Lot
     let currentUserId: UUID
     var compRepository: CompRepository?
@@ -23,12 +24,14 @@ final class BulkScanViewModel {
 
     init(
         context: ModelContext,
+        kicker: OutboxKicker,
         lot: Lot,
         currentUserId: UUID,
         compRepository: CompRepository? = nil,
         certLookupRepository: CertLookupRepository? = nil
     ) {
         self.context = context
+        self.kicker = kicker
         self.lot = lot
         self.currentUserId = currentUserId
         self.compRepository = compRepository
@@ -85,6 +88,7 @@ final class BulkScanViewModel {
         context.insert(outboxItem)
 
         try context.save()
+        kicker.kick()
         refreshRecent()
 
         triggerCertLookup(for: scan)
@@ -107,6 +111,7 @@ final class BulkScanViewModel {
         // before the network request lands.
         self.onLookupEvent(.started(grader: grader, certNumber: certNumber))
 
+        let kicker = self.kicker
         Task { [weak self] in
             do {
                 let result = try await lookup.lookup(grader: grader, certNumber: certNumber)
@@ -145,6 +150,7 @@ final class BulkScanViewModel {
                         ctx.insert(outboxItem)
                     }
                     try? ctx.save()
+                    kicker.kick()
                     self.refreshRecent()
                     self.triggerCompFetch(for: target)
                     self.onLookupEvent(.resolved(productLabel: Self.productLabel(from: result)))

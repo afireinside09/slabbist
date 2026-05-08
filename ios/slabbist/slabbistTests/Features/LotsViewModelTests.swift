@@ -6,6 +6,34 @@ import SwiftData
 @Suite("LotsViewModel")
 @MainActor
 struct LotsViewModelTests {
+    // MARK: - Helpers
+
+    /// No-op kicker for tests that don't exercise the kick path.
+    private static func noopKicker() -> OutboxKicker {
+        OutboxKicker { }
+    }
+
+    @Test("createLot kicks the outbox after saving")
+    func createLotKicks() async throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+
+        let counter = KickCounter()
+        let kicker = OutboxKicker { await counter.increment() }
+
+        let vm = LotsViewModel(
+            context: context,
+            kicker: kicker,
+            currentUserId: UUID(),
+            currentStoreId: UUID()
+        )
+
+        _ = try vm.createLot(name: "Test Lot")
+
+        await counter.waitFor(value: 1)
+        await #expect(counter.value == 1)
+    }
+
     @Test("createLot inserts a Lot and outbox insertLot item in one transaction")
     func createsLotAndOutboxItem() throws {
         let container = AppModelContainer.inMemory()
@@ -13,7 +41,7 @@ struct LotsViewModelTests {
 
         let userId = UUID()
         let storeId = UUID()
-        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
 
         let lot = try vm.createLot(name: "Test Lot")
 
@@ -40,7 +68,7 @@ struct LotsViewModelTests {
     func preservesNotesInPayload() throws {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)
-        let vm = LotsViewModel(context: context, currentUserId: UUID(), currentStoreId: UUID())
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: UUID(), currentStoreId: UUID())
         try vm.createLot(name: "With Notes", notes: "Tagged from the stack at the back counter")
 
         let outbox = try context.fetch(FetchDescriptor<OutboxItem>())
@@ -64,7 +92,7 @@ struct LotsViewModelTests {
         context.insert(scan)
         try context.save()
 
-        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
         try vm.deleteScan(scan)
 
         let scans = try context.fetch(FetchDescriptor<Scan>())
@@ -104,7 +132,7 @@ struct LotsViewModelTests {
         context.insert(bystanderScan)
         try context.save()
 
-        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
         try vm.deleteLot(targetLot)
 
         let lots = try context.fetch(FetchDescriptor<Lot>())
@@ -139,7 +167,7 @@ struct LotsViewModelTests {
         context.insert(scan)
         try context.save()
 
-        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
         try vm.setOfferCents(scan: scan, cents: 4_999)
 
         #expect(scan.offerCents == 4_999)
@@ -186,9 +214,32 @@ struct LotsViewModelTests {
         [older, newer, closed, otherStore].forEach(context.insert)
         try context.save()
 
-        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
         let lots = try vm.listOpenLots()
 
         #expect(lots.map(\.name) == ["newer", "older"])
+    }
+}
+
+// MARK: - Test helpers
+
+private actor KickCounter {
+    var value: Int = 0
+    private var continuations: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func increment() {
+        value += 1
+        let now = value
+        continuations = continuations.compactMap { (target, c) in
+            if now >= target { c.resume(); return nil }
+            return (target, c)
+        }
+    }
+
+    func waitFor(value target: Int) async {
+        if value >= target { return }
+        await withCheckedContinuation { continuation in
+            continuations.append((target, continuation))
+        }
     }
 }

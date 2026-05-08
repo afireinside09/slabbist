@@ -8,6 +8,7 @@ struct ScanDetailView: View {
     let scan: Scan
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
+    @Environment(OutboxKicker.self) private var kicker
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
     @State private var showingManualPrice = false
@@ -268,7 +269,7 @@ struct ScanDetailView: View {
     }
 
     private func setOfferCents(_ cents: Int64?) throws {
-        guard let viewModel = LotsViewModel.resolve(context: context, session: session) else {
+        guard let viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session) else {
             AppLog.scans.error("set offer cents: no LotsViewModel — user signed out?")
             return
         }
