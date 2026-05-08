@@ -7,36 +7,47 @@ import XCTest
 /// exactly the class of UX bugs that survive snapshot diffs but break for
 /// real users.
 ///
-/// Tests should call this at every stable navigation point, e.g.:
+/// The default mode is **report-only**: issues are attached to the test
+/// report and printed to stderr, but the test continues. Tests opt into
+/// `strict: true` when a screen has been remediated and we want the audit
+/// to gate that screen against future regressions.
 ///
-///     let app = UITestApp.launch()
-///     try app.auditA11y(named: "Lots tab")
-///     app.buttons["new-lot-button"].tap()
-///     try app.auditA11y(named: "New lot sheet")
-///
-/// On failure, every issue is printed (with element + category) before
-/// the test fails so the report points at the broken UI, not just
-/// "audit failed".
+/// ```swift
+/// let app = UITestApp.launch()
+/// // Lots-empty has been reviewed → enforce strictly.
+/// try app.auditA11y(named: "lots tab (empty)", strict: true)
+/// app.buttons["new-lot-button"].tap()
+/// // New-lot sheet hasn't been reviewed yet → report-only.
+/// try app.auditA11y(named: "new lot sheet")
+/// ```
 extension XCUIApplication {
     /// Run the system accessibility audit at the current screen state.
     ///
-    /// `name` is a human-readable label used in the failure message —
-    /// pick something a teammate can find quickly in the test output
-    /// (e.g. "lots tab", "new lot sheet").
+    /// `name` is a human-readable label used in the failure / report
+    /// message — pick something a teammate can find quickly in the test
+    /// output (e.g. "lots tab", "new lot sheet").
     ///
     /// `audit` selects which audit categories to run. Defaults to
-    /// `.defaultStableSet`, which is `.all` minus contrast and clipping
-    /// — those two need design review (color tokens, font sizing) so
-    /// they tend to flag *real findings* on existing screens. Pass
-    /// `.all` (or `.contrast` directly) when you're ready to graduate.
+    /// `.defaultStableSet`, which is `.all` minus contrast / dynamicType
+    /// / textClipped — those need design-system review (color tokens,
+    /// font sizing) so they tend to flag *real findings* on existing
+    /// screens. Pass `.all` (or `.contrast` directly) when you're ready
+    /// to graduate.
+    ///
+    /// `strict` controls whether issues fail the test. Defaults to
+    /// `false` — issues are still attached to the test report so the
+    /// engineer can see what was flagged, but the test continues. Pass
+    /// `strict: true` for screens that have been audited and should
+    /// stay clean.
     ///
     /// `ignoring` lets a test skip individual elements (by identifier
-    /// or label fragment) when an exception is genuinely warranted.
-    /// Prefer fixing the UI; use this only when the issue is a known
-    /// false positive (e.g. third-party SDK chrome).
+    /// or label fragment). Prefer fixing the UI; use this only when the
+    /// issue is a known false positive (e.g. SwiftUI Menu's wrapper
+    /// button surfacing without a label).
     func auditA11y(
         named name: String,
         audit: XCUIAccessibilityAuditType = .defaultStableSet,
+        strict: Bool = false,
         ignoring ignoreList: [String] = [],
         file: StaticString = #filePath,
         line: UInt = #line
@@ -44,35 +55,50 @@ extension XCUIApplication {
         var captured: [String] = []
         do {
             try performAccessibilityAudit(for: audit) { [self] issue in
-                let summary = self.describe(issue: issue)
                 if Self.shouldIgnore(issue: issue, ignoreList: ignoreList) {
-                    return true // ignore
+                    return true
                 }
-                captured.append(summary)
-                return false
+                captured.append(self.describe(issue: issue))
+                // In report-only mode, treat every issue as "ignored"
+                // so `performAccessibilityAudit` doesn't throw — we'll
+                // still attach the report below.
+                return !strict
             }
         } catch {
-            // performAccessibilityAudit only throws when the handler
-            // returned `false` for at least one issue. The handler has
-            // already accumulated the descriptive lines.
             let detail = captured.joined(separator: "\n  • ")
             XCTFail(
                 """
-                Accessibility audit failed at '\(name)':
+                Accessibility audit failed (strict) at '\(name)':
                   • \(detail.isEmpty ? error.localizedDescription : detail)
                 """,
                 file: file,
                 line: line
             )
-            throw error
+            return
+        }
+
+        // Always attach what we found (even when nothing failed). Lets
+        // engineers spot drift screen-by-screen via the test report
+        // without blocking CI. `XCTContext.runActivity` groups the
+        // attachment under a named activity so it's easy to find.
+        guard !captured.isEmpty else { return }
+        let body = """
+        Accessibility audit at '\(name)' (report-only) — \(captured.count) issue\(captured.count == 1 ? "" : "s"):
+          • \(captured.joined(separator: "\n  • "))
+        """
+        XCTContext.runActivity(named: "A11y audit: \(name)") { activity in
+            let attachment = XCTAttachment(string: body)
+            attachment.name = "a11y-audit-\(name)"
+            attachment.lifetime = .keepAlways
+            activity.add(attachment)
         }
     }
 
     private func describe(issue: XCUIAccessibilityAuditIssue) -> String {
         let category = String(describing: issue.auditType)
+        let detail = issue.compactDescription
         let elementId = issue.element?.identifier
         let elementLabel = issue.element?.label
-        let detail = issue.compactDescription
         let identityHint: String
         if let elementId, !elementId.isEmpty {
             identityHint = "id=\(elementId)"

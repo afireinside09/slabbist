@@ -145,6 +145,12 @@ struct LotDetailView: View {
                                 rowMenu(for: scan)
                             }
                             if scanPendingDelete?.id == scan.id {
+                                // No parent accessibilityIdentifier here:
+                                // SwiftUI propagates parent identifiers
+                                // down to children, which would mask the
+                                // strip's own `inline-delete-cancel` /
+                                // `inline-delete-confirm` button IDs that
+                                // XCUITests query.
                                 InlineDeleteConfirmation(
                                     title: "Delete this slab?",
                                     detail: "Removes \(scan.grader.rawValue) \(scan.certNumber) from this lot. The eBay comp cache stays around in case you re-scan.",
@@ -152,7 +158,6 @@ struct LotDetailView: View {
                                     onCancel: { dismissDeleteConfirmation() },
                                     onConfirm: { confirmDelete(scan) }
                                 )
-                                .accessibilityIdentifier("delete-scan-confirmation")
                             }
                         }
                     }

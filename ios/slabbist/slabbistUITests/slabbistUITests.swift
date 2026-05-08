@@ -22,7 +22,11 @@ final class LaunchSmokeUITests: XCTestCase {
             newLotButton.waitForExistence(timeout: 5),
             "Lots tab should render its New lot CTA on launch"
         )
-        try app.auditA11y(named: "lots tab (empty)")
+        // The empty Lots tab has been audited — we enforce strictly so
+        // any future change that reintroduces an a11y issue (missing
+        // label, undersized hit target, hierarchy break, etc.) on this
+        // first impression fails CI immediately.
+        try app.auditA11y(named: "lots tab (empty)", strict: true)
     }
 
     @MainActor

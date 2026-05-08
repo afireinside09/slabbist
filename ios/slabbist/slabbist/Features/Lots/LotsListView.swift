@@ -161,6 +161,12 @@ struct LotsListView: View {
                                 rowMenu(for: lot)
                             }
                             if lotPendingDelete?.id == lot.id {
+                                // No parent accessibilityIdentifier here:
+                                // SwiftUI propagates parent identifiers
+                                // down to children, which would mask the
+                                // strip's own `inline-delete-cancel` /
+                                // `inline-delete-confirm` button IDs that
+                                // XCUITests query.
                                 InlineDeleteConfirmation(
                                     title: "Delete \(lot.name) and all slabs?",
                                     detail: "This removes the lot and every slab inside it. This can't be undone.",
@@ -168,7 +174,6 @@ struct LotsListView: View {
                                     onCancel: { dismissDeleteConfirmation() },
                                     onConfirm: { confirmDelete(lot) }
                                 )
-                                .accessibilityIdentifier("delete-lot-confirmation")
                             }
                         }
                         if index < lots.count - 1 {

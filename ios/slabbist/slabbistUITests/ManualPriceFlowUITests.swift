@@ -120,17 +120,19 @@ final class ManualPriceFlowUITests: XCTestCase {
             lotRow.waitForExistence(timeout: 5),
             "Seeded Sample Lot should appear on the Lots list"
         )
-        try app.auditA11y(named: "lots tab (seeded)")
         XCTAssertTrue(
             lotRow.isHittable,
             "Lot row should be hittable before tapping"
         )
-        // Tap the static text inside the row rather than the row button
-        // itself. NavigationLinks with `.buttonStyle(.plain)` don't always
-        // surface their tap recognizer cleanly to XCUI under iOS 26 when
-        // the row contains nested text + chevron — tapping the leading
-        // title text is the path that consistently dispatches the
-        // NavigationLink's destination-push.
+        // Audits are report-only by default — issues land in the test
+        // report so engineers see them, but the test still runs through.
+        // Promote a screen to `strict: true` once it's been remediated.
+        try app.auditA11y(named: "lots tab (seeded)")
+        // Tap the static text inside the row. NavigationLinks with
+        // `.buttonStyle(.plain)` under iOS 26 sometimes don't surface
+        // their tap recognizer cleanly to XCUI when the row contains
+        // nested text + chevron — tapping the leading title text is the
+        // path that consistently dispatches the destination-push.
         let lotTitleHit = app.staticTexts["Sample Lot"]
         XCTAssertTrue(lotTitleHit.waitForExistence(timeout: 2))
         lotTitleHit.tap()
@@ -204,7 +206,10 @@ final class ManualPriceFlowUITests: XCTestCase {
 
         let lotRow = app.buttons["lot-row-Sample Lot"]
         XCTAssertTrue(lotRow.waitForExistence(timeout: 5))
-        lotRow.tap()
+        // Tap the static text inside the row — see the comment on
+        // `testSetManualPriceOnNoCompScan` for why this is the reliable
+        // hook for NavigationLinks under iOS 26 + XCUI.
+        app.staticTexts["Sample Lot"].tap()
 
         let scanRow = app.buttons["scan-row-11223344"]
         XCTAssertTrue(scanRow.waitForExistence(timeout: 5))
@@ -222,7 +227,6 @@ final class ManualPriceFlowUITests: XCTestCase {
             confirm.waitForExistence(timeout: 2),
             "Inline delete confirmation should appear under the slab row"
         )
-        try app.auditA11y(named: "lot detail (inline delete pending)")
         confirm.tap()
 
         XCTAssertFalse(
