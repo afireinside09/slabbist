@@ -4,8 +4,10 @@ import Supabase
 
 /// Background actor that drains the outbox.
 ///
-/// 7.1 scope: skeleton + `insertScan` happy path. Other kinds will
-/// trip a `fatalError` on dispatch — sub-phases 7.2–7.5 fill them in.
+/// Group A complete (insertScan, insertLot, updateLot, deleteLot,
+/// updateScan, updateScanOffer, deleteScan). Group B kinds
+/// (certLookupJob, priceCompJob) throw `OutboxBridgeError.malformedPayload`
+/// — the classifier (added in 7.3) will route them to `.failed`.
 ///
 /// The `@ModelActor` macro is convenient but doesn't allow injecting
 /// custom dependencies through the synthesized init. We use the
@@ -210,7 +212,14 @@ actor OutboxDrainer: ModelActor {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: invalid UUID")
             }
             var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
-            fields["offer_cents"] = p.offer_cents.map { .integer(Int($0)) } ?? .null
+            if let cents = p.offer_cents {
+                guard let safe = Int(exactly: cents) else {
+                    throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: offer_cents overflows Int")
+                }
+                fields["offer_cents"] = .integer(safe)
+            } else {
+                fields["offer_cents"] = .null
+            }
             try await repositories.scans.patch(id: id, fields: fields)
 
         case .deleteScan:

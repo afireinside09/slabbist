@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import SwiftData
+import Supabase
 @testable import slabbist
 
 @Suite("OutboxDrainer")
@@ -75,18 +76,34 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
-    @Test("dispatches updateScanOffer with offer_cents field")
+    @Test("updateScanOffer with cents: writes .integer(value)")
     @MainActor
-    func dispatchesUpdateScanOffer() async throws {
+    func dispatchesUpdateScanOfferWithCents() async throws {
         let h = Harness()
         let scanId = UUID()
         try await h.enqueueUpdateScanOffer(id: scanId, cents: 12500)
         await h.drainer.kickAndWait()
         await h.waitForIdle()
+
         #expect(h.fakeScans.patchCalls.count == 1)
         #expect(h.fakeScans.patchCalls[0].id == scanId)
-        let offerField = h.fakeScans.patchCalls[0].fields["offer_cents"]
-        #expect(offerField != nil)
+        #expect(h.fakeScans.patchCalls[0].fields["offer_cents"] == .integer(12500))
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("updateScanOffer with cents nil: writes .null (clear semantic)")
+    @MainActor
+    func dispatchesUpdateScanOfferClearing() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueUpdateScanOffer(id: scanId, cents: nil)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.patchCalls.count == 1)
+        #expect(h.fakeScans.patchCalls[0].id == scanId)
+        #expect(h.fakeScans.patchCalls[0].fields["offer_cents"] == .null)
         let count = await h.outboxCount()
         #expect(count == 0)
     }
