@@ -30,13 +30,28 @@ struct ScanDetailView: View {
 
     private var identity: GradedCardIdentity? { identities.first }
 
+    /// PPT row for this slab. Two snapshots can coexist per
+    /// `(identityId, service, grade)` — one per source — so we partition
+    /// the `@Query` results by `source` here and pass both into
+    /// `CompCardView` for side-by-side rendering.
+    private var pptSnapshot: GradedMarketSnapshot? {
+        snapshots.first { $0.source == GradedMarketSnapshot.sourcePPT }
+    }
+
+    /// Poketrace row for this slab. `nil` when the Poketrace branch had
+    /// no match or its API key is unset / failing — `CompCardView`
+    /// renders "no data" in that column rather than hiding the surface.
+    private var poketraceSnapshot: GradedMarketSnapshot? {
+        snapshots.first { $0.source == GradedMarketSnapshot.sourcePoketrace }
+    }
+
     var body: some View {
         SlabbedRoot {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
                     header
-                    if let snapshot = snapshots.first {
-                        valueSection(snapshot: snapshot)
+                    if pptSnapshot != nil || poketraceSnapshot != nil {
+                        valueSection
                     } else {
                         fallbackContent
                     }
@@ -131,10 +146,14 @@ struct ScanDetailView: View {
 
     // MARK: - Value section (resolved)
 
-    private func valueSection(snapshot: GradedMarketSnapshot) -> some View {
+    private var valueSection: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             KickerLabel("Market value")
-            CompCardView(snapshot: snapshot)
+            CompCardView(
+                scan: scan,
+                pptSnapshot: pptSnapshot,
+                poketraceSnapshot: poketraceSnapshot
+            )
             if let attemptedAt = scan.compFetchedAt {
                 Text("Last refreshed \(attemptedAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(SlabFont.mono(size: 11))
@@ -354,7 +373,9 @@ struct ScanDetailView: View {
 
     private func autoTriggerCompFetchIfNeeded() {
         guard scan.gradedCardIdentityId != nil else { return }
-        guard snapshots.first == nil else { return }
+        // Either source landing means we have *something* to render;
+        // only auto-trigger when we have nothing at all.
+        guard pptSnapshot == nil && poketraceSnapshot == nil else { return }
         let state = scan.compFetchState.flatMap(CompFetchState.init(rawValue:))
         let stale: Bool = {
             guard state == .fetching else { return false }
