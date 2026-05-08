@@ -115,4 +115,107 @@ struct CompRepositoryTests {
             _ = try CompRepository.decodeErrorBody(json, statusCode: 503)
         }
     }
+
+    @Test("decodes a v2 envelope with both PPT and Poketrace blocks present")
+    func decodesV2BothSources() async throws {
+        let json = #"""
+        {
+          "headline_price_cents": 18500,
+          "grading_service": "PSA",
+          "grade": "10",
+          "loose_price_cents": 400,
+          "psa_7_price_cents": 2400,
+          "psa_8_price_cents": 3400,
+          "psa_9_price_cents": 6800,
+          "psa_9_5_price_cents": 11200,
+          "psa_10_price_cents": 18500,
+          "bgs_10_price_cents": 21500,
+          "cgc_10_price_cents": 16800,
+          "sgc_10_price_cents": 16500,
+          "price_history": [{ "ts": "2025-11-08T00:00:00Z", "price_cents": 16200 }],
+          "ppt_tcgplayer_id": "243172",
+          "ppt_url": "https://www.pokemonpricetracker.com/card/charizard",
+          "fetched_at": "2026-05-07T22:14:03Z",
+          "cache_hit": false,
+          "is_stale_fallback": false,
+          "poketrace": {
+            "card_id": "22222222-2222-2222-2222-222222222222",
+            "tier": "PSA_10",
+            "avg_cents": 19500,
+            "low_cents": 18000,
+            "high_cents": 21000,
+            "avg_1d_cents": null,
+            "avg_7d_cents": 19400,
+            "avg_30d_cents": 19200,
+            "median_3d_cents": 19500,
+            "median_7d_cents": 19350,
+            "median_30d_cents": 19000,
+            "trend": "stable",
+            "confidence": "high",
+            "sale_count": 24,
+            "price_history": [{ "ts": "2026-04-30T00:00:00Z", "price_cents": 19200 }],
+            "fetched_at": "2026-05-07T22:14:03Z"
+          },
+          "reconciled": { "headline_price_cents": 19000, "source": "avg" }
+        }
+        """#.data(using: .utf8)!
+        let decoded = try CompRepository.decode(data: json)
+        #expect(decoded.headlinePriceCents == 18500)
+        #expect(decoded.poketrace != nil)
+        #expect(decoded.poketrace?.avgCents == 19500)
+        #expect(decoded.poketrace?.trend == "stable")
+        #expect(decoded.poketrace?.confidence == "high")
+        #expect(decoded.poketrace?.saleCount == 24)
+        #expect(decoded.reconciledHeadlineCents == 19000)
+        #expect(decoded.reconciledSource == "avg")
+    }
+
+    @Test("decodes a v2 envelope with poketrace null (PPT-only)")
+    func decodesV2PptOnly() async throws {
+        let json = #"""
+        {
+          "headline_price_cents": 18500,
+          "grading_service": "PSA", "grade": "10",
+          "loose_price_cents": 400,
+          "psa_7_price_cents": null, "psa_8_price_cents": null,
+          "psa_9_price_cents": null, "psa_9_5_price_cents": null,
+          "psa_10_price_cents": 18500, "bgs_10_price_cents": null,
+          "cgc_10_price_cents": null, "sgc_10_price_cents": null,
+          "price_history": [],
+          "ppt_tcgplayer_id": "243172",
+          "ppt_url": "https://www.pokemonpricetracker.com/card/charizard",
+          "fetched_at": "2026-05-07T22:14:03Z",
+          "cache_hit": false, "is_stale_fallback": false,
+          "poketrace": null,
+          "reconciled": { "headline_price_cents": 18500, "source": "ppt-only" }
+        }
+        """#.data(using: .utf8)!
+        let decoded = try CompRepository.decode(data: json)
+        #expect(decoded.poketrace == nil)
+        #expect(decoded.reconciledSource == "ppt-only")
+    }
+
+    @Test("decodes a legacy (pre-v2) response with no poketrace/reconciled blocks")
+    func decodesLegacyResponse() async throws {
+        let json = #"""
+        {
+          "headline_price_cents": 18500,
+          "grading_service": "PSA", "grade": "10",
+          "loose_price_cents": 400,
+          "psa_7_price_cents": null, "psa_8_price_cents": null,
+          "psa_9_price_cents": null, "psa_9_5_price_cents": null,
+          "psa_10_price_cents": 18500, "bgs_10_price_cents": null,
+          "cgc_10_price_cents": null, "sgc_10_price_cents": null,
+          "price_history": [],
+          "ppt_tcgplayer_id": "243172",
+          "ppt_url": "https://www.pokemonpricetracker.com/card/charizard",
+          "fetched_at": "2026-05-07T22:14:03Z",
+          "cache_hit": false, "is_stale_fallback": false
+        }
+        """#.data(using: .utf8)!
+        let decoded = try CompRepository.decode(data: json)
+        #expect(decoded.poketrace == nil)
+        #expect(decoded.reconciledHeadlineCents == 18500)   // falls back to PPT headline
+        #expect(decoded.reconciledSource == "ppt-only")     // synthesized
+    }
 }

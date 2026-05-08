@@ -11,11 +11,21 @@ import SnapshotTesting
 /// from the host app bundle, so font availability + scaling depend on
 /// the simulator. `precision: 0.99` absorbs minor antialiasing drift.
 ///
-/// Each case is rendered at a fixed 380x480 frame (close to an iPhone
-/// 17's content width minus the page padding) and snapshotted in both
-/// light and dark color schemes — that's the SnapshotTesting trait
-/// hook. `.serialized` because `assertSnapshot` writes a single
+/// Each case is rendered at a fixed 380x560 frame (close to an iPhone
+/// 17's content width minus the page padding; taller than the prior
+/// 480 because the side-by-side sources strip + sparkline toggle
+/// together stretch the card vertically) and snapshotted in both light
+/// and dark color schemes — that's the SnapshotTesting trait hook.
+/// `.serialized` because `assertSnapshot` writes a single
 /// reference-image directory and parallel runs would race it.
+///
+/// **Two snapshots per slab.** Since Task 12, a single
+/// `(identityId, service, grade)` can have up to two snapshot rows —
+/// one with `source == "pokemonpricetracker"` and one with `source == "poketrace"`.
+/// `CompCardView` now takes both as separate optionals (plus the
+/// originating `Scan` for the reconciled headline) so we build a
+/// matched pair of fixtures in each test, mirroring how
+/// `ScanDetailView` partitions its `@Query` results in production.
 ///
 /// **SwiftData note:** `GradedMarketSnapshot` is `@Model`. Constructing
 /// an instance ad-hoc (without inserting into a `ModelContext`) works
@@ -33,7 +43,7 @@ struct CompCardViewSnapshotTests {
     /// Fresh in-memory container per case, so model state can't leak
     /// between snapshots.
     private static func makeContainer() throws -> ModelContainer {
-        try InMemoryModelContainer.make(for: [GradedMarketSnapshot.self])
+        try InMemoryModelContainer.make(for: [Scan.self, GradedMarketSnapshot.self])
     }
 
     /// Encodes a `[PriceHistoryPoint]` into the on-disk JSON shape that
@@ -49,11 +59,41 @@ struct CompCardViewSnapshotTests {
     /// to a constant reference-time so the sparkline path is stable.
     private static let baseDate = Date(timeIntervalSinceReferenceDate: 700_000_000)
 
-    /// Builds + inserts a `GradedMarketSnapshot` in a fresh in-memory
-    /// container and returns both. Tests keep the container alive for
-    /// the duration of the snapshot render so the `@Model` instance
-    /// stays valid.
-    private static func makeSnapshot(
+    /// Stable identity UUID so every fixture references the same slab.
+    private static let identityId = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+    /// Builds a synthetic `Scan` with deterministic fields. The scan's
+    /// `reconciledHeadlinePriceCents` is the hero number — we set it
+    /// explicitly so the test asserts the rendered hero, not whatever
+    /// the production reconciliation logic happens to compute.
+    private static func makeScan(
+        grader: Grader = .PSA,
+        grade: String = "10",
+        reconciledHeadlinePriceCents: Int64?,
+        in context: ModelContext
+    ) -> Scan {
+        let scan = Scan(
+            id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            storeId: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+            lotId: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+            userId: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+            grader: grader,
+            certNumber: "12345678",
+            grade: grade,
+            gradedCardIdentityId: identityId,
+            status: .validated,
+            createdAt: baseDate,
+            updatedAt: baseDate
+        )
+        scan.reconciledHeadlinePriceCents = reconciledHeadlinePriceCents
+        context.insert(scan)
+        return scan
+    }
+
+    /// Builds a PPT-shaped snapshot. Defaults match the prior single-
+    /// source fixture so existing-feel assertions stay close to the
+    /// shipped baseline.
+    private static func makePPT(
         gradingService: String = "PSA",
         grade: String = "10",
         headlinePriceCents: Int64? = 18_500,
@@ -68,15 +108,15 @@ struct CompCardViewSnapshotTests {
         sgc10: Int64? = 16_500,
         priceHistory: [PriceHistoryPoint]? = nil,
         isStaleFallback: Bool = false,
-        pptURL: URL? = URL(string: "https://www.pokemonpricetracker.com/card/charizard-base-set")
-    ) throws -> (ModelContainer, GradedMarketSnapshot) {
-        let container = try makeContainer()
-        let context = ModelContext(container)
+        pptURL: URL? = URL(string: "https://www.pokemonpricetracker.com/card/charizard-base-set"),
+        in context: ModelContext
+    ) -> GradedMarketSnapshot {
         let json = priceHistory.map { encodeHistory($0) }
         let snap = GradedMarketSnapshot(
-            identityId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            identityId: identityId,
             gradingService: gradingService,
             grade: grade,
+            source: GradedMarketSnapshot.sourcePPT,
             headlinePriceCents: headlinePriceCents,
             loosePriceCents: loosePriceCents,
             psa7PriceCents: psa7,
@@ -95,19 +135,60 @@ struct CompCardViewSnapshotTests {
             isStaleFallback: isStaleFallback
         )
         context.insert(snap)
-        try context.save()
-        return (container, snap)
+        return snap
+    }
+
+    /// Builds a Poketrace-shaped snapshot. `ptAvgCents` mirrors
+    /// `headlinePriceCents` to mirror the production
+    /// `CompFetchService.persistSnapshots` write path.
+    private static func makePoketrace(
+        gradingService: String = "PSA",
+        grade: String = "10",
+        avgCents: Int64? = 19_000,
+        lowCents: Int64? = 17_500,
+        highCents: Int64? = 21_000,
+        trend: String? = "up",
+        confidence: String? = "high",
+        saleCount: Int? = 14,
+        priceHistory: [PriceHistoryPoint]? = nil,
+        in context: ModelContext
+    ) -> GradedMarketSnapshot {
+        let json = priceHistory.map { encodeHistory($0) }
+        let snap = GradedMarketSnapshot(
+            identityId: identityId,
+            gradingService: gradingService,
+            grade: grade,
+            source: GradedMarketSnapshot.sourcePoketrace,
+            headlinePriceCents: avgCents,
+            ptAvgCents: avgCents,
+            ptLowCents: lowCents,
+            ptHighCents: highCents,
+            ptTrend: trend,
+            ptConfidence: confidence,
+            ptSaleCount: saleCount,
+            poketraceCardId: "pt-card-id-placeholder",
+            priceHistoryJSON: json,
+            fetchedAt: baseDate,
+            cacheHit: false,
+            isStaleFallback: false
+        )
+        context.insert(snap)
+        return snap
     }
 
     /// Wraps `CompCardView` in a deterministic-size container with
     /// the app's dark background so layout doesn't bleed.
-    private static func host(_ snap: GradedMarketSnapshot) -> some View {
-        CompCardView(snapshot: snap)
+    private static func host(
+        scan: Scan,
+        ppt: GradedMarketSnapshot?,
+        poketrace: GradedMarketSnapshot?
+    ) -> some View {
+        CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: poketrace)
             .padding(Spacing.l)
             .background(AppColor.ink)
     }
 
-    /// Common snapshot configuration: a 380x480 fixed frame, both
+    /// Common snapshot configuration: a 380x560 fixed frame, both
     /// light and dark color schemes, 0.99 precision tolerance.
     private static func assertLightDark(
         _ view: some View,
@@ -118,7 +199,7 @@ struct CompCardViewSnapshotTests {
         line: UInt = #line,
         column: UInt = #column
     ) {
-        let layout: SwiftUISnapshotLayout = .fixed(width: 380, height: 480)
+        let layout: SwiftUISnapshotLayout = .fixed(width: 380, height: 560)
         assertSnapshot(
             of: view,
             as: .image(
@@ -149,92 +230,217 @@ struct CompCardViewSnapshotTests {
         )
     }
 
-    // MARK: - 1. PSA 10 full ladder + sparkline + good headline
+    // MARK: - Stable history series
 
-    @Test("PSA 10 — full ladder + sparkline + headline")
-    func psa10FullLadder() throws {
-        let history: [PriceHistoryPoint] = (0..<12).map { i in
-            let ts = Self.baseDate.addingTimeInterval(Double(i) * 86_400 * 14)
-            let cents = Int64(15_500 + Int(sin(Double(i) / 3) * 1_400) + i * 250)
-            return PriceHistoryPoint(ts: ts, priceCents: cents)
+    /// Synthesised price history used in cases that exercise the
+    /// sparkline. Pinned to `baseDate` so the rendered chart path is
+    /// byte-stable across runs.
+    private static func sampleHistory(start cents: Int64) -> [PriceHistoryPoint] {
+        (0..<12).map { i in
+            let ts = baseDate.addingTimeInterval(Double(i) * 86_400 * 14)
+            let value = Int64(cents + Int64(sin(Double(i) / 3) * 1_400) + Int64(i * 250))
+            return PriceHistoryPoint(ts: ts, priceCents: value)
         }
-        let (_, snap) = try Self.makeSnapshot(priceHistory: history)
-        Self.assertLightDark(Self.host(snap), named: "psa10-full")
     }
 
-    // MARK: - 2. BGS 10 headline (gold border on BGS cell)
+    // MARK: - 1. Both sources populated (avg of 2 sources)
+
+    @Test("both sources — PPT + Poketrace side-by-side, 'avg of 2 sources' caption")
+    func bothSources_psa10() throws {
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "10",
+            reconciledHeadlinePriceCents: 18_750, // (18_500 + 19_000) / 2
+            in: context
+        )
+        let ppt = Self.makePPT(
+            priceHistory: Self.sampleHistory(start: 15_500),
+            in: context
+        )
+        let pt = Self.makePoketrace(
+            priceHistory: Self.sampleHistory(start: 16_200),
+            in: context
+        )
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: pt),
+            named: "both-sources-psa10"
+        )
+    }
+
+    // MARK: - 2. PPT only (Poketrace cell shows "no data", caption "PPT only")
+
+    @Test("PPT only — Poketrace cell shows 'no data', caption 'PPT only'")
+    func pptOnly_psa10() throws {
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "10",
+            reconciledHeadlinePriceCents: 18_500,
+            in: context
+        )
+        let ppt = Self.makePPT(
+            priceHistory: Self.sampleHistory(start: 15_500),
+            in: context
+        )
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "ppt-only-psa10"
+        )
+    }
+
+    // MARK: - 3. Poketrace only (PPT cell shows "no data", caption "Poketrace only")
+
+    @Test("Poketrace only — PPT cell shows 'no data', caption 'Poketrace only'")
+    func poketraceOnly_psa9() throws {
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "9",
+            reconciledHeadlinePriceCents: 6_800,
+            in: context
+        )
+        let pt = Self.makePoketrace(
+            grade: "9",
+            avgCents: 6_800,
+            lowCents: 6_100,
+            highCents: 7_400,
+            trend: "stable",
+            confidence: "medium",
+            saleCount: 6,
+            priceHistory: Self.sampleHistory(start: 6_200),
+            in: context
+        )
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: nil, poketrace: pt),
+            named: "poketrace-only-psa9"
+        )
+    }
+
+    // MARK: - 4. BGS 10 headline (gold border on BGS cell)
 
     @Test("BGS 10 — gold border lands on BGS cell, not PSA")
     func bgs10Headline() throws {
-        let (_, snap) = try Self.makeSnapshot(
-            gradingService: "BGS",
-            grade: "10",
-            headlinePriceCents: 21_500,
-            priceHistory: nil
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .BGS, grade: "10",
+            reconciledHeadlinePriceCents: 21_500,
+            in: context
         )
-        Self.assertLightDark(Self.host(snap), named: "bgs10")
+        let ppt = Self.makePPT(
+            gradingService: "BGS", grade: "10",
+            headlinePriceCents: 21_500,
+            in: context
+        )
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "bgs10"
+        )
     }
 
-    // MARK: - 3. JP card (raw only)
+    // MARK: - 5. JP card (raw only, every tier nil)
 
     @Test("JP card — raw only, all PSA/BGS/CGC/SGC tiers nil")
     func japaneseRawOnly() throws {
-        let (_, snap) = try Self.makeSnapshot(
-            gradingService: "PSA",
-            grade: "10",
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "10",
+            reconciledHeadlinePriceCents: nil,
+            in: context
+        )
+        let ppt = Self.makePPT(
+            gradingService: "PSA", grade: "10",
             headlinePriceCents: nil,
             loosePriceCents: 350,
             psa7: nil, psa8: nil, psa9: nil, psa9_5: nil, psa10: nil,
             bgs10: nil, cgc10: nil, sgc10: nil,
-            priceHistory: nil
+            in: context
         )
-        Self.assertLightDark(Self.host(snap), named: "jp-raw-only")
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "jp-raw-only"
+        )
     }
 
-    // MARK: - 4. Stale fallback (caveat row visible)
+    // MARK: - 6. Stale fallback (caveat row visible)
 
     @Test("stale fallback — caveat row with offline chip")
     func staleFallback() throws {
-        let history: [PriceHistoryPoint] = (0..<6).map { i in
-            let ts = Self.baseDate.addingTimeInterval(Double(i) * 86_400 * 21)
-            return PriceHistoryPoint(ts: ts, priceCents: Int64(14_500 + i * 350))
-        }
-        let (_, snap) = try Self.makeSnapshot(
-            priceHistory: history,
-            isStaleFallback: true
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "10",
+            reconciledHeadlinePriceCents: 18_500,
+            in: context
         )
-        Self.assertLightDark(Self.host(snap), named: "stale-fallback")
+        let ppt = Self.makePPT(
+            priceHistory: Self.sampleHistory(start: 14_500),
+            isStaleFallback: true,
+            in: context
+        )
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "stale-fallback"
+        )
     }
 
-    // MARK: - 5. Unsupported tier (TAG 10)
+    // MARK: - 7. Unsupported tier (TAG 10)
 
     @Test("unsupported tier — TAG 10 with caveat copy")
     func unsupportedTagTier() throws {
-        let (_, snap) = try Self.makeSnapshot(
-            gradingService: "TAG",
-            grade: "10",
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .TAG, grade: "10",
+            reconciledHeadlinePriceCents: nil,
+            in: context
+        )
+        let ppt = Self.makePPT(
+            gradingService: "TAG", grade: "10",
             headlinePriceCents: nil,
             psa10: 18_500,
             bgs10: nil, cgc10: nil, sgc10: nil,
-            priceHistory: nil
+            in: context
         )
-        Self.assertLightDark(Self.host(snap), named: "tag10-unsupported")
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "tag10-unsupported"
+        )
     }
 
-    // MARK: - 6. Empty state (every tier nil, no history)
+    // MARK: - 8. Empty state (no snapshots, no history, no URL)
 
     @Test("empty state — every tier nil, no history")
     func emptyState() throws {
-        let (_, snap) = try Self.makeSnapshot(
-            gradingService: "PSA",
-            grade: "10",
+        let container = try Self.makeContainer()
+        let context = ModelContext(container)
+        let scan = Self.makeScan(
+            grader: .PSA, grade: "10",
+            reconciledHeadlinePriceCents: nil,
+            in: context
+        )
+        let ppt = Self.makePPT(
+            gradingService: "PSA", grade: "10",
             headlinePriceCents: nil,
             loosePriceCents: nil,
             psa7: nil, psa8: nil, psa9: nil, psa9_5: nil, psa10: nil,
             bgs10: nil, cgc10: nil, sgc10: nil,
-            priceHistory: nil,
-            pptURL: nil
+            pptURL: nil,
+            in: context
         )
-        Self.assertLightDark(Self.host(snap), named: "empty")
+        try context.save()
+        Self.assertLightDark(
+            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            named: "empty"
+        )
     }
 }

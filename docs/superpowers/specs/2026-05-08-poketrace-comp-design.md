@@ -339,6 +339,11 @@ Before merge: in dev build, scan a real PSA 10 slab. Verify:
 
 No feature flag is required: PPT continues working untouched; Poketrace simply appears when the key is configured.
 
+## Operational notes (post-deploy 2026-05-08)
+
+- **Poketrace plan tier matters.** The Free plan returns `data.prices` populated with raw conditions only (NEAR_MINT, LIGHTLY_PLAYED, etc.) — graded tiers are silently filtered out of the card-detail response. The per-tier history endpoint returns `403 {"code":"UPGRADE_REQUIRED"}`. Any graded coverage requires a Pro plan. The integration handles the absence cleanly: `extractTierPrice` returns null, `fetchPoketraceBranch` yields `null`, the response renders `poketrace: null` with `reconciled.source: "ppt-only"`, and the iOS Poketrace cell shows "no data". No code change is needed when the plan is upgraded — the next live-fetch cycle picks up the data.
+- **Cross-walk works on Free.** `/cards?tcgplayer_ids=<id>` returns the card UUID even on Free; we cache it on `graded_card_identities.poketrace_card_id` so a future plan upgrade doesn't re-pay the cross-walk cost.
+
 ## V1 limitations (planned-in)
 
 These are deliberate scope cuts for the first shipping version, recorded so they don't get rediscovered later.

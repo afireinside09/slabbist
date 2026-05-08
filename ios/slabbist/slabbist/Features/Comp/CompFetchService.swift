@@ -24,7 +24,21 @@ final class CompFetchService {
     /// shared task lands).
     private var inFlight: [String: Task<Void, Never>] = [:]
 
-    private init() {}
+    /// Test-friendly context, used by `persist(scan:decoded:)` when the
+    /// service is constructed via `init(context:)`. The shared singleton
+    /// passes the context per-call through `fetch(...)` instead.
+    private let boundContext: ModelContext?
+
+    private init() {
+        self.boundContext = nil
+    }
+
+    /// Test seam: build a service bound to a specific `ModelContext` so
+    /// `persist(scan:decoded:)` can be exercised in isolation without going
+    /// through the live fetch pipeline.
+    init(context: ModelContext) {
+        self.boundContext = context
+    }
 
     /// Test seam: reset all in-flight tracking. Production code never calls.
     func _resetForTests() {
@@ -80,7 +94,14 @@ final class CompFetchService {
                     gradingService: service,
                     grade: grade
                 )
-                Self.persistSnapshot(decoded: decoded, identityId: identityId, service: service, grade: grade, context: context)
+                Self.persistSnapshots(
+                    decoded: decoded,
+                    identityId: identityId,
+                    service: service,
+                    grade: grade,
+                    scanId: scanId,
+                    context: context
+                )
                 Self.flipMatching(
                     identityId: identityId,
                     service: service,
@@ -156,24 +177,65 @@ final class CompFetchService {
         }
     }
 
-    private static func persistSnapshot(
+    /// Test entry point: persist both PPT and (if present) Poketrace
+    /// snapshots for `scan` from a fully-decoded envelope, and mirror the
+    /// reconciled headline back to the scan. Uses the context bound at
+    /// `init(context:)` time.
+    func persist(scan: Scan, decoded: CompRepository.Decoded) async throws {
+        guard let context = boundContext else {
+            preconditionFailure("CompFetchService.persist requires a context-bound init")
+        }
+        guard let identityId = scan.gradedCardIdentityId else {
+            preconditionFailure("CompFetchService.persist requires a validated scan with gradedCardIdentityId")
+        }
+        Self.persistSnapshots(
+            decoded: decoded,
+            identityId: identityId,
+            service: decoded.gradingService,
+            grade: decoded.grade,
+            scanId: scan.id,
+            context: context
+        )
+        // `persistSnapshots` writes `reconciledHeadlinePriceCents` onto every
+        // matching scan via the predicate; ensure the in-memory `scan` arg
+        // (which may not be the same object identity as the fetched row in
+        // some test contexts) reflects it too.
+        scan.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
+        try context.save()
+    }
+
+    /// Drops any prior snapshots for `(identityId, service, grade)` regardless
+    /// of source, then inserts one PPT row and (when `decoded.poketrace` is
+    /// present) a second Poketrace row. Mirrors the reconciled headline onto
+    /// the originating scan so list views can render without re-decoding the
+    /// snapshot rows.
+    private static func persistSnapshots(
         decoded: CompRepository.Decoded,
         identityId: UUID,
         service: String,
         grade: String,
+        scanId: UUID,
         context: ModelContext
     ) {
-        let historyJSON: String? = {
-            guard !decoded.priceHistory.isEmpty else { return nil }
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            guard let data = try? encoder.encode(decoded.priceHistory) else { return nil }
-            return String(data: data, encoding: .utf8)
-        }()
-        let snapshot = GradedMarketSnapshot(
+        // Drop existing rows for this slab — both sources — so a refetch
+        // doesn't pile up duplicates.
+        let existingDescriptor = FetchDescriptor<GradedMarketSnapshot>(
+            predicate: #Predicate<GradedMarketSnapshot> { s in
+                s.identityId == identityId &&
+                s.gradingService == service &&
+                s.grade == grade
+            }
+        )
+        if let existing = try? context.fetch(existingDescriptor) {
+            for s in existing { context.delete(s) }
+        }
+
+        let pptHistoryJSON = encodePriceHistory(decoded.priceHistory)
+        let ppt = GradedMarketSnapshot(
             identityId: identityId,
             gradingService: service,
             grade: grade,
+            source: GradedMarketSnapshot.sourcePPT,
             headlinePriceCents: decoded.headlinePriceCents,
             loosePriceCents: decoded.loosePriceCents,
             psa7PriceCents: decoded.psa7PriceCents,
@@ -186,12 +248,60 @@ final class CompFetchService {
             sgc10PriceCents: decoded.sgc10PriceCents,
             pptTCGPlayerId: decoded.pptTCGPlayerId,
             pptURL: decoded.pptURL,
-            priceHistoryJSON: historyJSON,
+            priceHistoryJSON: pptHistoryJSON,
             fetchedAt: decoded.fetchedAt,
             cacheHit: decoded.cacheHit,
             isStaleFallback: decoded.isStaleFallback
         )
-        context.insert(snapshot)
+        context.insert(ppt)
+
+        if let pt = decoded.poketrace {
+            let ptHistoryJSON = encodePriceHistory(pt.priceHistory)
+            let snapshot = GradedMarketSnapshot(
+                identityId: identityId,
+                gradingService: service,
+                grade: grade,
+                source: GradedMarketSnapshot.sourcePoketrace,
+                headlinePriceCents: pt.avgCents,
+                ptAvgCents: pt.avgCents,
+                ptLowCents: pt.lowCents,
+                ptHighCents: pt.highCents,
+                ptAvg1dCents: pt.avg1dCents,
+                ptAvg7dCents: pt.avg7dCents,
+                ptAvg30dCents: pt.avg30dCents,
+                ptMedian3dCents: pt.median3dCents,
+                ptMedian7dCents: pt.median7dCents,
+                ptMedian30dCents: pt.median30dCents,
+                ptTrend: pt.trend,
+                ptConfidence: pt.confidence,
+                ptSaleCount: pt.saleCount,
+                poketraceCardId: pt.cardId,
+                priceHistoryJSON: ptHistoryJSON,
+                fetchedAt: pt.fetchedAt,
+                cacheHit: decoded.cacheHit,
+                isStaleFallback: decoded.isStaleFallback
+            )
+            context.insert(snapshot)
+        }
+
+        // Mirror the reconciled headline onto the originating scan. The
+        // `flipMatching` call site below also touches `compFetch*`, but the
+        // hero number lives independently so we update it here next to the
+        // snapshot writes that produced it.
+        if let target = fetchScan(scanId, in: context) {
+            target.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
+        }
+    }
+
+    /// Encodes a `[PriceHistoryPoint]` array as the JSON blob persisted on
+    /// `GradedMarketSnapshot.priceHistoryJSON`. Returns `nil` for an empty
+    /// list so consumers can short-circuit on `priceHistoryJSON == nil`.
+    private static func encodePriceHistory(_ points: [PriceHistoryPoint]) -> String? {
+        guard !points.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(points) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     private static func fetchScan(_ id: UUID, in context: ModelContext) -> Scan? {

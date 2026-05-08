@@ -32,6 +32,32 @@ final class CompRepository {
         let fetched_at: Date
         let cache_hit: Bool
         let is_stale_fallback: Bool
+        // v2 additions; both optional so legacy responses still decode.
+        let poketrace: PoketraceWire?
+        let reconciled: ReconciledWire?
+
+        struct PoketraceWire: Decodable {
+            let card_id: String
+            let tier: String
+            let avg_cents: Int64?
+            let low_cents: Int64?
+            let high_cents: Int64?
+            let avg_1d_cents: Int64?
+            let avg_7d_cents: Int64?
+            let avg_30d_cents: Int64?
+            let median_3d_cents: Int64?
+            let median_7d_cents: Int64?
+            let median_30d_cents: Int64?
+            let trend: String?
+            let confidence: String?
+            let sale_count: Int?
+            let price_history: [PriceHistoryPoint]
+            let fetched_at: Date
+        }
+        struct ReconciledWire: Decodable {
+            let headline_price_cents: Int64?
+            let source: String
+        }
     }
 
     struct Decoded {
@@ -53,6 +79,28 @@ final class CompRepository {
         let fetchedAt: Date
         let cacheHit: Bool
         let isStaleFallback: Bool
+        let poketrace: SourceComp?
+        let reconciledHeadlineCents: Int64?
+        let reconciledSource: String  // "avg" | "ppt-only" | "poketrace-only"
+
+        struct SourceComp: Equatable {
+            let cardId: String
+            let tier: String
+            let avgCents: Int64?
+            let lowCents: Int64?
+            let highCents: Int64?
+            let avg1dCents: Int64?
+            let avg7dCents: Int64?
+            let avg30dCents: Int64?
+            let median3dCents: Int64?
+            let median7dCents: Int64?
+            let median30dCents: Int64?
+            let trend: String?
+            let confidence: String?
+            let saleCount: Int?
+            let priceHistory: [PriceHistoryPoint]
+            let fetchedAt: Date
+        }
     }
 
     private let urlSession: URLSession
@@ -71,6 +119,18 @@ final class CompRepository {
         let wire: Wire
         do { wire = try decoder.decode(Wire.self, from: data) }
         catch { throw Error.decoding("\(error)") }
+        let poketrace = wire.poketrace.map { pt in
+            Decoded.SourceComp(
+                cardId: pt.card_id, tier: pt.tier,
+                avgCents: pt.avg_cents, lowCents: pt.low_cents, highCents: pt.high_cents,
+                avg1dCents: pt.avg_1d_cents, avg7dCents: pt.avg_7d_cents, avg30dCents: pt.avg_30d_cents,
+                median3dCents: pt.median_3d_cents, median7dCents: pt.median_7d_cents, median30dCents: pt.median_30d_cents,
+                trend: pt.trend, confidence: pt.confidence, saleCount: pt.sale_count,
+                priceHistory: pt.price_history, fetchedAt: pt.fetched_at
+            )
+        }
+        let reconciledCents = wire.reconciled?.headline_price_cents ?? wire.headline_price_cents
+        let reconciledSource = wire.reconciled?.source ?? "ppt-only"
         return Decoded(
             headlinePriceCents: wire.headline_price_cents,
             gradingService: wire.grading_service,
@@ -89,7 +149,10 @@ final class CompRepository {
             pptURL: URL(string: wire.ppt_url),
             fetchedAt: wire.fetched_at,
             cacheHit: wire.cache_hit,
-            isStaleFallback: wire.is_stale_fallback
+            isStaleFallback: wire.is_stale_fallback,
+            poketrace: poketrace,
+            reconciledHeadlineCents: reconciledCents,
+            reconciledSource: reconciledSource
         )
     }
 

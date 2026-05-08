@@ -53,3 +53,42 @@ export interface PriceCompResponse {
 }
 
 export type CacheState = "hit" | "miss" | "stale";
+
+// ---- Poketrace (second source) ---------------------------------------------
+
+export interface PoketraceTierFields {
+  avg_cents:        number | null;
+  low_cents:        number | null;
+  high_cents:       number | null;
+  avg_1d_cents:     number | null;
+  avg_7d_cents:     number | null;
+  avg_30d_cents:    number | null;
+  median_3d_cents:  number | null;
+  median_7d_cents:  number | null;
+  median_30d_cents: number | null;
+  trend:            "up" | "down" | "stable" | null;
+  confidence:       "high" | "medium" | "low" | null;
+  sale_count:       number | null;
+}
+
+export interface PoketraceBlock extends PoketraceTierFields {
+  card_id: string;
+  tier:    string;                 // e.g. "PSA_10"
+  price_history: PriceHistoryWirePoint[];
+  fetched_at: string;
+}
+
+export type ReconciledSource = "avg" | "ppt-only" | "poketrace-only";
+
+export interface ReconciledBlock {
+  headline_price_cents: number | null;
+  source: ReconciledSource;
+}
+
+// Wider response envelope. The legacy fields at the top remain populated for
+// the PPT branch so existing iOS clients on v1 keep working until the new
+// CompRepository decoder ships.
+export interface PriceCompResponseV2 extends PriceCompResponse {
+  poketrace: PoketraceBlock | null;
+  reconciled: ReconciledBlock;
+}
