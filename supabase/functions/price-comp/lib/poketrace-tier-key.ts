@@ -1,4 +1,5 @@
 // supabase/functions/price-comp/lib/poketrace-tier-key.ts
+// @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 //
 // Build a Poketrace tier key from a (gradingService, grade) pair as the
 // app stores them on graded_market. Poketrace's tier strings replace

@@ -1,3 +1,4 @@
+// @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { poketraceTierKey } from "../lib/poketrace-tier-key.ts";
 
