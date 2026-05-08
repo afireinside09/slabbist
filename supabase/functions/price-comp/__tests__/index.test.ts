@@ -172,6 +172,8 @@ Deno.test("cache miss + no cached id — search, persist, return ladder", async 
       pptBaseUrl: mock.url,
       pptToken: "test-token",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -241,6 +243,8 @@ Deno.test("cache hit — within TTL skips PPT entirely", async () => {
       pptBaseUrl: mock.url,
       pptToken: "test-token",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -298,6 +302,8 @@ Deno.test("warm path — uses ?tcgPlayerId, not search", async () => {
       pptBaseUrl: mock.url,
       pptToken: "t",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -333,7 +339,7 @@ Deno.test("zero search hits — 404 PRODUCT_NOT_RESOLVED, no persistence", async
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
     });
-    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     const body = await res.json();
     assertEquals(res.status, 404);
     assertEquals(body.code, "PRODUCT_NOT_RESOLVED");
@@ -381,7 +387,7 @@ Deno.test("upstream 5xx with cached row — returns is_stale_fallback", async ()
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
     });
-    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     const body = await res.json();
     assertEquals(res.status, 200);
     assertEquals(body.cache_hit, true);
@@ -408,7 +414,7 @@ Deno.test("identity not found — 404 IDENTITY_NOT_FOUND", async () => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ graded_card_identity_id: "missing", grading_service: "PSA", grade: "10" }),
   });
-  const res = await handle(req, { supabase: fake, pptBaseUrl: "http://localhost:0", pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+  const res = await handle(req, { supabase: fake, pptBaseUrl: "http://localhost:0", pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
   const body = await res.json();
   assertEquals(res.status, 404);
   assertEquals(body.code, "IDENTITY_NOT_FOUND");
@@ -435,7 +441,7 @@ Deno.test("cached id + 404 from PPT — clears the cached id, returns NO_MARKET_
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
     });
-    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     const body = await res.json();
     assertEquals(res.status, 404);
     assertEquals(body.code, "NO_MARKET_DATA");
@@ -477,7 +483,7 @@ Deno.test("resolver T1: parens stripped from card_name in T1 query, full fetch f
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-1", grading_service: "PSA", grade: "10" }),
     });
-    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     assertEquals(res.status, 200);
     // T1 hits → only T1 is run (no T2/T3 fall-through). Then full fetch.
     assertEquals(state.calls.length, 2);
@@ -536,7 +542,7 @@ Deno.test("resolver T2 fallback: T1 misses, ?set= filter resolves on overlap", a
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-2", grading_service: "PSA", grade: "10" }),
     });
-    const res = await handle(req, { supabase: fake, pptBaseUrl: mockUrl, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    const res = await handle(req, { supabase: fake, pptBaseUrl: mockUrl, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     const body = await res.json();
     assertEquals(res.status, 200);
     assertEquals(body.ppt_tcgplayer_id, "999111");
@@ -591,6 +597,8 @@ Deno.test("resolver Tier A: alias hit + tcg_products hit → direct PPT fetch, n
       pptBaseUrl: mock.url,
       pptToken: "t",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -648,6 +656,8 @@ Deno.test("warm path: EN returns null, JP returns card → response built from J
       pptBaseUrl: mockUrl,
       pptToken: "t",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -694,6 +704,8 @@ Deno.test("warm path: EN AND JP both null → identity ppt_tcgplayer_id cleared,
       pptBaseUrl: mockUrl,
       pptToken: "t",
       ttlSeconds: 86400,
+      poketraceBaseUrl: "https://api.poketrace.com/v1",
+      poketraceApiKey: null,
       now: () => Date.now(),
     });
     const body = await res.json();
@@ -742,7 +754,7 @@ Deno.test("resolver: null card_number → T1 query has no number", async () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ graded_card_identity_id: "id-3", grading_service: "PSA", grade: "10" }),
     });
-    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, now: () => Date.now() });
+    await handle(req, { supabase: fake, pptBaseUrl: mock.url, pptToken: "t", ttlSeconds: 86400, poketraceBaseUrl: "https://api.poketrace.com/v1", poketraceApiKey: null, now: () => Date.now() });
     // T1 with name+set only. Card-name match alone doesn't pass scoreCard
     // accept (overlap 0 since "Promo" is a stopword), so T1 candidate is
     // rejected → fall through to T3 (T2 skipped, no distinctive token in

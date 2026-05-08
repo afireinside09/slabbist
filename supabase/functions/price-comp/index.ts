@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GradingService, PriceCompRequest, PriceCompResponse, CacheState } from "./types.ts";
+import type { PoketraceBlock, ReconciledBlock, PriceCompResponseV2 } from "./types.ts";
 import { extractLadder, pickTier, productUrl, ladderHasAnyPrice, parsePriceHistory, priceHistoryForTier, type LadderPrices, type PriceHistoryPoint, type PPTCard } from "./ppt/parse.ts";
 import { gradeKeyFor } from "./lib/grade-key.ts";
 import { fetchCard } from "./ppt/cards.ts";
@@ -10,6 +11,10 @@ import { resolveCard } from "./ppt/match.ts";
 import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
 import { persistIdentityPPTId, clearIdentityPPTId } from "./persistence/identity-product-id.ts";
 import { evaluateFreshness } from "./cache/freshness.ts";
+import { resolvePoketraceCardId } from "./poketrace/match.ts";
+import { fetchPoketracePrices } from "./poketrace/prices.ts";
+import { fetchPoketraceHistory } from "./poketrace/history.ts";
+import { poketraceTierKey } from "./lib/poketrace-tier-key.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -62,6 +67,8 @@ export interface HandleDeps {
   pptBaseUrl: string;
   pptToken: string;
   ttlSeconds: number;
+  poketraceBaseUrl: string;
+  poketraceApiKey: string | null; // null disables the branch
   now: () => number;
 }
 
@@ -104,7 +111,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
   });
 
   if (state === "hit" && cached) {
-    return json(200, buildResponse({
+    const pptResponse = buildResponse({
       ladderCents: cached.ladderCents,
       headlineCents: cached.headlinePriceCents,
       service: body.grading_service,
@@ -114,7 +121,38 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
       pptUrl: cached.pptUrl ?? identity.ppt_url ?? "",
       cacheHit: true,
       isStaleFallback: false,
-    }));
+    });
+
+    // Read cached Poketrace row separately; if fresh enough, return it
+    // alongside the PPT cache hit. No upstream HTTP call here.
+    const cachedPt = await readMarketLadder(
+      supabase, body.graded_card_identity_id, body.grading_service, body.grade, "poketrace",
+    );
+    let poketraceBlock: PoketraceBlock | null = null;
+    if (cachedPt && cachedPt.poketrace) {
+      const tierKey = poketraceTierKey(body.grading_service, body.grade);
+      poketraceBlock = {
+        card_id: identity.poketrace_card_id ?? "",
+        tier: tierKey,
+        avg_cents:        cachedPt.poketrace.avgCents,
+        low_cents:        cachedPt.poketrace.lowCents,
+        high_cents:       cachedPt.poketrace.highCents,
+        avg_1d_cents:     cachedPt.poketrace.avg1dCents,
+        avg_7d_cents:     cachedPt.poketrace.avg7dCents,
+        avg_30d_cents:    cachedPt.poketrace.avg30dCents,
+        median_3d_cents:  cachedPt.poketrace.median3dCents,
+        median_7d_cents:  cachedPt.poketrace.median7dCents,
+        median_30d_cents: cachedPt.poketrace.median30dCents,
+        trend:            cachedPt.poketrace.trend,
+        confidence:       cachedPt.poketrace.confidence,
+        sale_count:       cachedPt.poketrace.saleCount,
+        price_history:    cachedPt.priceHistory,
+        fetched_at:       cachedPt.updatedAt ?? new Date().toISOString(),
+      };
+    }
+    const reconciledBlock = reconcile(pptResponse.headline_price_cents, poketraceBlock);
+    const v2: PriceCompResponseV2 = { ...pptResponse, poketrace: poketraceBlock, reconciled: reconciledBlock };
+    return json(200, v2);
   }
 
   // 3. Live fetch
@@ -244,7 +282,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     credits_consumed: creditsConsumed ?? null,
   });
 
-  return json(200, buildResponse({
+  const pptResponse = buildResponse({
     ladderCents: ladder,
     headlineCents,
     service: body.grading_service,
@@ -254,7 +292,76 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     pptUrl: url,
     cacheHit: false,
     isStaleFallback: false,
-  }));
+  });
+
+  // V1 LIMITATION (intentional for shipping speed): the Poketrace branch
+  // runs sequentially AFTER the PPT happy path completes. This means PPT
+  // failures (404 NO_MARKET_DATA, AUTH_INVALID, etc.) short-circuit the
+  // request before Poketrace gets a chance, so the spec's
+  // 'poketrace-only' reconciliation source path is unreachable in v1.
+  // Refactoring index.ts to fan out PPT into a helper and run both
+  // providers via Promise.allSettled is tracked as a follow-up — see
+  // spec section "V1 limitations".
+  //
+  // The Poketrace call has its own 8s per-fetch timeout in client.ts.
+  let poketraceBlock: PoketraceBlock | null = null;
+  try {
+    poketraceBlock = await fetchPoketraceBranch(
+      deps,
+      {
+        id: identity.id,
+        ppt_tcgplayer_id: identity.ppt_tcgplayer_id ?? null,
+        poketrace_card_id: identity.poketrace_card_id ?? null,
+        poketrace_card_id_resolved_at: identity.poketrace_card_id_resolved_at ?? null,
+      },
+      body.grading_service,
+      body.grade,
+    );
+  } catch (e) {
+    console.error("poketrace.branch_failed", { message: (e as Error).message });
+  }
+
+  // Persist Poketrace row (fire-and-log; persistence failure does not fail the request)
+  if (poketraceBlock) {
+    try {
+      await upsertMarketLadder(supabase, {
+        identityId: body.graded_card_identity_id,
+        gradingService: body.grading_service,
+        grade: body.grade,
+        source: "poketrace",
+        headlinePriceCents: poketraceBlock.avg_cents,
+        ladderCents: { loose: null, psa_7: null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null, bgs_10: null, cgc_10: null, sgc_10: null },
+        priceHistory: poketraceBlock.price_history,
+        pptTCGPlayerId: "",
+        pptUrl: "",
+        poketrace: {
+          avgCents:       poketraceBlock.avg_cents,
+          lowCents:       poketraceBlock.low_cents,
+          highCents:      poketraceBlock.high_cents,
+          avg1dCents:     poketraceBlock.avg_1d_cents,
+          avg7dCents:     poketraceBlock.avg_7d_cents,
+          avg30dCents:    poketraceBlock.avg_30d_cents,
+          median3dCents:  poketraceBlock.median_3d_cents,
+          median7dCents:  poketraceBlock.median_7d_cents,
+          median30dCents: poketraceBlock.median_30d_cents,
+          trend:          poketraceBlock.trend,
+          confidence:     poketraceBlock.confidence,
+          saleCount:      poketraceBlock.sale_count,
+        },
+      });
+    } catch (e) {
+      console.error("poketrace.persist.market_failed", { message: (e as Error).message });
+    }
+  }
+
+  const reconciledBlock = reconcile(pptResponse.headline_price_cents, poketraceBlock);
+
+  const v2: PriceCompResponseV2 = {
+    ...pptResponse,
+    poketrace: poketraceBlock,
+    reconciled: reconciledBlock,
+  };
+  return json(200, v2);
 }
 
 async function staleOrUpstreamDown(
@@ -264,7 +371,7 @@ async function staleOrUpstreamDown(
 ): Promise<Response> {
   console.error("ppt.upstream_5xx", { marker });
   if (!cached) return json(503, { code: "UPSTREAM_UNAVAILABLE" });
-  return json(200, buildResponse({
+  const pptResponse = buildResponse({
     ladderCents: cached.ladderCents,
     headlineCents: cached.headlinePriceCents,
     service: body.grading_service,
@@ -274,18 +381,87 @@ async function staleOrUpstreamDown(
     pptUrl: cached.pptUrl ?? "",
     cacheHit: true,
     isStaleFallback: true,
-  }));
+  });
+  const v2: PriceCompResponseV2 = {
+    ...pptResponse,
+    poketrace: null,
+    reconciled: { headline_price_cents: cached.headlinePriceCents, source: "ppt-only" },
+  };
+  return json(200, v2);
+}
+
+async function fetchPoketraceBranch(
+  deps: HandleDeps,
+  identity: { id: string; ppt_tcgplayer_id: string | null; poketrace_card_id: string | null; poketrace_card_id_resolved_at: string | null },
+  service: GradingService,
+  grade: string,
+): Promise<PoketraceBlock | null> {
+  if (!deps.poketraceApiKey) return null;
+  const client = { apiKey: deps.poketraceApiKey, baseUrl: deps.poketraceBaseUrl };
+  const cardId = await resolvePoketraceCardId(
+    { supabase: deps.supabase as SupabaseClient, client, now: deps.now },
+    identity,
+  );
+  if (!cardId) return null;
+
+  const tierKey = poketraceTierKey(service, grade);
+  const [pricesRes, historyRes] = await Promise.allSettled([
+    fetchPoketracePrices(client, cardId, tierKey),
+    fetchPoketraceHistory(client, cardId, tierKey),
+  ]);
+
+  const prices = pricesRes.status === "fulfilled" ? pricesRes.value : null;
+  const history = historyRes.status === "fulfilled" ? historyRes.value.history : [];
+
+  if (!prices || !prices.fields) return null;
+
+  return {
+    card_id: cardId,
+    tier: tierKey,
+    ...prices.fields,
+    price_history: history,
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+function reconcile(
+  pptHeadlineCents: number | null,
+  poketrace: PoketraceBlock | null,
+): ReconciledBlock {
+  const ptAvg = poketrace?.avg_cents ?? null;
+  if (pptHeadlineCents !== null && ptAvg !== null) {
+    return {
+      headline_price_cents: Math.round((pptHeadlineCents + ptAvg) / 2),
+      source: "avg",
+    };
+  }
+  if (pptHeadlineCents !== null) {
+    return { headline_price_cents: pptHeadlineCents, source: "ppt-only" };
+  }
+  if (ptAvg !== null) {
+    return { headline_price_cents: ptAvg, source: "poketrace-only" };
+  }
+  return { headline_price_cents: null, source: "ppt-only" };
 }
 
 Deno.serve(async (req) => {
   const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false },
   });
+  const poketraceApiKey = (() => {
+    try { return env("POKETRACE_API_KEY"); }
+    catch { return null; }
+  })();
+  if (!poketraceApiKey) {
+    console.warn("price-comp.poketrace_disabled", { reason: "POKETRACE_API_KEY not set" });
+  }
   return await handle(req, {
     supabase,
     pptBaseUrl: "https://www.pokemonpricetracker.com",
     pptToken: env("POKEMONPRICETRACKER_API_TOKEN"),
     ttlSeconds: Number(env("POKEMONPRICETRACKER_FRESHNESS_TTL_SECONDS", "86400")),
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey,
     now: () => Date.now(),
   });
 });
