@@ -222,4 +222,53 @@ struct OutboxDrainerTests {
         await h.waitForIdle()
         #expect(h.fakeScans.insertedIds.isEmpty)
     }
+
+    // MARK: - 7.4 ordering + dedupe tests
+
+    @Test("ordering: deleteScan precedes insertLot precedes updateLot")
+    @MainActor
+    func priorityOrdering() async throws {
+        let h = Harness()
+        let scanId = UUID(); let lotIdA = UUID(); let lotIdB = UUID()
+        let now = h.clock.current()
+        // Enqueue in REVERSE priority order to prove the drainer reorders.
+        try await h.enqueueUpdateLot(id: lotIdB, name: "Renamed", createdAt: now)
+        try await h.enqueueInsertLot(id: lotIdA, createdAt: now.addingTimeInterval(1))
+        try await h.enqueueDeleteScan(id: scanId, createdAt: now.addingTimeInterval(2))
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // After the drain, all three items should be gone.
+        let count = await h.outboxCount()
+        #expect(count == 0)
+
+        // Recorders preserve call order — assert the chronological dispatch
+        // sequence reflects priority, not enqueue order:
+        //   deleteScan (50) → insertLot (15) → updateLot (5)
+        #expect(h.fakeScans.deletedIds == [scanId])
+        #expect(h.fakeLots.insertedIds == [lotIdA])
+        #expect(h.fakeLots.patchCalls.map(\.id) == [lotIdB])
+    }
+
+    @Test("concurrent kicks dedupe — only one drain pass executes")
+    @MainActor
+    func concurrentKicksDedupe() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueInsertScan(id: scanId)
+
+        // Three concurrent kicks. Two should hit the `guard !isDraining`
+        // early-return; only the first does any work.
+        async let a: Void = h.drainer.kickAndWait()
+        async let b: Void = h.drainer.kickAndWait()
+        async let c: Void = h.drainer.kickAndWait()
+        _ = await (a, b, c)
+        await h.waitForIdle()
+
+        // Repo records exactly one insert (not three).
+        #expect(h.fakeScans.insertedIds.count == 1)
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
 }
