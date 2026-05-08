@@ -65,9 +65,17 @@ export async function resolvePoketraceCardId(
     return null;
   }
 
-  // 4. Live cross-walk
+  // 4. Live cross-walk.
+  //
+  // We deliberately do NOT pass `has_graded=true` here. The filter is too
+  // aggressive: it excludes cards that exist in Poketrace's catalog but
+  // don't yet have graded sales data. We want to resolve to the UUID
+  // anyway so that (a) once Poketrace ingests graded sales for that card
+  // the next scan picks them up without re-doing the cross-walk, and
+  // (b) the absence-of-tier case is already handled cleanly by
+  // extractTierPrice → fields: null at the prices layer.
   const fetchImpl = overrides.fetchJsonImpl ?? fetchJson;
-  const path = `/cards?tcgplayer_ids=${encodeURIComponent(identity.ppt_tcgplayer_id)}&limit=20&has_graded=true`;
+  const path = `/cards?tcgplayer_ids=${encodeURIComponent(identity.ppt_tcgplayer_id)}&limit=20`;
   const res = await fetchImpl<CardSearchResponse>(deps.client, path);
 
   if (res.status !== 200 || !res.body?.data) {
