@@ -35,9 +35,28 @@ struct SupabaseErrorTests {
         }
     }
 
-    @Test("maps 23xxx Postgres codes to .constraintViolation")
+    @Test("23505 (unique violation) maps to .uniqueViolation, not generic .constraintViolation")
+    func uniqueViolationMapping() {
+        let pg = PostgrestError(
+            code: "23505",
+            message: "duplicate key value violates unique constraint \"lots_pkey\""
+        )
+        let mapped = SupabaseError.map(pg)
+        if case .uniqueViolation = mapped { return }
+        Issue.record("expected .uniqueViolation, got \(mapped)")
+    }
+
+    @Test("23503 (FK violation) still maps to .constraintViolation")
+    func fkViolationMapping() {
+        let pg = PostgrestError(code: "23503", message: "foreign key violation")
+        let mapped = SupabaseError.map(pg)
+        if case .constraintViolation = mapped { return }
+        Issue.record("expected .constraintViolation, got \(mapped)")
+    }
+
+    @Test("maps remaining 23xxx Postgres codes to .constraintViolation")
     func constraintCodes() {
-        for code in ["23505", "23502", "23503", "23514"] {
+        for code in ["23502", "23503", "23514"] {
             let pg = PostgrestError(code: code, message: "boom")
             let mapped = SupabaseError.map(pg)
             guard case let .constraintViolation(message, _) = mapped else {

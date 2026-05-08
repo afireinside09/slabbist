@@ -17,6 +17,11 @@ nonisolated enum SupabaseError: Error, CustomStringConvertible {
     case forbidden(underlying: Error)
     /// Uniqueness / FK / check constraint violated.
     case constraintViolation(message: String, underlying: Error)
+    /// Specifically a unique-constraint violation (PostgreSQL SQLSTATE
+    /// 23505). Broken out from the generic `.constraintViolation` because
+    /// the outbox drainer treats it as idempotent success on inserts —
+    /// the row already exists, so the previous attempt landed.
+    case uniqueViolation(message: String, underlying: Error)
     /// Network / transport / decoding problem that isn't specifically
     /// classified above.
     case transport(underlying: Error)
@@ -31,6 +36,8 @@ nonisolated enum SupabaseError: Error, CustomStringConvertible {
             return "Forbidden by RLS: \(error.localizedDescription)"
         case let .constraintViolation(message, _):
             return "Constraint violation: \(message)"
+        case let .uniqueViolation(message, _):
+            return "Unique constraint violation: \(message)"
         case let .transport(error):
             return "Transport error: \(error.localizedDescription)"
         }
@@ -71,8 +78,8 @@ nonisolated enum SupabaseError: Error, CustomStringConvertible {
 
         // Postgres SQLSTATE codes surfaced through PostgREST.
         case "23505":
-            // unique_violation
-            return .constraintViolation(message: error.message, underlying: error)
+            // unique_violation — idempotent-success candidate for the outbox drainer
+            return .uniqueViolation(message: error.message, underlying: error)
         case "23502":
             // not_null_violation
             return .constraintViolation(message: error.message, underlying: error)
