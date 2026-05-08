@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// MainActor-isolated entry point producers and lifecycle hooks call to
 /// nudge the drainer. Owns no state — just hops onto a detached Task and
@@ -7,7 +8,11 @@ import Foundation
 /// Producers stay decoupled from the actor: they don't `await`, don't
 /// import the actor type, and don't care that the drainer is doing work
 /// on a background thread.
+///
+/// `@Observable` is required so `SlabbistApp` can inject it via
+/// `.environment(kicker)` and views can read it without a wrapper.
 @MainActor
+@Observable
 final class OutboxKicker {
     private let action: @Sendable () async -> Void
 
