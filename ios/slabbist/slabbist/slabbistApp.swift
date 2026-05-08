@@ -8,6 +8,12 @@ struct SlabbistApp: App {
     @State private var session = SessionStore()
     @State private var hydrator = StoreHydrator()
 
+    /// Resolved once at app start. Under XCUITests this swaps to an
+    /// in-memory container so every test launch starts with an empty
+    /// SwiftData store; in production it returns the file-backed shared
+    /// container exactly as before.
+    private let modelContainer: ModelContainer = UITestEnvironment.resolveModelContainer()
+
     init() {
         Self.verifyCustomFontsLoaded()
     }
@@ -17,10 +23,23 @@ struct SlabbistApp: App {
             RootView()
                 .environment(session)
                 .environment(hydrator)
-                .onAppear { session.bootstrap() }
+                .onAppear {
+                    if UITestEnvironment.isActive {
+                        // UI test harness: skip Supabase auth + hydrator.
+                        // Bootstrap synthetic user/store so the post-auth
+                        // shell is reachable without a network round-trip.
+                        UITestEnvironment.bootstrapIfActive(
+                            session: session,
+                            hydrator: hydrator,
+                            container: modelContainer
+                        )
+                    } else {
+                        session.bootstrap()
+                    }
+                }
                 .preferredColorScheme(.dark)
         }
-        .modelContainer(AppModelContainer.shared)
+        .modelContainer(modelContainer)
     }
 
     private static let designLog = Logger(

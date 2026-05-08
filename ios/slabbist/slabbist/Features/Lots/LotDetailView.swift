@@ -134,6 +134,7 @@ struct LotDetailView: View {
                                     slabRow(for: scan)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("scan-row-\(scan.certNumber)")
                                 .contextMenu {
                                     Button("Delete slab", systemImage: "trash", role: .destructive) {
                                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
@@ -176,7 +177,9 @@ struct LotDetailView: View {
     private func rowMenu(for scan: Scan) -> some View {
         Menu {
             Button("Delete slab", systemImage: "trash", role: .destructive) {
-                scanPendingDelete = scan
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    scanPendingDelete = scan
+                }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -187,6 +190,7 @@ struct LotDetailView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Slab actions")
+        .accessibilityIdentifier("scan-menu-\(scan.certNumber)")
     }
 
     private func slabRow(for scan: Scan) -> some View {

@@ -72,6 +72,16 @@ final class StoreHydrator {
         state = .idle
     }
 
+    /// XCUITest seam: stamp the hydrator as already complete for a
+    /// synthetic user so `LotsListView.prepare()` can skip the network
+    /// call entirely. Production code never invokes this; it is gated by
+    /// `UITestEnvironment.isActive` in `slabbistApp`.
+    func markReadyForUITests(userId: UUID) {
+        inFlight?.cancel()
+        inFlight = nil
+        state = .ready(hydratedUserId: userId)
+    }
+
     private func performHydration(userId: UUID) async {
         do {
             let dtos = try await repository.listForCurrentUser(page: .default)

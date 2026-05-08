@@ -22,6 +22,7 @@ struct NewLotSheet: View {
                             .textInputAutocapitalization(.words)
                             .foregroundStyle(AppColor.text)
                             .tint(AppColor.gold)
+                            .accessibilityIdentifier("new-lot-name-field")
                     }
                     .padding(.horizontal, Spacing.l)
                     .padding(.vertical, Spacing.md)
@@ -43,6 +44,7 @@ struct NewLotSheet: View {
                         self.error = error.localizedDescription
                     }
                 }
+                .accessibilityIdentifier("new-lot-create-button")
             }
             .padding(.horizontal, Spacing.xxl)
             .padding(.top, Spacing.l)

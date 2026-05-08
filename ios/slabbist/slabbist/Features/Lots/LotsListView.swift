@@ -39,6 +39,7 @@ struct LotsListView: View {
                         ) {
                             showingNewLot = true
                         }
+                        .accessibilityIdentifier("new-lot-button")
 
                         if viewModel == nil {
                             setupStatusCard
@@ -149,6 +150,7 @@ struct LotsListView: View {
                                     row(for: lot)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("lot-row-\(lot.name)")
                                 .contextMenu {
                                     Button("Delete lot", systemImage: "trash", role: .destructive) {
                                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
@@ -199,7 +201,9 @@ struct LotsListView: View {
     private func rowMenu(for lot: Lot) -> some View {
         Menu {
             Button("Delete lot", systemImage: "trash", role: .destructive) {
-                lotPendingDelete = lot
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    lotPendingDelete = lot
+                }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -210,6 +214,7 @@ struct LotsListView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Lot actions")
+        .accessibilityIdentifier("lot-menu-\(lot.name)")
     }
 
     /// Resolves a path route to its destination view by looking the entity up

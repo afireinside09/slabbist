@@ -49,5 +49,14 @@ final class SessionStore {
 
     var isSignedIn: Bool { userId != nil }
 
+    /// XCUITest seam: short-circuit auth so the test harness lands inside
+    /// the post-sign-in app shell without hitting Supabase. Production
+    /// code never calls this — it is gated by `UITestEnvironment.isActive`
+    /// in `slabbistApp`.
+    func applyUITestUser(userId: UUID) {
+        authTask?.cancel()
+        self.userId = userId
+    }
+
     private static let log = Logger(subsystem: "com.slabbist.auth", category: "session")
 }
