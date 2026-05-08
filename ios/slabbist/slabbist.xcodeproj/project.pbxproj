@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1048E737CBCAE5AA0E9E9B91 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 4C0CF8ABD0DD5C60F57D4334 /* Supabase */; };
+		B5A1B2C3D4E5F60100000001 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = B5A1B2C3D4E5F60100000002 /* SnapshotTesting */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B5A1B2C3D4E5F60100000001 /* SnapshotTesting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,6 +167,9 @@
 				B144A3C22F99D4D8002A2653 /* slabbistTests */,
 			);
 			name = slabbistTests;
+			packageProductDependencies = (
+				B5A1B2C3D4E5F60100000002 /* SnapshotTesting */,
+			);
 			productName = slabbistTests;
 			productReference = B144A3BF2F99D4D8002A2653 /* slabbistTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -224,6 +229,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B8A3B336BD43435EC0AA2EDF /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				B5A1B2C3D4E5F60100000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B144A3B12F99D4D7002A2653 /* Products */;
@@ -620,6 +626,14 @@
 				minimumVersion = 2.44.0;
 			};
 		};
+		B5A1B2C3D4E5F60100000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.18.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -627,6 +641,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B8A3B336BD43435EC0AA2EDF /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		B5A1B2C3D4E5F60100000002 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5A1B2C3D4E5F60100000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
