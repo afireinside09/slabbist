@@ -113,6 +113,115 @@ final class Harness {
         )
     }
 
+    func enqueueInsertLot(id: UUID, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.InsertLot(
+            id: id.uuidString,
+            store_id: UUID().uuidString,
+            created_by_user_id: UUID().uuidString,
+            name: "Test Lot",
+            notes: nil,
+            status: "open",
+            created_at: ISO8601DateFormatter().string(from: stamp),
+            updated_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .insertLot,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueDeleteScan(id: UUID, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.DeleteScan(
+            id: id.uuidString,
+            deleted_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .deleteScan,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueDeleteLot(id: UUID, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.DeleteLot(
+            id: id.uuidString,
+            deleted_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .deleteLot,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueUpdateScan(id: UUID, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.UpdateScan(
+            id: id.uuidString,
+            graded_card_identity_id: nil,
+            grade: nil,
+            status: "identified",
+            updated_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateScan,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueUpdateScanOffer(id: UUID, cents: Int64?, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.UpdateScanOffer(
+            id: id.uuidString,
+            offer_cents: cents,
+            updated_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateScanOffer,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueUpdateLot(id: UUID, name: String?, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.UpdateLot(
+            id: id.uuidString,
+            name: name,
+            notes: nil,
+            status: nil,
+            updated_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateLot,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
     func outboxCount() async -> Int {
         await drainer._testOutboxCount()
     }
@@ -123,31 +232,47 @@ final class Harness {
 /// Fake `ScanRepository`. Recorders are wrapped in an actor to keep
 /// concurrent writes from the drainer + test main actor safe.
 ///
-/// `insertedIds` is also mirrored into a lock-protected array so tests
-/// on the MainActor can read it synchronously after `waitForIdle()` —
-/// once the drain loop has finished there are no more concurrent writers.
+/// `insertedIds`, `deletedIds`, and `patchCalls` are mirrored into
+/// lock-protected arrays so tests on the MainActor can read them
+/// synchronously after `waitForIdle()` — once the drain loop has
+/// finished there are no more concurrent writers.
 final class FakeScanRepository: ScanRepository, @unchecked Sendable {
     private let recorder = Recorder()
     var nextError: Error?
 
     actor Recorder {
         var insertedIds: [UUID] = []
-        func append(_ id: UUID) { insertedIds.append(id) }
-        func snapshot() -> [UUID] { insertedIds }
+        var deletedIds: [UUID] = []
+        var patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+        func appendInserted(_ id: UUID) { insertedIds.append(id) }
+        func appendDeleted(_ id: UUID) { deletedIds.append(id) }
+        func appendPatch(id: UUID, fields: [String: AnyJSON]) { patchCalls.append((id: id, fields: fields)) }
+        func snapshotInserted() -> [UUID] { insertedIds }
     }
 
-    /// Lock-protected mirror of the recorder's list. Safe to read from
-    /// MainActor after `Harness.waitForIdle()` has returned (no concurrent
-    /// writers at that point).
+    /// Lock-protected mirrors. Safe to read from MainActor after
+    /// `Harness.waitForIdle()` has returned (no concurrent writers at that point).
     private let _lock = NSLock()
     private var _insertedIds: [UUID] = []
+    private var _deletedIds: [UUID] = []
+    private var _patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
 
     var insertedIds: [UUID] {
         _lock.lock(); defer { _lock.unlock() }
         return _insertedIds
     }
 
-    func snapshotInsertedIds() async -> [UUID] { await recorder.snapshot() }
+    var deletedIds: [UUID] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _deletedIds
+    }
+
+    var patchCalls: [(id: UUID, fields: [String: AnyJSON])] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _patchCalls
+    }
+
+    func snapshotInsertedIds() async -> [UUID] { await recorder.snapshotInserted() }
 
     func listItems(
         lotId: UUID,
@@ -168,7 +293,7 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
 
     func insert(_ scan: ScanDTO) async throws {
         if let e = nextError { nextError = nil; throw e }
-        await recorder.append(scan.id)
+        await recorder.appendInserted(scan.id)
         _lock.lock(); defer { _lock.unlock() }
         _insertedIds.append(scan.id)
     }
@@ -180,8 +305,20 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
 
     func upsert(_ scan: ScanDTO) async throws {}
     func upsertMany(_ scans: [ScanDTO]) async throws {}
-    func delete(id: UUID) async throws {}
-    func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
+
+    func delete(id: UUID) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendDeleted(id)
+        _lock.lock(); defer { _lock.unlock() }
+        _deletedIds.append(id)
+    }
+
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendPatch(id: id, fields: fields)
+        _lock.lock(); defer { _lock.unlock() }
+        _patchCalls.append((id: id, fields: fields))
+    }
 }
 
 /// Fake `LotRepository`. Same shape as `FakeScanRepository`.
@@ -191,11 +328,35 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
 
     actor Recorder {
         var insertedIds: [UUID] = []
-        func append(_ id: UUID) { insertedIds.append(id) }
-        func snapshot() -> [UUID] { insertedIds }
+        var deletedIds: [UUID] = []
+        var patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+        func appendInserted(_ id: UUID) { insertedIds.append(id) }
+        func appendDeleted(_ id: UUID) { deletedIds.append(id) }
+        func appendPatch(id: UUID, fields: [String: AnyJSON]) { patchCalls.append((id: id, fields: fields)) }
+        func snapshotInserted() -> [UUID] { insertedIds }
     }
 
-    func snapshotInsertedIds() async -> [UUID] { await recorder.snapshot() }
+    private let _lock = NSLock()
+    private var _insertedIds: [UUID] = []
+    private var _deletedIds: [UUID] = []
+    private var _patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+
+    var insertedIds: [UUID] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _insertedIds
+    }
+
+    var deletedIds: [UUID] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _deletedIds
+    }
+
+    var patchCalls: [(id: UUID, fields: [String: AnyJSON])] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _patchCalls
+    }
+
+    func snapshotInsertedIds() async -> [UUID] { await recorder.snapshotInserted() }
 
     func listItems(
         storeId: UUID,
@@ -216,7 +377,9 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
 
     func insert(_ lot: LotDTO) async throws {
         if let e = nextError { nextError = nil; throw e }
-        await recorder.append(lot.id)
+        await recorder.appendInserted(lot.id)
+        _lock.lock(); defer { _lock.unlock() }
+        _insertedIds.append(lot.id)
     }
 
     func insertAndReturn(_ lot: LotDTO) async throws -> LotDTO {
@@ -226,8 +389,20 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
 
     func upsert(_ lot: LotDTO) async throws {}
     func upsertMany(_ lots: [LotDTO]) async throws {}
-    func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
-    func delete(id: UUID) async throws {}
+
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendPatch(id: id, fields: fields)
+        _lock.lock(); defer { _lock.unlock() }
+        _patchCalls.append((id: id, fields: fields))
+    }
+
+    func delete(id: UUID) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendDeleted(id)
+        _lock.lock(); defer { _lock.unlock() }
+        _deletedIds.append(id)
+    }
 }
 
 // MARK: - Null repositories (unused dependencies)

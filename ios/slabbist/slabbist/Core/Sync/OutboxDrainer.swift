@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Supabase
 
 /// Background actor that drains the outbox.
 ///
@@ -167,15 +168,62 @@ actor OutboxDrainer: ModelActor {
         case .insertScan:
             let p = try JSONDecoder().decode(OutboxPayloads.InsertScan.self, from: payload)
             try await repositories.scans.insert(try ScanDTO(from: p))
-        case .insertLot,
-             .updateLot,
-             .deleteLot,
-             .updateScan,
-             .updateScanOffer,
-             .deleteScan,
-             .certLookupJob,
-             .priceCompJob:
-            fatalError("dispatch for \(kind) not yet implemented (lands in 7.2)")
+
+        case .insertLot:
+            let p = try JSONDecoder().decode(OutboxPayloads.InsertLot.self, from: payload)
+            try await repositories.lots.insert(try LotDTO(from: p))
+
+        case .updateLot:
+            let p = try JSONDecoder().decode(OutboxPayloads.UpdateLot.self, from: payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateLot: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
+            if let v = p.name   { fields["name"]   = .string(v) }
+            if let v = p.notes  { fields["notes"]  = .string(v) }
+            if let v = p.status { fields["status"] = .string(v) }
+            try await repositories.lots.patch(id: id, fields: fields)
+
+        case .deleteLot:
+            let p = try JSONDecoder().decode(OutboxPayloads.DeleteLot.self, from: payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "DeleteLot: invalid UUID")
+            }
+            try await repositories.lots.delete(id: id)
+
+        case .updateScan:
+            let p = try JSONDecoder().decode(OutboxPayloads.UpdateScan.self, from: payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateScan: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = [
+                "status":     .string(p.status),
+                "updated_at": .string(p.updated_at)
+            ]
+            if let v = p.graded_card_identity_id { fields["graded_card_identity_id"] = .string(v) }
+            if let v = p.grade                   { fields["grade"]                   = .string(v) }
+            try await repositories.scans.patch(id: id, fields: fields)
+
+        case .updateScanOffer:
+            let p = try JSONDecoder().decode(OutboxPayloads.UpdateScanOffer.self, from: payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
+            fields["offer_cents"] = p.offer_cents.map { .integer(Int($0)) } ?? .null
+            try await repositories.scans.patch(id: id, fields: fields)
+
+        case .deleteScan:
+            let p = try JSONDecoder().decode(OutboxPayloads.DeleteScan.self, from: payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "DeleteScan: invalid UUID")
+            }
+            try await repositories.scans.delete(id: id)
+
+        case .certLookupJob, .priceCompJob:
+            // Group B kinds are out of scope for v1 — surface as permanent
+            // failure so the classifier (7.3) routes them to .failed.
+            throw OutboxBridgeError.malformedPayload(reason: "\(kind) not wired in v1 (Group B)")
         }
     }
 
@@ -228,6 +276,37 @@ extension ScanDTO {
             ocrConfidence: p.ocr_confidence,
             capturedPhotoURL: nil,
             offerCents: nil,
+            createdAt: iso.date(from: p.created_at) ?? Date(),
+            updatedAt: iso.date(from: p.updated_at) ?? Date()
+        )
+    }
+}
+
+extension LotDTO {
+    /// Bridge an `OutboxPayloads.InsertLot` (snake_case wire shape) to
+    /// the camelCase `LotDTO` the repository expects. Throws
+    /// `OutboxBridgeError.malformedPayload` if any UUID field is invalid.
+    /// Optional fields not present in `InsertLot` (vendorName, vendorContact,
+    /// offeredTotalCents, marginRuleId, transactionStamp) default to nil.
+    init(from p: OutboxPayloads.InsertLot) throws {
+        guard let id           = UUID(uuidString: p.id),
+              let storeId      = UUID(uuidString: p.store_id),
+              let createdById  = UUID(uuidString: p.created_by_user_id) else {
+            throw OutboxBridgeError.malformedPayload(reason: "InsertLot: invalid UUID")
+        }
+        let iso = OutboxDateFormatter.iso8601
+        self.init(
+            id: id,
+            storeId: storeId,
+            createdByUserId: createdById,
+            name: p.name,
+            notes: p.notes,
+            status: p.status,
+            vendorName: nil,
+            vendorContact: nil,
+            offeredTotalCents: nil,
+            marginRuleId: nil,
+            transactionStamp: nil,
             createdAt: iso.date(from: p.created_at) ?? Date(),
             updatedAt: iso.date(from: p.updated_at) ?? Date()
         )
