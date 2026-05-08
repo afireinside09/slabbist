@@ -50,6 +50,11 @@ final class Scan {
     /// Timestamp of the last fetch attempt. Used both for retry throttling
     /// and to display "Last checked …" on the failure UI.
     var compFetchedAt: Date?
+    /// Source of truth for the comp-card hero number. Computed server-side
+    /// (average of PPT + Poketrace when both succeed; single-source value
+    /// otherwise). Mirrored locally so list views render without re-decoding
+    /// the snapshots.
+    var reconciledHeadlinePriceCents: Int64?
     var createdAt: Date
     var updatedAt: Date
 
@@ -85,6 +90,7 @@ final class Scan {
         self.compFetchState = nil
         self.compFetchError = nil
         self.compFetchedAt = nil
+        self.reconciledHeadlinePriceCents = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
