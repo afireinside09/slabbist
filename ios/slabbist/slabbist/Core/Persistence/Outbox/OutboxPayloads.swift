@@ -4,9 +4,9 @@ import Foundation
 /// match Postgres column names so the outbox worker (Plan 2) can POST them
 /// directly without re-mapping. `nil` optional fields serialize to JSON
 /// null; do not serialize them as empty strings or zeros.
-enum OutboxPayloads {}
+nonisolated enum OutboxPayloads {}
 
-extension OutboxPayloads {
+nonisolated extension OutboxPayloads {
     struct InsertLot: Codable {
         let id: String
         let store_id: String

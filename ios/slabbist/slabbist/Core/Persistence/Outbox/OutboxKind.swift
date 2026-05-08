@@ -1,6 +1,6 @@
 import Foundation
 
-enum OutboxKind: String, Codable, CaseIterable {
+nonisolated enum OutboxKind: String, Codable, CaseIterable {
     case insertScan
     case updateScan
     case updateScanOffer
@@ -15,7 +15,7 @@ enum OutboxKind: String, Codable, CaseIterable {
     /// unblocks comp; writes happen in natural order behind them.
     /// Deletes are highest so a user-initiated remove takes precedence over
     /// background inserts/updates that might race against it.
-    var priority: Int {
+    nonisolated var priority: Int {
         switch self {
         case .deleteScan:      return 50
         case .deleteLot:       return 50
@@ -30,6 +30,6 @@ enum OutboxKind: String, Codable, CaseIterable {
     }
 }
 
-enum OutboxItemStatus: String, Codable, CaseIterable {
+nonisolated enum OutboxItemStatus: String, Codable, CaseIterable {
     case pending, inFlight, completed, failed
 }
