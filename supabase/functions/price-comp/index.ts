@@ -90,7 +90,13 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
   }
 
   // 2. Cache read
-  const cached = await readMarketLadder(supabase, body.graded_card_identity_id, body.grading_service, body.grade);
+  const cached = await readMarketLadder(
+    supabase,
+    body.graded_card_identity_id,
+    body.grading_service,
+    body.grade,
+    "pokemonpricetracker",
+  );
   const state: CacheState = evaluateFreshness({
     updatedAtMs: cached?.updatedAt ? Date.parse(cached.updatedAt) : null,
     nowMs: deps.now(),
@@ -216,6 +222,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
       identityId: body.graded_card_identity_id,
       gradingService: body.grading_service,
       grade: body.grade,
+      source: "pokemonpricetracker",
       headlinePriceCents: headlineCents,
       ladderCents: ladder,
       priceHistory: history,
