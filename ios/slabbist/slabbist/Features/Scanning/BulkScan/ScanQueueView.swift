@@ -3,6 +3,12 @@ import SwiftUI
 struct ScanQueueView: View {
     let scans: [Scan]
 
+    /// Max height for the queue panel. Sized to ~3 rows so the panel never
+    /// grows tall enough to cover the centered `CapturedReviewCard` modal
+    /// during a bulk-scan session — older entries stay reachable through
+    /// the inner ScrollView without pushing the live UI off screen.
+    private static let maxPanelHeight: CGFloat = 192
+
     var body: some View {
         if scans.isEmpty {
             Text("No scans yet")
@@ -11,19 +17,27 @@ struct ScanQueueView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, Spacing.md)
         } else {
-            let visible = Array(scans.prefix(6))
+            // Trim to a reasonable backlog so the in-camera queue doesn't
+            // hold every scan from the session — the lot detail screen is
+            // the canonical record. 12 rows is enough headroom that a
+            // user scanning quickly still sees recent context but the
+            // ScrollView has a small, snappy content size.
+            let visible = Array(scans.prefix(12))
             SlabCard {
-                VStack(spacing: 0) {
-                    ForEach(visible, id: \.id) { scan in
-                        if scan.id != visible.first?.id {
-                            SlabCardDivider()
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        ForEach(visible, id: \.id) { scan in
+                            if scan.id != visible.first?.id {
+                                SlabCardDivider()
+                            }
+                            NavigationLink(value: scan) {
+                                row(for: scan)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        NavigationLink(value: scan) {
-                            row(for: scan)
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
+                .frame(maxHeight: Self.maxPanelHeight)
             }
         }
     }

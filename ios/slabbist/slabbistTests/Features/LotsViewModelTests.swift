@@ -123,6 +123,48 @@ struct LotsViewModelTests {
         #expect(lotPayload.id == targetLot.id.uuidString)
     }
 
+    @Test("setOfferCents persists the manual price and enqueues an updateScanOffer outbox item")
+    func setOfferCentsPersistsAndEnqueues() throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+
+        let userId = UUID()
+        let storeId = UUID()
+        let lot = Lot(id: UUID(), storeId: storeId, createdByUserId: userId,
+                      name: "Lot", createdAt: Date(), updatedAt: Date())
+        let scan = Scan(id: UUID(), storeId: storeId, lotId: lot.id, userId: userId,
+                        grader: .PSA, certNumber: "12345678",
+                        createdAt: Date(), updatedAt: Date())
+        context.insert(lot)
+        context.insert(scan)
+        try context.save()
+
+        let vm = LotsViewModel(context: context, currentUserId: userId, currentStoreId: storeId)
+        try vm.setOfferCents(scan: scan, cents: 4_999)
+
+        #expect(scan.offerCents == 4_999)
+
+        let outbox = try context.fetch(FetchDescriptor<OutboxItem>())
+        let offerItems = outbox.filter { $0.kind == .updateScanOffer }
+        #expect(offerItems.count == 1)
+        let payload = try JSONDecoder().decode(OutboxPayloads.UpdateScanOffer.self, from: offerItems[0].payload)
+        #expect(payload.id == scan.id.uuidString)
+        #expect(payload.offer_cents == 4_999)
+
+        // Clearing flips the value back to nil and emits a second item with
+        // an explicit null offer_cents — the worker contract for "remove".
+        try vm.setOfferCents(scan: scan, cents: nil)
+        #expect(scan.offerCents == nil)
+        let allOfferItems = try context.fetch(FetchDescriptor<OutboxItem>())
+            .filter { $0.kind == .updateScanOffer }
+        #expect(allOfferItems.count == 2)
+        let clearPayload = try JSONDecoder().decode(
+            OutboxPayloads.UpdateScanOffer.self,
+            from: allOfferItems.last!.payload
+        )
+        #expect(clearPayload.offer_cents == nil)
+    }
+
     @Test("listOpenLots returns only open lots for the current store, newest first")
     func listsOpenLotsNewestFirst() throws {
         let container = AppModelContainer.inMemory()

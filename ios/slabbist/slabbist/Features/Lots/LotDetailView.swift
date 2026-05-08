@@ -54,22 +54,6 @@ struct LotDetailView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .confirmationDialog(
-            "Delete this slab?",
-            isPresented: Binding(
-                get: { scanPendingDelete != nil },
-                set: { if !$0 { scanPendingDelete = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: scanPendingDelete
-        ) { scan in
-            Button("Delete \(scan.grader.rawValue) \(scan.certNumber)", role: .destructive) {
-                deleteScan(scan)
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: { _ in
-            Text("Removes the slab from this lot. The eBay comp cache stays around in case you re-scan.")
-        }
     }
 
     private func deleteScan(_ scan: Scan) {
@@ -144,22 +128,49 @@ struct LotDetailView: View {
                         if scan.id != scans.first?.id {
                             SlabCardDivider()
                         }
-                        HStack(spacing: 0) {
-                            NavigationLink(value: LotsRoute.scan(scan.id)) {
-                                slabRow(for: scan)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("Delete slab", systemImage: "trash", role: .destructive) {
-                                    scanPendingDelete = scan
+                        VStack(spacing: 0) {
+                            HStack(spacing: 0) {
+                                NavigationLink(value: LotsRoute.scan(scan.id)) {
+                                    slabRow(for: scan)
                                 }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Delete slab", systemImage: "trash", role: .destructive) {
+                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                            scanPendingDelete = scan
+                                        }
+                                    }
+                                }
+                                rowMenu(for: scan)
                             }
-                            rowMenu(for: scan)
+                            if scanPendingDelete?.id == scan.id {
+                                InlineDeleteConfirmation(
+                                    title: "Delete this slab?",
+                                    detail: "Removes \(scan.grader.rawValue) \(scan.certNumber) from this lot. The eBay comp cache stays around in case you re-scan.",
+                                    confirmLabel: "Delete slab",
+                                    onCancel: { dismissDeleteConfirmation() },
+                                    onConfirm: { confirmDelete(scan) }
+                                )
+                                .accessibilityIdentifier("delete-scan-confirmation")
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func dismissDeleteConfirmation() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            scanPendingDelete = nil
+        }
+    }
+
+    private func confirmDelete(_ scan: Scan) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            scanPendingDelete = nil
+        }
+        deleteScan(scan)
     }
 
     private func rowMenu(for scan: Scan) -> some View {
@@ -180,6 +191,7 @@ struct LotDetailView: View {
 
     private func slabRow(for scan: Scan) -> some View {
         let identity = identity(for: scan)
+        let trailing = trailingValue(for: scan)
         return HStack(alignment: .center, spacing: Spacing.m) {
             Circle()
                 .fill(statusColor(for: scan))
@@ -197,10 +209,16 @@ struct LotDetailView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                if let snapshot = latestSnapshot(for: scan) {
-                    Text(snapshot.headlinePriceCents.map(formattedCents) ?? "—")
+                if let trailing {
+                    Text(formattedCents(trailing.cents))
                         .font(SlabFont.mono(size: 13, weight: .semibold))
                         .foregroundStyle(AppColor.text)
+                    if trailing.isManual {
+                        Text("Manual")
+                            .font(SlabFont.mono(size: 9, weight: .semibold))
+                            .tracking(0.6)
+                            .foregroundStyle(AppColor.gold)
+                    }
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .regular))
@@ -209,6 +227,19 @@ struct LotDetailView: View {
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.m)
+    }
+
+    /// Resolves the price shown on the trailing edge of a slab row.
+    /// Prefers the live PPT comp; falls back to the user's manual price
+    /// when no comp exists yet (or PPT returned no_data / failed).
+    private func trailingValue(for scan: Scan) -> (cents: Int64, isManual: Bool)? {
+        if let snap = latestSnapshot(for: scan), let cents = snap.headlinePriceCents {
+            return (cents, false)
+        }
+        if let manual = scan.offerCents {
+            return (manual, true)
+        }
+        return nil
     }
 
     /// Lookup helper — joins a scan to its `GradedCardIdentity` row by
@@ -256,13 +287,17 @@ struct LotDetailView: View {
     }
 
     private var aggregateValueCents: Int64 {
-        scans.compactMap { latestSnapshot(for: $0)?.headlinePriceCents }.reduce(0, +)
+        scans.compactMap { trailingValue(for: $0)?.cents }.reduce(0, +)
     }
 
     private var aggregateValueDetail: String {
-        let pricedCount = scans.compactMap { latestSnapshot(for: $0) }.count
+        let pricedCount = scans.compactMap { trailingValue(for: $0) }.count
         if pricedCount == 0 { return "No comps yet" }
+        let manualCount = scans.compactMap { trailingValue(for: $0) }.filter(\.isManual).count
         let suffix = pricedCount == 1 ? "slab" : "slabs"
+        if manualCount > 0 {
+            return "across \(pricedCount) \(suffix) · \(manualCount) manual"
+        }
         return "across \(pricedCount) \(suffix)"
     }
 

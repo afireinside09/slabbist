@@ -69,27 +69,6 @@ struct LotsListView: View {
             .navigationDestination(for: LotsRoute.self) { route in
                 routeDestination(route)
             }
-            .confirmationDialog(
-                "Delete \(lotPendingDelete?.name ?? "lot")?",
-                isPresented: Binding(
-                    get: { lotPendingDelete != nil },
-                    set: { if !$0 { lotPendingDelete = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: lotPendingDelete
-            ) { lot in
-                Button("Delete lot and all slabs", role: .destructive) {
-                    do {
-                        try viewModel?.deleteLot(lot)
-                        refresh()
-                    } catch {
-                        AppLog.lots.error("delete lot failed: \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: { _ in
-                Text("This removes the lot and every slab inside it. This can't be undone.")
-            }
             .task(id: session.userId) {
                 await prepare()
             }
@@ -164,17 +143,31 @@ struct LotsListView: View {
             SlabCard {
                 VStack(spacing: 0) {
                     ForEach(Array(lots.enumerated()), id: \.element.id) { index, lot in
-                        HStack(spacing: 0) {
-                            NavigationLink(value: LotsRoute.lot(lot.id)) {
-                                row(for: lot)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("Delete lot", systemImage: "trash", role: .destructive) {
-                                    lotPendingDelete = lot
+                        VStack(spacing: 0) {
+                            HStack(spacing: 0) {
+                                NavigationLink(value: LotsRoute.lot(lot.id)) {
+                                    row(for: lot)
                                 }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Delete lot", systemImage: "trash", role: .destructive) {
+                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                            lotPendingDelete = lot
+                                        }
+                                    }
+                                }
+                                rowMenu(for: lot)
                             }
-                            rowMenu(for: lot)
+                            if lotPendingDelete?.id == lot.id {
+                                InlineDeleteConfirmation(
+                                    title: "Delete \(lot.name) and all slabs?",
+                                    detail: "This removes the lot and every slab inside it. This can't be undone.",
+                                    confirmLabel: "Delete lot",
+                                    onCancel: { dismissDeleteConfirmation() },
+                                    onConfirm: { confirmDelete(lot) }
+                                )
+                                .accessibilityIdentifier("delete-lot-confirmation")
+                            }
                         }
                         if index < lots.count - 1 {
                             SlabCardDivider()
@@ -182,6 +175,24 @@ struct LotsListView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func dismissDeleteConfirmation() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            lotPendingDelete = nil
+        }
+    }
+
+    private func confirmDelete(_ lot: Lot) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            lotPendingDelete = nil
+        }
+        do {
+            try viewModel?.deleteLot(lot)
+            refresh()
+        } catch {
+            AppLog.lots.error("delete lot failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

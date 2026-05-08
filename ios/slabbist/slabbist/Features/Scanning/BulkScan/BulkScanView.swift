@@ -140,54 +140,60 @@ struct BulkScanView: View {
     #endif
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            cameraArea
-                .ignoresSafeArea(edges: [.top, .horizontal])
-                .overlay(alignment: .center) {
-                    Color.white
-                        .opacity(lastCaptureFlash ? 0.35 : 0)
-                        .allowsHitTesting(false)
-                        .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
-                }
-                .overlay {
-                    SlabFinderOverlay(
-                        tone: controller.status.tone,
-                        detectedRect: controller.detectedSlabRect
-                    )
-                }
-                .overlay(alignment: .top) {
-                    ScannerStatusPill(status: controller.status)
-                        .padding(.top, Spacing.l)
-                        .padding(.horizontal, Spacing.xxl)
-                }
-                .overlay(alignment: .center) {
-                    if let pending = controller.pendingReview {
-                        CapturedReviewCard(
-                            candidate: pending,
-                            onConfirm: handleReviewConfirm,
-                            onCancel: handleReviewCancel
+        ZStack {
+            ZStack(alignment: .bottom) {
+                cameraArea
+                    .ignoresSafeArea(edges: [.top, .horizontal])
+                    .overlay(alignment: .center) {
+                        Color.white
+                            .opacity(lastCaptureFlash ? 0.35 : 0)
+                            .allowsHitTesting(false)
+                            .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
+                    }
+                    .overlay {
+                        SlabFinderOverlay(
+                            tone: controller.status.tone,
+                            detectedRect: controller.detectedSlabRect
                         )
-                        .padding(.horizontal, Spacing.xxl)
-                        .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
-                }
-                .animation(.spring(response: 0.32, dampingFraction: 0.82), value: controller.pendingReview)
+                    .overlay(alignment: .top) {
+                        ScannerStatusPill(status: controller.status)
+                            .padding(.top, Spacing.l)
+                            .padding(.horizontal, Spacing.xxl)
+                    }
 
-            VStack(spacing: Spacing.m) {
-                #if targetEnvironment(simulator)
-                simulatorScanButton
-                #endif
-                if let viewModel = controller.viewModel {
-                    VStack(alignment: .leading, spacing: Spacing.m) {
-                        summaryHeader(for: viewModel)
-                        ScanQueueView(scans: viewModel.recentScans)
+                VStack(spacing: Spacing.m) {
+                    #if targetEnvironment(simulator)
+                    simulatorScanButton
+                    #endif
+                    if let viewModel = controller.viewModel {
+                        VStack(alignment: .leading, spacing: Spacing.m) {
+                            summaryHeader(for: viewModel)
+                            ScanQueueView(scans: viewModel.recentScans)
+                        }
+                        .padding(.horizontal, Spacing.xxl)
+                        .padding(.vertical, Spacing.l)
+                        .background(AppColor.ink.opacity(0.92))
                     }
-                    .padding(.horizontal, Spacing.xxl)
-                    .padding(.vertical, Spacing.l)
-                    .background(AppColor.ink.opacity(0.92))
                 }
             }
+
+            // Review modal lives in the outer ZStack so it paints above the
+            // queue panel below. The previous layout nested the modal as an
+            // overlay on `cameraArea`, which sits *behind* the bottom panel
+            // in z-order — once enough scans landed, the queue grew over
+            // the centered modal and obscured the confirm/discard buttons.
+            if let pending = controller.pendingReview {
+                CapturedReviewCard(
+                    candidate: pending,
+                    onConfirm: handleReviewConfirm,
+                    onCancel: handleReviewCancel
+                )
+                .padding(.horizontal, Spacing.xxl)
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: controller.pendingReview)
         .background(AppColor.ink)
         .navigationDestination(for: Scan.self) { scan in
             ScanDetailView(scan: scan)

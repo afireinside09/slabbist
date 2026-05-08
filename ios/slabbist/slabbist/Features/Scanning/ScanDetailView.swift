@@ -7,8 +7,10 @@ import Auth
 struct ScanDetailView: View {
     let scan: Scan
     @Environment(\.modelContext) private var context
+    @Environment(SessionStore.self) private var session
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
+    @State private var showingManualPrice = false
 
     init(scan: Scan) {
         self.scan = scan
@@ -37,6 +39,9 @@ struct ScanDetailView: View {
                     } else {
                         fallbackContent
                     }
+                    if scan.offerCents != nil {
+                        manualPriceCard
+                    }
                 }
                 .padding(.horizontal, Spacing.xxl)
                 .padding(.top, Spacing.l)
@@ -47,6 +52,11 @@ struct ScanDetailView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .sheet(isPresented: $showingManualPrice) {
+            ManualPriceSheet(initialCents: scan.offerCents) { cents in
+                try setOfferCents(cents)
+            }
+        }
         // Recovery hatch for two real-world stuck states:
         //   1. The scan was validated in a prior session and never had a
         //      comp fetched (state = nil) — bulk scan exited too soon.
@@ -187,9 +197,10 @@ struct ScanDetailView: View {
             symbol: "magnifyingglass",
             symbolTint: AppColor.muted,
             title: "Pokemon Price Tracker has no comp for this slab",
-            detail: "Either we couldn't find this card on Pokemon Price Tracker, or there's no published price for this tier yet. Try retrying later.",
+            detail: "Either we couldn't find this card on Pokemon Price Tracker, or there's no published price for this tier yet. Set a manual price to count this slab in your lot total.",
             showsProgress: false,
-            cta: ("Retry comp fetch", retry)
+            cta: ("Retry comp fetch", retry),
+            secondaryCta: scan.offerCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
         )
     }
 
@@ -201,8 +212,67 @@ struct ScanDetailView: View {
             title: "Comp fetch failed",
             detail: scan.compFetchError ?? "Unknown error",
             showsProgress: false,
-            cta: ("Retry comp fetch", retry)
+            cta: ("Retry comp fetch", retry),
+            secondaryCta: scan.offerCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
         )
+    }
+
+    /// Standalone card showing the manual price the user set when no PPT
+    /// comp was available. Rendered in addition to the comp / empty state
+    /// so the user can edit or clear the value at any time. Tap-to-edit
+    /// presents the same `ManualPriceSheet` used to enter it.
+    private var manualPriceCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Manual price")
+            SlabCard {
+                HStack(alignment: .center, spacing: Spacing.m) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(scan.offerCents.map(formattedCents) ?? "—")
+                            .font(SlabFont.mono(size: 22, weight: .semibold))
+                            .foregroundStyle(AppColor.text)
+                        Text("Counts toward this lot's total")
+                            .font(SlabFont.sans(size: 12))
+                            .foregroundStyle(AppColor.dim)
+                    }
+                    Spacer()
+                    Button {
+                        showingManualPrice = true
+                    } label: {
+                        Text("Edit")
+                            .font(SlabFont.sans(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColor.gold)
+                            .padding(.horizontal, Spacing.m)
+                            .padding(.vertical, Spacing.s)
+                            .background(
+                                RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                                    .stroke(AppColor.gold.opacity(0.45), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit manual price")
+                    .accessibilityIdentifier("manual-price-edit")
+                }
+                .padding(.horizontal, Spacing.l)
+                .padding(.vertical, Spacing.md)
+            }
+        }
+    }
+
+    private func formattedCents(_ cents: Int64) -> String {
+        let dollars = Double(cents) / 100
+        let fmt = NumberFormatter()
+        fmt.numberStyle = .currency
+        fmt.currencyCode = "USD"
+        fmt.maximumFractionDigits = cents % 100 == 0 ? 0 : 2
+        return fmt.string(from: dollars as NSNumber) ?? "$\(dollars)"
+    }
+
+    private func setOfferCents(_ cents: Int64?) throws {
+        guard let viewModel = LotsViewModel.resolve(context: context, session: session) else {
+            AppLog.scans.error("set offer cents: no LotsViewModel — user signed out?")
+            return
+        }
+        try viewModel.setOfferCents(scan: scan, cents: cents)
     }
 
     /// Shared empty / loading / error layout. Keeps the visual rhythm
@@ -214,7 +284,8 @@ struct ScanDetailView: View {
         title: String,
         detail: String,
         showsProgress: Bool,
-        cta: (label: String, action: () -> Void)?
+        cta: (label: String, action: () -> Void)?,
+        secondaryCta: (label: String, action: () -> Void)? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             KickerLabel(kicker)
@@ -246,6 +317,21 @@ struct ScanDetailView: View {
             }
             if let cta {
                 PrimaryGoldButton(title: cta.label, action: cta.action)
+            }
+            if let secondaryCta {
+                Button(action: secondaryCta.action) {
+                    Text(secondaryCta.label)
+                        .font(SlabFont.sans(size: 14, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Spacing.md)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                                .stroke(AppColor.gold.opacity(0.55), lineWidth: 1)
+                        )
+                        .foregroundStyle(AppColor.gold)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("manual-price-cta")
             }
         }
     }

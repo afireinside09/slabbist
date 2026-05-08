@@ -164,14 +164,14 @@ export async function ingestPokemonAllCategories(opts: Omit<IngestOptions, "cate
   // ingest rows are already committed and must not be rolled back by
   // a downstream RPC failure.
   try {
-    const { error } = await opts.supabase.rpc("refresh_movers");
+    const { error } = await opts.supabase.rpc("refresh_movers").abortSignal(AbortSignal.timeout(120_000));
     if (error) opts.log?.warn("refresh_movers failed", { error: error.message });
     else opts.log?.info("movers refreshed");
   } catch (e) {
     opts.log?.warn("refresh_movers threw", { error: String((e as Error).message ?? e) });
   }
   try {
-    const { data, error } = await opts.supabase.rpc("prune_tcg_price_history");
+    const { data, error } = await opts.supabase.rpc("prune_tcg_price_history").abortSignal(AbortSignal.timeout(120_000));
     if (error) opts.log?.warn("prune_tcg_price_history failed", { error: error.message });
     else opts.log?.info("price history pruned", { deleted: typeof data === "number" ? data : null });
   } catch (e) {
