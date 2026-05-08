@@ -7,27 +7,29 @@ struct SubGradeCard: View {
     let dataPoint: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.headline)
-                Spacer()
-                Text(formatted(score))
-                    .font(.title2.bold())
-                    .monospacedDigit()
-                    .foregroundStyle(AppColor.gold)
+        SlabCard {
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title).slabRowTitle()
+                    Spacer()
+                    Text(formatted(score))
+                        .font(SlabFont.serif(size: 28))
+                        .tracking(-0.6)
+                        .foregroundStyle(AppColor.text)
+                }
+                Text(note)
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let dataPoint {
+                    Text(dataPoint)
+                        .font(SlabFont.mono(size: 11))
+                        .foregroundStyle(AppColor.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Text(note)
-                .font(.body)
-                .foregroundStyle(.primary)
-            if let dataPoint {
-                Text(dataPoint)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
+            .padding(Spacing.l)
         }
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title) \(formatted(score)) out of 10")
     }

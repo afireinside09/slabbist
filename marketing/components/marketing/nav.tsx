@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SLAB } from '@/lib/tokens';
 import { Icon } from '@/components/icon';
 import { SlabLogo } from '@/components/slab-logo';
@@ -14,7 +14,10 @@ const NAV_LINKS = [
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { openAuth } = useAuth();
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const firstSheetLinkRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -22,6 +25,27 @@ export function Nav() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = 'hidden';
+    firstSheetLinkRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+      previouslyFocused?.focus?.();
+    };
+  }, [menuOpen]);
+
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <nav
@@ -163,8 +187,109 @@ export function Nav() {
             Join waitlist
             <Icon name="arrow" size={13} sw={2} />
           </button>
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="slab-nav-menu"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="slab-nav-sheet"
+            onClick={() => setMenuOpen((o) => !o)}
+            style={{
+              display: 'none',
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              background: 'transparent',
+              border: '1px solid ' + SLAB.hair,
+              color: SLAB.text,
+              cursor: 'pointer',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name={menuOpen ? 'x' : 'menu'} size={18} sw={2} />
+          </button>
         </div>
       </div>
+
+      {menuOpen && (
+        <>
+          <div
+            onClick={closeMenu}
+            aria-hidden
+            style={{
+              position: 'fixed',
+              inset: 0,
+              top: 0,
+              background: 'oklch(0.05 0.003 78 / 0.72)',
+              zIndex: 99,
+            }}
+          />
+          <div
+            id="slab-nav-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site navigation"
+            style={{
+              position: 'fixed',
+              top: 72,
+              left: 16,
+              right: 16,
+              zIndex: 101,
+              padding: 12,
+              background: SLAB.surface,
+              border: '1px solid ' + SLAB.hair,
+              borderRadius: 22,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              boxShadow: '0 30px 80px oklch(0 0 0 / 0.5)',
+            }}
+          >
+            {NAV_LINKS.map((l, i) => (
+              <a
+                key={l.label}
+                href={l.href}
+                ref={i === 0 ? firstSheetLinkRef : undefined}
+                onClick={closeMenu}
+                style={{
+                  display: 'block',
+                  padding: '14px 16px',
+                  borderRadius: 14,
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: SLAB.text,
+                  textDecoration: 'none',
+                }}
+              >
+                {l.label}
+              </a>
+            ))}
+            <div style={{ height: 1, background: SLAB.hair, margin: '6px 12px' }} />
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                openAuth('login');
+              }}
+              style={{
+                textAlign: 'left',
+                padding: '14px 16px',
+                borderRadius: 14,
+                fontSize: 16,
+                fontWeight: 500,
+                color: SLAB.text,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Sign in
+            </button>
+          </div>
+        </>
+      )}
     </nav>
   );
 }

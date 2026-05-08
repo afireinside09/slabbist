@@ -10,63 +10,110 @@ struct GradeReportView: View {
     @State private var showOtherGraders = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                hero
-                photos
+        SlabbedRoot {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    hero
+                    photos
+                    subGradesSection
+                    if estimate.otherGraders != nil {
+                        otherGradersDisclosure
+                    }
+                    disclaimer
+                    Spacer(minLength: Spacing.xxxl)
+                }
+                .padding(.horizontal, Spacing.xxl)
+                .padding(.top, Spacing.l)
+                .padding(.bottom, Spacing.xxxl)
+            }
+        }
+        .navigationTitle("PSA \(formatted(estimate.compositeGrade))")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar { toolbarItems }
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Composite")
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                Text("PSA")
+                    .font(SlabFont.sans(size: 14, weight: .medium))
+                    .tracking(2.0)
+                    .textCase(.uppercase)
+                    .foregroundStyle(AppColor.dim)
+                    .padding(.bottom, 8)
+                Text(formatted(estimate.compositeGrade))
+                    .font(SlabFont.serif(size: 68))
+                    .tracking(-2)
+                    .foregroundStyle(AppColor.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            VerdictPill(verdict: estimate.verdict, confidence: estimate.confidence)
+            Text(estimate.verdictReasoning)
+                .font(SlabFont.sans(size: 14))
+                .foregroundStyle(AppColor.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var photos: some View {
+        HStack(spacing: Spacing.m) {
+            AsyncGradePhoto(path: estimate.frontThumbPath)
+            AsyncGradePhoto(path: estimate.backThumbPath)
+        }
+        .frame(height: 220)
+    }
+
+    private var subGradesSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Sub-grades")
+            VStack(spacing: Spacing.m) {
                 SubGradeCard(
                     title: "Centering",
                     score: estimate.subGrades.centering,
                     note: estimate.subGradeNotes.centering,
                     dataPoint: centeringDataPoint
                 )
-                SubGradeCard(title: "Corners",
-                             score: estimate.subGrades.corners,
-                             note: estimate.subGradeNotes.corners,
-                             dataPoint: nil)
-                SubGradeCard(title: "Edges",
-                             score: estimate.subGrades.edges,
-                             note: estimate.subGradeNotes.edges,
-                             dataPoint: nil)
-                SubGradeCard(title: "Surface",
-                             score: estimate.subGrades.surface,
-                             note: estimate.subGradeNotes.surface,
-                             dataPoint: nil)
-
-                if let other = estimate.otherGraders {
-                    DisclosureGroup("Show other graders", isExpanded: $showOtherGraders) {
-                        OtherGradersPanel(bundle: other)
-                    }
-                    .padding(16)
-                    .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                }
-
-                disclaimer
+                SubGradeCard(
+                    title: "Corners",
+                    score: estimate.subGrades.corners,
+                    note: estimate.subGradeNotes.corners,
+                    dataPoint: nil
+                )
+                SubGradeCard(
+                    title: "Edges",
+                    score: estimate.subGrades.edges,
+                    note: estimate.subGradeNotes.edges,
+                    dataPoint: nil
+                )
+                SubGradeCard(
+                    title: "Surface",
+                    score: estimate.subGrades.surface,
+                    note: estimate.subGradeNotes.surface,
+                    dataPoint: nil
+                )
             }
-            .padding(16)
-        }
-        .navigationTitle("PSA \(formatted(estimate.compositeGrade))")
-        .toolbar { toolbarItems }
-    }
-
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PSA \(formatted(estimate.compositeGrade))")
-                .font(.system(size: 48, weight: .heavy))
-                .foregroundStyle(AppColor.gold)
-            VerdictPill(verdict: estimate.verdict, confidence: estimate.confidence)
-            Text(estimate.verdictReasoning)
-                .font(.body)
-                .foregroundStyle(.secondary)
         }
     }
 
-    private var photos: some View {
-        HStack(spacing: 12) {
-            AsyncGradePhoto(path: estimate.frontThumbPath)
-            AsyncGradePhoto(path: estimate.backThumbPath)
+    private var otherGradersDisclosure: some View {
+        SlabCard {
+            DisclosureGroup(isExpanded: $showOtherGraders) {
+                if let other = estimate.otherGraders {
+                    OtherGradersPanel(bundle: other)
+                        .padding(.top, Spacing.m)
+                }
+            } label: {
+                Text("Show other graders")
+                    .slabRowTitle()
+            }
+            .tint(AppColor.gold)
+            .padding(Spacing.l)
         }
-        .frame(height: 220)
     }
 
     private var centeringDataPoint: String {
@@ -81,9 +128,9 @@ struct GradeReportView: View {
 
     private var disclaimer: some View {
         Text("Estimate only — not a guarantee. Real grades depend on submission tier, grader trends, and minor surface defects not visible in photos. Slabbist is not responsible for grading outcomes.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
+            .font(SlabFont.sans(size: 11))
+            .foregroundStyle(AppColor.dim)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ToolbarContentBuilder
@@ -93,6 +140,7 @@ struct GradeReportView: View {
                 onStarToggle?(!estimate.isStarred)
             } label: {
                 Image(systemName: estimate.isStarred ? "star.fill" : "star")
+                    .foregroundStyle(estimate.isStarred ? AppColor.gold : AppColor.text)
             }
             .accessibilityLabel(estimate.isStarred ? "Unstar" : "Star")
         }
@@ -123,10 +171,23 @@ struct AsyncGradePhoto: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                            .stroke(AppColor.hairline, lineWidth: 1)
+                    )
             } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.15))
+                RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                    .fill(AppColor.elev)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                            .stroke(AppColor.hairline, lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundStyle(AppColor.dim)
+                    )
             }
         }
         .task(id: path) { await load() }

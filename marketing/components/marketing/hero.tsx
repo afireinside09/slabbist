@@ -83,7 +83,7 @@ export function Hero() {
           >
             Early
           </span>
-          Waitlist is open — iOS launch imminent
+          Closed beta — iOS launch later this year
           <Icon name="arrow" size={12} sw={2} color={SLAB.gold} />
         </div>
 

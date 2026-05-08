@@ -36,11 +36,13 @@ enum AppColor {
     static let muted           = Color(hex: 0xF4F2ED, alpha: 0.58)
     static let dim             = Color(hex: 0xF4F2ED, alpha: 0.36)
 
-    // Accent (OKLCH approximations; revisit if off-feel)
-    static let gold            = Color(hex: 0xE2B765)
-    static let goldDim         = Color(hex: 0xA47E3D)
+    // Accent — Display P3 from OKLCH so saturated chroma doesn't clip in sRGB.
+    static let gold            = Color.oklchP3(0.82, 0.13, 78)
+    static let goldDim         = Color.oklchP3(0.58, 0.09, 75)
+    /// Text-on-gold for the rare cases gold sits on a darker tile; usually `ink` is preferred.
+    static let goldInk         = Color.oklchP3(0.32, 0.07, 72)
 
     // Semantic
-    static let positive        = Color(hex: 0x76D49D)
-    static let negative        = Color(hex: 0xE0795B)
+    static let positive        = Color.oklchP3(0.78, 0.14, 155)
+    static let negative        = Color.oklchP3(0.68, 0.18, 25)
 }

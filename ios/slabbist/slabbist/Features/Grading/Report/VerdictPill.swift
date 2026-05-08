@@ -5,17 +5,26 @@ struct VerdictPill: View {
     let confidence: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.s) {
+            Circle()
+                .fill(verdictTint)
+                .frame(width: 8, height: 8)
             Text(verdictLabel(verdict))
-                .font(.headline)
-            Text(confidence.capitalized + " confidence")
-                .font(.caption)
-                .opacity(0.8)
+                .font(SlabFont.sans(size: 13, weight: .semibold))
+                .foregroundStyle(AppColor.text)
+            Text(confidence.uppercased() + " CONFIDENCE")
+                .font(SlabFont.sans(size: 10, weight: .medium))
+                .tracking(1.6)
+                .foregroundStyle(AppColor.dim)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(verdictColor(verdict), in: Capsule())
-        .foregroundStyle(.white)
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.s)
+        .background(
+            Capsule().fill(AppColor.elev)
+        )
+        .overlay(
+            Capsule().stroke(AppColor.hairline, lineWidth: 1)
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(verdictLabel(verdict)), \(confidence) confidence")
     }
@@ -31,13 +40,16 @@ struct VerdictPill: View {
         }
     }
 
-    private func verdictColor(_ v: String) -> Color {
-        switch v {
-        case "submit_express": return .green
-        case "submit_value":   return .teal
-        case "submit_economy": return .blue
-        case "do_not_submit":  return .red
-        default:               return .orange
+    private var verdictTint: Color {
+        switch verdict {
+        case "submit_express", "submit_value", "submit_economy":
+            return AppColor.positive
+        case "do_not_submit":
+            return AppColor.negative
+        case "borderline_reshoot":
+            return AppColor.gold
+        default:
+            return AppColor.muted
         }
     }
 }

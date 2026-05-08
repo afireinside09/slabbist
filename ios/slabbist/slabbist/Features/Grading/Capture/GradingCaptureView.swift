@@ -63,11 +63,28 @@ struct GradingCaptureView: View {
     }
 
     private var permissionRequired: some View {
-        Text("Camera permission required.")
-            .font(SlabFont.sans(size: 15))
-            .foregroundStyle(AppColor.muted)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppColor.ink)
+        VStack(spacing: Spacing.l) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 36, weight: .regular))
+                .foregroundStyle(AppColor.dim)
+            VStack(spacing: Spacing.s) {
+                Text("Camera access needed")
+                    .slabRowTitle()
+                Text("Slabbist uses your camera to photograph the front and back of the card. Open Settings to enable access.")
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            PrimaryGoldButton(title: "Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.xxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColor.ink)
     }
 
     /// Big hollow gold ring with a radial-gradient inner disc — the

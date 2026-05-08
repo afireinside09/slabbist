@@ -37,6 +37,7 @@ export function FeatureRow() {
   const [active, setActive] = useState(0);
   const ref = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
+  const [autoPaused, setAutoPaused] = useState(false);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -51,10 +52,12 @@ export function FeatureRow() {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || autoPaused) return;
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const t = setInterval(() => setActive((a) => (a + 1) % FEATS.length), 4200);
     return () => clearInterval(t);
-  }, [visible]);
+  }, [visible, autoPaused]);
 
   return (
     <section
@@ -114,19 +117,26 @@ export function FeatureRow() {
                   aria-selected={active === i}
                   aria-controls={`feat-panel-${i}`}
                   tabIndex={active === i ? 0 : -1}
-                  onClick={() => setActive(i)}
+                  onClick={() => {
+                    setAutoPaused(true);
+                    setActive(i);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
                       e.preventDefault();
+                      setAutoPaused(true);
                       setActive((active + 1) % FEATS.length);
                     } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
                       e.preventDefault();
+                      setAutoPaused(true);
                       setActive((active - 1 + FEATS.length) % FEATS.length);
                     } else if (e.key === 'Home') {
                       e.preventDefault();
+                      setAutoPaused(true);
                       setActive(0);
                     } else if (e.key === 'End') {
                       e.preventDefault();
+                      setAutoPaused(true);
                       setActive(FEATS.length - 1);
                     }
                   }}
@@ -657,10 +667,6 @@ function CompPanel() {
             strokeLinecap="round"
           />
           <circle cx="300" cy="18" r="3.5" fill={SLAB.gold} />
-          <circle cx="300" cy="18" r="8" fill={SLAB.gold} opacity="0.3">
-            <animate attributeName="r" values="4;12;4" dur="2s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
-          </circle>
         </svg>
       </div>
 

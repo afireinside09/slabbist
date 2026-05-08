@@ -6,12 +6,16 @@ struct QualityChip: View {
     var body: some View {
         if let message {
             Text(message)
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-                .foregroundStyle(.white)
-                .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5))
+                .font(SlabFont.sans(size: 12, weight: .semibold))
+                .foregroundStyle(AppColor.text)
+                .padding(.horizontal, Spacing.m)
+                .padding(.vertical, Spacing.s)
+                .background(
+                    Capsule().fill(AppColor.elev.opacity(0.92))
+                )
+                .overlay(
+                    Capsule().stroke(AppColor.hairlineStrong, lineWidth: 1)
+                )
                 .accessibilityLabel("Capture quality: \(message)")
         }
     }

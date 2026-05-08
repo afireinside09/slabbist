@@ -104,32 +104,25 @@ struct MoverDetailView: View {
     private var statsCard: some View {
         SlabCard {
             VStack(alignment: .leading, spacing: Spacing.l) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        KickerLabel("Now")
-                        Text(MoversFormat.price(viewModel.mover.currentPrice))
-                            .slabMetric()
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                        KickerLabel("90d ago")
-                        Text(MoversFormat.price(viewModel.mover.previousPrice))
-                            .font(SlabFont.mono(size: 14))
-                            .foregroundStyle(AppColor.muted)
-                    }
-                }
+                HeroValueBlock(
+                    kicker: "Now",
+                    cents: cents(viewModel.mover.currentPrice),
+                    delta: MoversFormat.percent(viewModel.mover.pctChange),
+                    deltaTint: viewModel.mover.pctChange >= 0 ? .positive : .negative,
+                    size: 54
+                )
 
                 SlabCardDivider()
 
                 HStack(spacing: Spacing.l) {
                     statColumn(
-                        label: "Change",
-                        value: signedDollar(viewModel.mover.absChange),
-                        tint: changeTint
+                        label: "90d ago",
+                        value: MoversFormat.price(viewModel.mover.previousPrice),
+                        tint: AppColor.muted
                     )
                     statColumn(
-                        label: "Move",
-                        value: MoversFormat.percent(viewModel.mover.pctChange),
+                        label: "Change",
+                        value: signedDollar(viewModel.mover.absChange),
                         tint: changeTint
                     )
                     statColumn(
@@ -141,6 +134,10 @@ struct MoverDetailView: View {
             }
             .padding(Spacing.l)
         }
+    }
+
+    private func cents(_ dollars: Double) -> Int64 {
+        Int64((dollars * 100).rounded())
     }
 
     private func statColumn(label: String, value: String, tint: Color) -> some View {

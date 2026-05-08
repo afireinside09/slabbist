@@ -592,11 +592,11 @@ function AuthModal({
                     }}
                   >
                     By creating a store you agree to our{' '}
-                    <a href="#" style={{ color: SLAB.muted }}>
+                    <a href="/terms" style={{ color: SLAB.muted }}>
                       Terms
                     </a>{' '}
                     and{' '}
-                    <a href="#" style={{ color: SLAB.muted }}>
+                    <a href="/privacy" style={{ color: SLAB.muted }}>
                       Privacy Policy
                     </a>
                     .
