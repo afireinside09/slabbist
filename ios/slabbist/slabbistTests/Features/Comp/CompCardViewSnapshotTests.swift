@@ -77,6 +77,7 @@ struct CompCardViewSnapshotTests {
             identityId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             gradingService: gradingService,
             grade: grade,
+            source: GradedMarketSnapshot.sourcePPT,
             headlinePriceCents: headlinePriceCents,
             loosePriceCents: loosePriceCents,
             psa7PriceCents: psa7,

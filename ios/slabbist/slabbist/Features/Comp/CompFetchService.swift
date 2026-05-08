@@ -174,6 +174,7 @@ final class CompFetchService {
             identityId: identityId,
             gradingService: service,
             grade: grade,
+            source: GradedMarketSnapshot.sourcePPT,
             headlinePriceCents: decoded.headlinePriceCents,
             loosePriceCents: decoded.loosePriceCents,
             psa7PriceCents: decoded.psa7PriceCents,

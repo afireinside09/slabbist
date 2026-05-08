@@ -17,13 +17,14 @@ enum AppModelContainer {
         do {
             return try ModelContainer(for: schema, configurations: [config])
         } catch {
-            // The schema reshape from the eBay-aggregate model to the
-            // PriceCharting per-tier ladder is not lightweight-migratable
-            // (added optional Int64? fields, dropped a relationship, removed
-            // many fields). On first launch after this change, blow the
-            // store away and start fresh — comp data is recoverable from
-            // a cheap re-fetch, all other models cascade through Store/Lot
-            // ownership which is server-backed.
+            // GradedMarketSnapshot reshapes are not lightweight-migratable:
+            // first PriceCharting moved to a per-tier ladder, then PPT
+            // added pptTCGPlayerId/pptURL, and now poketrace introduces
+            // `source` plus a parallel pt_* column family. On first launch
+            // after each shape change, blow the store away and start fresh —
+            // comp data is recoverable from a cheap re-fetch, all other
+            // models cascade through Store/Lot ownership which is
+            // server-backed.
             try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "default.store"))
             return try! ModelContainer(for: schema, configurations: [config])
         }

@@ -224,6 +224,7 @@ struct CompCardView: View {
     let json = String(data: (try? encoder.encode(history)) ?? Data(), encoding: .utf8)
     let snap = GradedMarketSnapshot(
         identityId: UUID(), gradingService: "PSA", grade: "10",
+        source: GradedMarketSnapshot.sourcePPT,
         headlinePriceCents: 18500, loosePriceCents: 400,
         psa7PriceCents: 2400, psa8PriceCents: 3400, psa9PriceCents: 6800, psa9_5PriceCents: 11200, psa10PriceCents: 18500,
         bgs10PriceCents: 21500, cgc10PriceCents: 16800, sgc10PriceCents: 16500,
@@ -238,6 +239,7 @@ struct CompCardView: View {
 #Preview("BGS 10 headline") {
     let snap = GradedMarketSnapshot(
         identityId: UUID(), gradingService: "BGS", grade: "10",
+        source: GradedMarketSnapshot.sourcePPT,
         headlinePriceCents: 21500, loosePriceCents: 400,
         psa7PriceCents: nil, psa8PriceCents: nil, psa9PriceCents: nil, psa9_5PriceCents: nil, psa10PriceCents: 18500,
         bgs10PriceCents: 21500, cgc10PriceCents: 16800, sgc10PriceCents: nil,
@@ -252,6 +254,7 @@ struct CompCardView: View {
 #Preview("Unsupported tier · TAG 10") {
     let snap = GradedMarketSnapshot(
         identityId: UUID(), gradingService: "TAG", grade: "10",
+        source: GradedMarketSnapshot.sourcePPT,
         headlinePriceCents: nil, loosePriceCents: 400,
         psa7PriceCents: nil, psa8PriceCents: nil, psa9PriceCents: nil, psa9_5PriceCents: nil, psa10PriceCents: 18500,
         bgs10PriceCents: nil, cgc10PriceCents: nil, sgc10PriceCents: nil,
