@@ -31,3 +31,4 @@ ios/slabbist/Config/Secrets.xcconfig
 supabase/functions/**/deno.lock
 
 .claude
+.impeccable.md
