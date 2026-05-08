@@ -30,6 +30,6 @@ enum OutboxKind: String, Codable, CaseIterable {
     }
 }
 
-enum OutboxStatus: String, Codable, CaseIterable {
+enum OutboxItemStatus: String, Codable, CaseIterable {
     case pending, inFlight, completed, failed
 }

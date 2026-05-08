@@ -6,7 +6,7 @@ final class OutboxItem {
     @Attribute(.unique) var id: UUID
     var kind: OutboxKind
     var payload: Data
-    var status: OutboxStatus
+    var status: OutboxItemStatus
     var attempts: Int
     var lastError: String?
     var createdAt: Date
@@ -16,7 +16,7 @@ final class OutboxItem {
         id: UUID,
         kind: OutboxKind,
         payload: Data,
-        status: OutboxStatus = .pending,
+        status: OutboxItemStatus = .pending,
         attempts: Int = 0,
         lastError: String? = nil,
         createdAt: Date,
