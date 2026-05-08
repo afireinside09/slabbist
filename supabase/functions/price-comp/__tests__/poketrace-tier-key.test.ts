@@ -25,3 +25,19 @@ Deno.test("poketraceTierKey: SGC + 9.5 → SGC_9_5", () => {
 Deno.test("poketraceTierKey: TAG + 1.5 → TAG_1_5", () => {
   assertEquals(poketraceTierKey("TAG", "1.5"), "TAG_1_5");
 });
+
+Deno.test("poketraceTierKey: PSA + 'GEM MT 10' → PSA_10 (strips PPT-style adjectives)", () => {
+  assertEquals(poketraceTierKey("PSA", "GEM MT 10"), "PSA_10");
+});
+
+Deno.test("poketraceTierKey: PSA + 'MINT 9' → PSA_9", () => {
+  assertEquals(poketraceTierKey("PSA", "MINT 9"), "PSA_9");
+});
+
+Deno.test("poketraceTierKey: PSA + 'NM-MT 8' → PSA_8", () => {
+  assertEquals(poketraceTierKey("PSA", "NM-MT 8"), "PSA_8");
+});
+
+Deno.test("poketraceTierKey: PSA + ' GEM MT 9.5 ' → PSA_9_5 (whitespace tolerant)", () => {
+  assertEquals(poketraceTierKey("PSA", " GEM MT 9.5 "), "PSA_9_5");
+});
