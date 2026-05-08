@@ -129,10 +129,17 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
       supabase, body.graded_card_identity_id, body.grading_service, body.grade, "poketrace",
     );
     let poketraceBlock: PoketraceBlock | null = null;
-    if (cachedPt && cachedPt.poketrace) {
+    const ptState: CacheState = evaluateFreshness({
+      updatedAtMs: cachedPt?.updatedAt ? Date.parse(cachedPt.updatedAt) : null,
+      nowMs: deps.now(),
+      ttlSeconds: deps.ttlSeconds,
+    });
+    // Guard: empty-string is the negative-cache sentinel ("looked, no match").
+    const ptCardId = identity.poketrace_card_id ?? "";
+    if (cachedPt && cachedPt.poketrace && ptState === "hit" && ptCardId !== "") {
       const tierKey = poketraceTierKey(body.grading_service, body.grade);
       poketraceBlock = {
-        card_id: identity.poketrace_card_id ?? "",
+        card_id: ptCardId,
         tier: tierKey,
         avg_cents:        cachedPt.poketrace.avgCents,
         low_cents:        cachedPt.poketrace.lowCents,
@@ -409,6 +416,12 @@ async function fetchPoketraceBranch(
     fetchPoketracePrices(client, cardId, tierKey),
     fetchPoketraceHistory(client, cardId, tierKey),
   ]);
+  if (pricesRes.status === "rejected") {
+    console.error("poketrace.prices_failed", { message: String(pricesRes.reason) });
+  }
+  if (historyRes.status === "rejected") {
+    console.error("poketrace.history_failed", { message: String(historyRes.reason) });
+  }
 
   const prices = pricesRes.status === "fulfilled" ? pricesRes.value : null;
   const history = historyRes.status === "fulfilled" ? historyRes.value.history : [];
