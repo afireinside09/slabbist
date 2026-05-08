@@ -11,12 +11,15 @@ import Supabase
 @MainActor
 final class Harness {
     let container: ModelContainer
-    let context: ModelContext
     let fakeLots = FakeLotRepository()
     let fakeScans = FakeScanRepository()
     let status = OutboxStatus()
     let clock = TestClock()
     let drainer: OutboxDrainer
+
+    /// Records every StatusUpdate the drainer publishes. The harness can
+    /// await transitions against this buffer instead of `Task.sleep`.
+    private let observed = StatusObserver()
 
     init() {
         // Build a fresh in-memory container per harness instance. We don't
@@ -33,7 +36,6 @@ final class Harness {
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         self.container = try! ModelContainer(for: schema, configurations: [config])
-        self.context = ModelContext(container)
         let repos = AppRepositories(
             stores: NullStoreRepo(),
             members: NullStoreMemberRepo(),
@@ -42,22 +44,39 @@ final class Harness {
             gradeEstimates: NullGradeEstimateRepo()
         )
         let statusBox = self.status
+        let observer = self.observed
         self.drainer = OutboxDrainer(
             modelContainer: container,
             repositories: repos,
             clock: clock,
             statusSink: { update in
-                Task { @MainActor in
-                    statusBox.update(
-                        pendingCount: update.pendingCount,
-                        isDraining: update.isDraining
-                    )
-                    if let isPaused = update.isPaused {
-                        statusBox.setPaused(isPaused, reason: nil)
+                Task {
+                    await observer.record(update)
+                    await MainActor.run {
+                        statusBox.update(
+                            pendingCount: update.pendingCount,
+                            isDraining: update.isDraining
+                        )
+                        if let isPaused = update.isPaused {
+                            statusBox.setPaused(isPaused, reason: nil)
+                        }
                     }
                 }
             }
         )
+    }
+
+    /// Block until the drainer has published at least one update with
+    /// `isDraining == false` after `kickAndWait()` returns, AND the
+    /// MainActor status box reflects the matching pendingCount.
+    /// Replaces `try? await Task.sleep(nanoseconds: 100_000_000)`.
+    func waitForIdle() async {
+        await observed.waitForIdle()
+        // One MainActor hop to ensure the statusBox.update side-effect
+        // has flushed (it's enqueued in the same Task that called
+        // observed.record, so by the time observed.waitForIdle returns,
+        // any pending MainActor.run is at most one hop away).
+        await MainActor.run { _ = status.pendingCount }
     }
 
     func enqueueInsertScan(id: UUID, createdAt: Date? = nil) async throws {
@@ -66,7 +85,7 @@ final class Harness {
         // `Date()` here would set `nextAttemptAt` far in the future
         // relative to the test clock and the item would never get
         // picked up.
-        let createdAt = createdAt ?? clock.current()
+        let stamp = createdAt ?? clock.current()
         let dto = OutboxPayloads.InsertScan(
             id: id.uuidString,
             store_id: UUID().uuidString,
@@ -77,8 +96,8 @@ final class Harness {
             status: "pending_validation",
             ocr_raw_text: nil,
             ocr_confidence: nil,
-            created_at: ISO8601DateFormatter().string(from: createdAt),
-            updated_at: ISO8601DateFormatter().string(from: createdAt)
+            created_at: ISO8601DateFormatter().string(from: stamp),
+            updated_at: ISO8601DateFormatter().string(from: stamp)
         )
         let payload = try JSONEncoder().encode(dto)
         // Insert through the drainer's own context to avoid cross-context
@@ -89,8 +108,8 @@ final class Harness {
             id: UUID(),
             kind: .insertScan,
             payload: payload,
-            createdAt: createdAt,
-            nextAttemptAt: createdAt
+            createdAt: stamp,
+            nextAttemptAt: stamp
         )
     }
 
@@ -103,6 +122,10 @@ final class Harness {
 
 /// Fake `ScanRepository`. Recorders are wrapped in an actor to keep
 /// concurrent writes from the drainer + test main actor safe.
+///
+/// `insertedIds` is also mirrored into a lock-protected array so tests
+/// on the MainActor can read it synchronously after `waitForIdle()` —
+/// once the drain loop has finished there are no more concurrent writers.
 final class FakeScanRepository: ScanRepository, @unchecked Sendable {
     private let recorder = Recorder()
     var nextError: Error?
@@ -111,6 +134,17 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
         var insertedIds: [UUID] = []
         func append(_ id: UUID) { insertedIds.append(id) }
         func snapshot() -> [UUID] { insertedIds }
+    }
+
+    /// Lock-protected mirror of the recorder's list. Safe to read from
+    /// MainActor after `Harness.waitForIdle()` has returned (no concurrent
+    /// writers at that point).
+    private let _lock = NSLock()
+    private var _insertedIds: [UUID] = []
+
+    var insertedIds: [UUID] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _insertedIds
     }
 
     func snapshotInsertedIds() async -> [UUID] { await recorder.snapshot() }
@@ -135,6 +169,8 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
     func insert(_ scan: ScanDTO) async throws {
         if let e = nextError { nextError = nil; throw e }
         await recorder.append(scan.id)
+        _lock.lock(); defer { _lock.unlock() }
+        _insertedIds.append(scan.id)
     }
 
     func insertAndReturn(_ scan: ScanDTO) async throws -> ScanDTO {
@@ -246,4 +282,32 @@ final class TestClock: OutboxClock, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         now = now.addingTimeInterval(seconds)
     }
+}
+
+// MARK: - StatusObserver
+
+/// Records every StatusUpdate the drainer emits and lets a test await
+/// the next `isDraining == false` transition. Replaces fixed Task.sleep
+/// waits in the harness — no flake under load.
+actor StatusObserver {
+    private var buffer: [OutboxDrainer.StatusUpdate] = []
+    private var idleContinuations: [CheckedContinuation<Void, Never>] = []
+
+    func record(_ update: OutboxDrainer.StatusUpdate) {
+        buffer.append(update)
+        if !update.isDraining {
+            for c in idleContinuations { c.resume() }
+            idleContinuations.removeAll()
+        }
+    }
+
+    func waitForIdle() async {
+        // If we've already seen a non-draining update, return immediately.
+        if buffer.contains(where: { !$0.isDraining }) { return }
+        await withCheckedContinuation { continuation in
+            idleContinuations.append(continuation)
+        }
+    }
+
+    func updates() -> [OutboxDrainer.StatusUpdate] { buffer }
 }

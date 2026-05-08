@@ -120,10 +120,15 @@ actor OutboxDrainer: ModelActor {
         // versions. We do a coarse fetch (just the time window) and
         // filter pending in memory, which is robust and the batch
         // size cap (50) keeps the cost trivial.
+        //
+        // The `sortBy: nextAttemptAt asc` ensures that when 7.3 introduces
+        // inFlight/failed rows they don't crowd out eligible .pending rows
+        // before the in-memory filter gets a chance to see them.
         var d = FetchDescriptor<OutboxItem>(
             predicate: #Predicate<OutboxItem> {
                 $0.nextAttemptAt <= now
-            }
+            },
+            sortBy: [SortDescriptor(\OutboxItem.nextAttemptAt, order: .forward)]
         )
         d.fetchLimit = 50
         let rows = (try? context.fetch(d)) ?? []
@@ -161,7 +166,7 @@ actor OutboxDrainer: ModelActor {
         switch kind {
         case .insertScan:
             let p = try JSONDecoder().decode(OutboxPayloads.InsertScan.self, from: payload)
-            try await repositories.scans.insert(ScanDTO(from: p))
+            try await repositories.scans.insert(try ScanDTO(from: p))
         case .insertLot,
              .updateLot,
              .deleteLot,
@@ -192,18 +197,29 @@ actor OutboxDrainer: ModelActor {
 
 // MARK: - Payload → DTO bridging
 
+enum OutboxBridgeError: Error {
+    case malformedPayload(reason: String)
+}
+
 extension ScanDTO {
     /// Bridge an `OutboxPayloads.InsertScan` (snake_case wire shape) to
-    /// the camelCase `ScanDTO` the repository expects. Force-unwraps on
-    /// UUID strings are intentional — payloads come from our own
-    /// producer code which already validated the UUIDs at enqueue time.
-    init(from p: OutboxPayloads.InsertScan) {
-        let iso = ISO8601DateFormatter()
+    /// the camelCase `ScanDTO` the repository expects. Throws
+    /// `OutboxBridgeError.malformedPayload` if any UUID field is invalid
+    /// so that a corrupted SQLite row is routed to `lastError` rather
+    /// than crashing the drain loop.
+    init(from p: OutboxPayloads.InsertScan) throws {
+        guard let id = UUID(uuidString: p.id),
+              let storeId = UUID(uuidString: p.store_id),
+              let lotId = UUID(uuidString: p.lot_id),
+              let userId = UUID(uuidString: p.user_id) else {
+            throw OutboxBridgeError.malformedPayload(reason: "InsertScan: invalid UUID")
+        }
+        let iso = OutboxDateFormatter.iso8601
         self.init(
-            id: UUID(uuidString: p.id)!,
-            storeId: UUID(uuidString: p.store_id)!,
-            lotId: UUID(uuidString: p.lot_id)!,
-            userId: UUID(uuidString: p.user_id)!,
+            id: id,
+            storeId: storeId,
+            lotId: lotId,
+            userId: userId,
             grader: p.grader,
             certNumber: p.cert_number,
             grade: nil,
@@ -216,4 +232,13 @@ extension ScanDTO {
             updatedAt: iso.date(from: p.updated_at) ?? Date()
         )
     }
+}
+
+/// Cached `ISO8601DateFormatter` — the type is heavy to allocate (locale,
+/// calendar, regex). One per process is enough; the formatter is thread-safe
+/// per Apple docs.
+enum OutboxDateFormatter {
+    static let iso8601: ISO8601DateFormatter = {
+        ISO8601DateFormatter()
+    }()
 }
