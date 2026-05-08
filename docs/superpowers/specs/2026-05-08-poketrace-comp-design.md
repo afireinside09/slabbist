@@ -339,6 +339,14 @@ Before merge: in dev build, scan a real PSA 10 slab. Verify:
 
 No feature flag is required: PPT continues working untouched; Poketrace simply appears when the key is configured.
 
+## V1 limitations (planned-in)
+
+These are deliberate scope cuts for the first shipping version, recorded so they don't get rediscovered later.
+
+- **Sequential fan-out (PPT-first).** v1 runs Poketrace after PPT's happy path completes. PPT failures (`NO_MARKET_DATA`, `PRODUCT_NOT_RESOLVED`, `AUTH_INVALID`) short-circuit the request, which means the `reconciled.source = 'poketrace-only'` branch is unreachable in v1. Refactoring `index.ts` so both providers run via `Promise.allSettled` is the follow-up that unlocks it. The reconciliation logic itself already handles the case correctly; only the orchestration is gated.
+- **Shared TTL.** v1 does not honor a dedicated `POKETRACE_FRESHNESS_TTL_SECONDS` env var. Poketrace freshness piggy-backs on the existing PPT TTL: when PPT goes stale, both providers refetch together. This keeps the cache-hit path simple at the cost of slightly less independent control.
+- **No 429 daily short-circuit.** v1 logs `dailyRemaining` from the rate-limit headers but does not auto-disable the Poketrace branch when the daily budget is exhausted. Each scan still issues the call; if Poketrace returns 429, the branch yields `null` for that scan and the cell shows "no data". A daily-budget short-circuit is a follow-up.
+
 ## Open Questions
 
 None blocking. (Confirm with user during planning: should we expose Poketrace `confidence` as a visible badge in v1, or only use it to tint the price text? Current design uses tinting only. Trivial to flip.)
