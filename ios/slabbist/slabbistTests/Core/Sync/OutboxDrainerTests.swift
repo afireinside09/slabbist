@@ -121,4 +121,105 @@ struct OutboxDrainerTests {
         let count = await h.outboxCount()
         #expect(count == 0)
     }
+
+    // MARK: - 7.3 error-classifier tests
+
+    @Test("409 (uniqueViolation) on insertScan deletes the item — idempotent success")
+    @MainActor
+    func conflictOnInsertIsSuccess() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        h.fakeScans.nextError = SupabaseError.uniqueViolation(
+            message: "dup",
+            underlying: NSError(domain: "x", code: 0)
+        )
+        try await h.enqueueInsertScan(id: scanId)
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        let count = await h.outboxCount()
+        #expect(count == 0)
+        #expect(h.fakeScans.insertedIds.isEmpty)
+    }
+
+    @Test("transient error then success: backoff schedules retry, second kick after clock advance lands")
+    @MainActor
+    func transientThenSuccess() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        h.fakeScans.nextError = SupabaseError.transport(underlying: URLError(.timedOut))
+        try await h.enqueueInsertScan(id: scanId)
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.insertedIds.isEmpty)
+        let count1 = await h.outboxCount()
+        #expect(count1 == 1)
+
+        let item1 = try await h.firstOutboxItem()
+        #expect(item1.attempts == 1)
+        #expect(item1.status == .pending)
+        #expect(item1.nextAttemptAt > h.clock.current())
+
+        h.clock.advance(10) // jump past the backoff window
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.insertedIds == [scanId])
+        let count2 = await h.outboxCount()
+        #expect(count2 == 0)
+    }
+
+    @Test("401 pauses the queue; subsequent kicks no-op until unpause()")
+    @MainActor
+    func authErrorPausesQueue() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        h.fakeScans.nextError = SupabaseError.unauthorized
+        try await h.enqueueInsertScan(id: scanId)
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.status.isPaused == true)
+        #expect(h.fakeScans.insertedIds.isEmpty)
+        let count = await h.outboxCount()
+        #expect(count == 1)
+
+        // Subsequent kick while paused: no repo call (the nextError was
+        // consumed on the first attempt, so a second drain-pass would
+        // succeed if it ran — proving it didn't).
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+        #expect(h.fakeScans.insertedIds.isEmpty)
+
+        // Unpause and kick again — should drain.
+        await h.drainer.unpause()
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+        #expect(h.fakeScans.insertedIds == [scanId])
+    }
+
+    @Test("permanent (forbidden / RLS) marks item .failed and stops retrying")
+    @MainActor
+    func permanentMarksFailed() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        h.fakeScans.nextError = SupabaseError.forbidden(underlying: NSError(domain: "x", code: 0))
+        try await h.enqueueInsertScan(id: scanId)
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        let item = try await h.firstOutboxItem()
+        #expect(item.status == .failed)
+        #expect(item.lastError != nil)
+
+        // Re-kick: failed items are not re-fetched.
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+        #expect(h.fakeScans.insertedIds.isEmpty)
+    }
 }

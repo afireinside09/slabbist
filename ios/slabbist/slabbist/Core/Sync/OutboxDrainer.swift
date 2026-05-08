@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 import Supabase
 
@@ -26,12 +27,22 @@ actor OutboxDrainer: ModelActor {
         var pendingCount: Int
         var isDraining: Bool
         var isPaused: Bool?
+        var lastError: String?
     }
+
+    private static let log = Logger(subsystem: "com.slabbist.sync", category: "outbox")
 
     private let repositories: AppRepositories
     private let clock: any OutboxClock
     private let statusSink: @Sendable (StatusUpdate) -> Void
     private var isDraining: Bool = false
+    private var pausedForAuth: Bool = false
+
+    /// Called by the auth resume path (Task 10) when SessionStore signs back
+    /// in. Clears the auth-pause flag so the next kick can proceed.
+    func unpause() {
+        pausedForAuth = false
+    }
 
     init(
         modelContainer: ModelContainer,
@@ -91,12 +102,40 @@ actor OutboxDrainer: ModelActor {
     func _testOutboxCount() -> Int {
         (try? context.fetchCount(FetchDescriptor<OutboxItem>())) ?? 0
     }
+
+    /// Snapshot of an `OutboxItem`'s key fields. `OutboxItem` is a
+    /// SwiftData `@Model` class and is not `Sendable`; returning it
+    /// across the actor boundary is undefined. This struct captures
+    /// only plain value types so tests can inspect them safely.
+    struct OutboxItemSnapshot: Sendable {
+        let id: UUID
+        let kind: OutboxKind
+        let status: OutboxItemStatus
+        let attempts: Int
+        let lastError: String?
+        let nextAttemptAt: Date
+    }
+
+    func _testFirstOutboxItem() throws -> OutboxItemSnapshot {
+        var d = FetchDescriptor<OutboxItem>()
+        d.fetchLimit = 1
+        let items = try context.fetch(d)
+        guard let item = items.first else {
+            throw OutboxBridgeError.malformedPayload(reason: "no items in outbox")
+        }
+        return OutboxItemSnapshot(
+            id: item.id, kind: item.kind, status: item.status,
+            attempts: item.attempts, lastError: item.lastError,
+            nextAttemptAt: item.nextAttemptAt
+        )
+    }
     #endif
 
     // MARK: - Drain loop
 
     private func drainOnce() async {
         guard !isDraining else { return }
+        guard !pausedForAuth else { return }
         isDraining = true
         publishStatus()
         defer {
@@ -105,6 +144,7 @@ actor OutboxDrainer: ModelActor {
         }
 
         while true {
+            guard !pausedForAuth else { break }
             let now = clock.current()
             let batch = fetchBatch(now: now)
             if batch.isEmpty { break }
@@ -112,6 +152,7 @@ actor OutboxDrainer: ModelActor {
             for item in batch {
                 await dispatchItem(item)
                 publishStatus()
+                if pausedForAuth { break }
             }
         }
     }
@@ -154,14 +195,50 @@ actor OutboxDrainer: ModelActor {
             try await dispatch(kind: item.kind, payload: item.payload)
             context.delete(item)
             try? context.save()
-        } catch {
-            // Full error handling lands in 7.3 (classifier + backoff).
-            // For 7.1 we simply revert to .pending so the drain loop
-            // can break out (the predicate `nextAttemptAt <= now` keeps
-            // it eligible). The lastError string is best-effort context.
-            item.status = .pending
-            item.lastError = String(describing: error).prefix(1024).description
+        } catch let error {
+            handle(error: error, item: item)
             try? context.save()
+        }
+    }
+
+    private func handle(error: Error, item: OutboxItem) {
+        let mapped = SupabaseError.map(error)
+        let disposition = OutboxErrorClassifier.classify(mapped, for: item.kind)
+        let kindStr = String(describing: item.kind)
+        let errStr = String(describing: mapped).prefix(1024).description
+
+        switch disposition {
+        case .success:
+            // Idempotent — treat as if it landed.
+            context.delete(item)
+
+        case .transient:
+            item.attempts += 1
+            item.lastError = errStr
+            item.status = .pending
+            let exp = pow(2.0, Double(item.attempts))
+            let backoff = min(exp, 300.0) // cap at 5 min
+            item.nextAttemptAt = clock.current().addingTimeInterval(backoff)
+
+        case .auth:
+            // Stop the drain pass, mark the queue paused. The auth-resume
+            // wiring in slabbistApp (Task 10) calls unpause() + kick() once
+            // SessionStore re-establishes the session.
+            pausedForAuth = true
+            item.status = .pending
+            item.lastError = "Sign in to sync"
+            statusSink(StatusUpdate(
+                pendingCount: pendingCountValue(),
+                isDraining: false,
+                isPaused: true,
+                lastError: nil
+            ))
+
+        case .permanent:
+            item.status = .failed
+            item.lastError = errStr
+            item.attempts += 1
+            Self.log.error("permanent failure on \(kindStr, privacy: .public): \(errStr, privacy: .public)")
         }
     }
 
@@ -241,7 +318,7 @@ actor OutboxDrainer: ModelActor {
     private func publishStatus() {
         let count = pendingCountValue()
         let draining = isDraining
-        statusSink(StatusUpdate(pendingCount: count, isDraining: draining, isPaused: nil))
+        statusSink(StatusUpdate(pendingCount: count, isDraining: draining, isPaused: nil, lastError: nil))
     }
 
     private func pendingCountValue() -> Int {

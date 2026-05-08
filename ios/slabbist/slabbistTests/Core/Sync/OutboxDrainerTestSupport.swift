@@ -58,7 +58,7 @@ final class Harness {
                             isDraining: update.isDraining
                         )
                         if let isPaused = update.isPaused {
-                            statusBox.setPaused(isPaused, reason: nil)
+                            statusBox.setPaused(isPaused, reason: update.lastError)
                         }
                     }
                 }
@@ -224,6 +224,10 @@ final class Harness {
 
     func outboxCount() async -> Int {
         await drainer._testOutboxCount()
+    }
+
+    func firstOutboxItem() async throws -> OutboxDrainer.OutboxItemSnapshot {
+        try await drainer._testFirstOutboxItem()
     }
 }
 
