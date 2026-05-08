@@ -216,6 +216,7 @@ nonisolated struct SupabaseRepository<Row: Codable & Sendable>: Sendable {
     /// the outbox drainer for `updateScan` / `updateScanOffer` / `updateLot`
     /// kinds whose payloads are intentionally partial (only changed columns).
     func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        guard !fields.isEmpty else { return }
         try await execute {
             _ = try await client.from(tableName)
                 .update(fields, returning: .minimal)
