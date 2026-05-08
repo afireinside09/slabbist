@@ -158,24 +158,59 @@ export async function ingestPokemonAllCategories(opts: Omit<IngestOptions, "cate
   const out: IngestResult[] = [];
   for (const id of [3, 85]) out.push(await ingestTcgcsvForCategory({ ...opts, categoryId: id }));
   // Refresh per-set movers, then prune price history to the 90-day
-  // window the movers refresh anchors against. Order matters only as
-  // a safety preference: refresh first so a prune failure can't strand
-  // the iOS tab on a stale snapshot. Both calls are best-effort —
-  // ingest rows are already committed and must not be rolled back by
-  // a downstream RPC failure.
-  try {
-    const { error } = await opts.supabase.rpc("refresh_movers").abortSignal(AbortSignal.timeout(120_000));
-    if (error) opts.log?.warn("refresh_movers failed", { error: error.message });
-    else opts.log?.info("movers refreshed");
-  } catch (e) {
-    opts.log?.warn("refresh_movers threw", { error: String((e as Error).message ?? e) });
+  // window the movers refresh anchors against. Both calls run regardless
+  // of each other's outcome (prune is a useful GC even if refresh failed),
+  // but any failure here MUST surface to the workflow — a silent green
+  // run with stale `movers` is the failure mode we're guarding against.
+  // Ceiling matches `ALTER FUNCTION ... SET statement_timeout = '5min'`
+  // applied in the 20260508210000 migration; PostgREST otherwise inherits
+  // the authenticator role's 8s GUC and these RPCs would be killed
+  // server-side as tcg_price_history grows.
+  const RPC_TIMEOUT_MS = 300_000;
+  const errors: string[] = [];
+  const startedAt = new Date();
+
+  const { error: refreshErr } = await opts.supabase
+    .rpc("refresh_movers")
+    .abortSignal(AbortSignal.timeout(RPC_TIMEOUT_MS));
+  if (refreshErr) {
+    errors.push(`refresh_movers: ${refreshErr.message}`);
+    opts.log?.error("refresh_movers failed", { error: refreshErr.message });
+  } else {
+    // PostgREST returned 200, but the function may have committed nothing
+    // (e.g. role/GUC misconfig). Verify by reading back the watermark.
+    const { data: vRow, error: vErr } = await opts.supabase
+      .from("movers")
+      .select("refreshed_at")
+      .order("refreshed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (vErr) {
+      errors.push(`refresh_movers verify: ${vErr.message}`);
+      opts.log?.error("refresh_movers verify failed", { error: vErr.message });
+    } else if (!vRow?.refreshed_at || new Date(vRow.refreshed_at) < startedAt) {
+      const observed = vRow?.refreshed_at ?? "(none)";
+      errors.push(`refresh_movers verify: refreshed_at=${observed} did not advance past ${startedAt.toISOString()}`);
+      opts.log?.error("refresh_movers verify: stale watermark", {
+        startedAt: startedAt.toISOString(), observed,
+      });
+    } else {
+      opts.log?.info("movers refreshed", { refreshed_at: vRow.refreshed_at });
+    }
   }
-  try {
-    const { data, error } = await opts.supabase.rpc("prune_tcg_price_history").abortSignal(AbortSignal.timeout(120_000));
-    if (error) opts.log?.warn("prune_tcg_price_history failed", { error: error.message });
-    else opts.log?.info("price history pruned", { deleted: typeof data === "number" ? data : null });
-  } catch (e) {
-    opts.log?.warn("prune_tcg_price_history threw", { error: String((e as Error).message ?? e) });
+
+  const { data: pruneData, error: pruneErr } = await opts.supabase
+    .rpc("prune_tcg_price_history")
+    .abortSignal(AbortSignal.timeout(RPC_TIMEOUT_MS));
+  if (pruneErr) {
+    errors.push(`prune_tcg_price_history: ${pruneErr.message}`);
+    opts.log?.error("prune_tcg_price_history failed", { error: pruneErr.message });
+  } else {
+    opts.log?.info("price history pruned", { deleted: typeof pruneData === "number" ? pruneData : null });
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`maintenance RPC failures: ${errors.join("; ")}`);
   }
   return out;
 }

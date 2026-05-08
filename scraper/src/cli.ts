@@ -21,13 +21,23 @@ run.command("raw")
     const cfg = loadConfig();
     const log = createLogger({ level: cfg.runtime.logLevel });
     if (source !== "tcgcsv") { log.error("unknown raw source", { source }); process.exit(2); }
-    const results = await ingestPokemonAllCategories({
-      supabase: getSupabase(),
-      userAgent: cfg.runtime.userAgent,
-      concurrency: Number(o.concurrency),
-      delayMs: Number(o.delayMs),
-      log,
-    });
+    let results;
+    try {
+      results = await ingestPokemonAllCategories({
+        supabase: getSupabase(),
+        userAgent: cfg.runtime.userAgent,
+        concurrency: Number(o.concurrency),
+        delayMs: Number(o.delayMs),
+        log,
+      });
+    } catch (e) {
+      // Categories themselves swallow per-group errors and surface via
+      // status='failed' on their IngestResult — so a throw here is the
+      // post-ingest maintenance path (refresh_movers / prune) failing.
+      // Exit non-zero so the GH Actions run goes red instead of green.
+      log.error("maintenance failed", { error: String((e as Error).message ?? e) });
+      process.exit(1);
+    }
     for (const r of results) log.info("run complete", { ...r });
     if (results.some((r) => r.status === "failed")) process.exit(1);
   });
