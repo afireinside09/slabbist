@@ -13,17 +13,16 @@ final class OutboxStatus {
 
     init() {}
 
-    /// Merge update — pass only the fields that changed.
-    /// `lastError` is double-optional: pass `nil` to leave it untouched,
-    /// pass `.some(nil)` to clear, pass `.some("...")` to set.
+    /// Merge update — pass only the fields that changed. `lastError` is
+    /// owned by `setPaused` and only gets set/cleared via the auth-pause
+    /// path; the drainer body uses `update` for routine pending/draining
+    /// transitions.
     func update(
         pendingCount: Int? = nil,
-        isDraining: Bool? = nil,
-        lastError: String?? = nil
+        isDraining: Bool? = nil
     ) {
         if let pendingCount { self.pendingCount = pendingCount }
         if let isDraining { self.isDraining = isDraining }
-        if case let .some(newValue) = lastError { self.lastError = newValue }
     }
 
     /// Auth pause flag. When `paused`, the pill switches to "Sign in to

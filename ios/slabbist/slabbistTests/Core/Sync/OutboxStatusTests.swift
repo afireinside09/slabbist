@@ -14,17 +14,30 @@ struct OutboxStatusTests {
         #expect(s.lastError == nil)
     }
 
-    @Test("update merges new values")
-    func update() {
+    @Test("update sets pendingCount and isDraining")
+    func updateSetsCountAndDraining() {
         let s = OutboxStatus()
         s.update(pendingCount: 3, isDraining: true)
         #expect(s.pendingCount == 3)
         #expect(s.isDraining == true)
         #expect(s.isPaused == false)
-        s.update(isDraining: false, lastError: "boom")
-        #expect(s.pendingCount == 3) // unchanged
-        #expect(s.isDraining == false)
-        #expect(s.lastError == "boom")
+        #expect(s.lastError == nil)
+    }
+
+    @Test("update merges without clobbering unchanged fields")
+    func updateMergesWithoutClobbering() {
+        let s = OutboxStatus()
+        s.update(pendingCount: 3, isDraining: true)
+
+        // Subsequent update touches only isDraining; pendingCount must persist,
+        // and lastError (set via setPaused) must not be touched.
+        s.setPaused(true, reason: "Sign in to sync")
+        s.update(isDraining: false)
+
+        #expect(s.pendingCount == 3)        // preserved
+        #expect(s.isDraining == false)      // updated
+        #expect(s.isPaused == true)         // not touched
+        #expect(s.lastError == "Sign in to sync") // not touched
     }
 
     @Test("setPaused flips both flags atomically")
