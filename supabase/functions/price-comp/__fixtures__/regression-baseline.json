@@ -1,0 +1,3185 @@
+{
+  "captured_at": "2026-05-08T00:07:59.959Z",
+  "captured_against": "ksildxueezkvrwryybln",
+  "scenarios": [
+    {
+      "identity": {
+        "id": "5d63d481-eaac-4128-ab12-59cd678fe475",
+        "card_name": "Charizard Holo (1st Edition Shadowless)",
+        "card_number": "4/102",
+        "set_name": "Base Set",
+        "year": 1999,
+        "ppt_tcgplayer_id": "42479"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 604,
+          "name": "Base Set",
+          "abbreviation": "BS",
+          "published_on": "1999-01-09"
+        },
+        {
+          "group_id": 1663,
+          "name": "Base Set (Shadowless)",
+          "abbreviation": "BSS",
+          "published_on": "1999-01-09"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 42382,
+          "group_id": 604,
+          "name": "Charizard",
+          "card_number": "004/102"
+        },
+        {
+          "product_id": 42385,
+          "group_id": 604,
+          "name": "Wartortle",
+          "card_number": "042/102"
+        },
+        {
+          "product_id": 42387,
+          "group_id": 604,
+          "name": "Bulbasaur",
+          "card_number": "044/102"
+        },
+        {
+          "product_id": 42391,
+          "group_id": 604,
+          "name": "Doduo",
+          "card_number": "048/102"
+        },
+        {
+          "product_id": 42392,
+          "group_id": 604,
+          "name": "Drowzee",
+          "card_number": "049/102"
+        },
+        {
+          "product_id": 42389,
+          "group_id": 604,
+          "name": "Charmander",
+          "card_number": "046/102"
+        },
+        {
+          "product_id": 657516,
+          "group_id": 604,
+          "name": "Charizard (Black Dot Error)",
+          "card_number": "004/102"
+        },
+        {
+          "product_id": 42384,
+          "group_id": 604,
+          "name": "Seel",
+          "card_number": "041/102"
+        },
+        {
+          "product_id": 42386,
+          "group_id": 604,
+          "name": "Abra",
+          "card_number": "043/102"
+        },
+        {
+          "product_id": 42383,
+          "group_id": 604,
+          "name": "Raticate",
+          "card_number": "040/102"
+        },
+        {
+          "product_id": 42388,
+          "group_id": 604,
+          "name": "Caterpie",
+          "card_number": "045/102"
+        },
+        {
+          "product_id": 42390,
+          "group_id": 604,
+          "name": "Diglett",
+          "card_number": "047/102"
+        },
+        {
+          "product_id": 107039,
+          "group_id": 1663,
+          "name": "Wartortle",
+          "card_number": "042/102"
+        },
+        {
+          "product_id": 107040,
+          "group_id": 1663,
+          "name": "Abra",
+          "card_number": "043/102"
+        },
+        {
+          "product_id": 107043,
+          "group_id": 1663,
+          "name": "Charmander",
+          "card_number": "046/102"
+        },
+        {
+          "product_id": 107044,
+          "group_id": 1663,
+          "name": "Diglett",
+          "card_number": "047/102"
+        },
+        {
+          "product_id": 107045,
+          "group_id": 1663,
+          "name": "Doduo",
+          "card_number": "048/102"
+        },
+        {
+          "product_id": 107046,
+          "group_id": 1663,
+          "name": "Drowzee",
+          "card_number": "049/102"
+        },
+        {
+          "product_id": 106999,
+          "group_id": 1663,
+          "name": "Charizard",
+          "card_number": "004/102"
+        },
+        {
+          "product_id": 107041,
+          "group_id": 1663,
+          "name": "Bulbasaur",
+          "card_number": "044/102"
+        },
+        {
+          "product_id": 107037,
+          "group_id": 1663,
+          "name": "Raticate",
+          "card_number": "040/102"
+        },
+        {
+          "product_id": 107038,
+          "group_id": 1663,
+          "name": "Seel",
+          "card_number": "041/102"
+        },
+        {
+          "product_id": 107042,
+          "group_id": 1663,
+          "name": "Caterpie",
+          "card_number": "045/102"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "42382": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "42382",
+            "name": "Charizard",
+            "cardNumber": "004/102",
+            "setName": "Base Set",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/42382",
+            "prices": {
+              "market": 561.18
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 3675
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 1400
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 14875
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 450
+                  }
+                },
+                "bgs4": {
+                  "smartMarketPrice": {
+                    "price": 299
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 306.88
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 775
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 190.5
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 464.69
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 987.5
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 5500
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 318.32
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 287
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 1359.15
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 647.5
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 288.15
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 412.5
+                  }
+                },
+                "cgc4": {
+                  "smartMarketPrice": {
+                    "price": 274.25
+                  }
+                },
+                "sgc6": {
+                  "smartMarketPrice": {
+                    "price": 400
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 299.95
+                  }
+                },
+                "tag6": {
+                  "smartMarketPrice": {
+                    "price": 514.96
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 25.5
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 550
+                  }
+                }
+              }
+            }
+          }
+        },
+        "42479": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "42479",
+            "name": "Charizard",
+            "cardNumber": "004/130",
+            "setName": "Base Set 2",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/42479",
+            "prices": {
+              "market": 387.97
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 600
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 1190
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 420.38
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 492.99
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 302.5
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 543.77
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 337.5
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 160.62
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 1399.99
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 290.25
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 132.5
+                  }
+                },
+                "cgc2": {
+                  "smartMarketPrice": {
+                    "price": 131.99
+                  }
+                },
+                "bgs4": {
+                  "smartMarketPrice": {
+                    "price": 225
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 190.5
+                  }
+                },
+                "sgc8": {
+                  "smartMarketPrice": {
+                    "price": 400
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 396
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 288.24
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 215
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 289.05
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 400
+                  }
+                },
+                "tag7": {
+                  "smartMarketPrice": {
+                    "price": 318.75
+                  }
+                }
+              }
+            }
+          }
+        },
+        "106999": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "106999",
+            "name": "Charizard",
+            "cardNumber": "004/102",
+            "setName": "Base Set (Shadowless)",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/106999",
+            "prices": {
+              "market": 10000
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 1636.25
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 651
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 1064.37
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 1421.25
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 2020
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 595
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 590
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 930.62
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 3500
+                  }
+                },
+                "bgs6": {
+                  "smartMarketPrice": {
+                    "price": 595
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 920
+                  }
+                },
+                "bgs4": {
+                  "smartMarketPrice": {
+                    "price": 740
+                  }
+                },
+                "sgc4": {
+                  "smartMarketPrice": {
+                    "price": 269
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 1275
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 275
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 5853.5
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 12862.5
+                  }
+                },
+                "sgc3": {
+                  "smartMarketPrice": {
+                    "price": 900
+                  }
+                },
+                "sgc10": {
+                  "smartMarketPrice": {
+                    "price": 425
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 14601
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "42382",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "fb196385-5110-4eac-b019-f26977bd147f",
+        "card_name": "Dragonite Holo",
+        "card_number": "4/62",
+        "set_name": "Fossil",
+        "year": 1999,
+        "ppt_tcgplayer_id": "106520"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 604,
+          "name": "Base Set",
+          "abbreviation": "BS",
+          "published_on": "1999-01-09"
+        },
+        {
+          "group_id": 630,
+          "name": "Fossil",
+          "abbreviation": "FO",
+          "published_on": "1999-10-10"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 106520,
+          "group_id": 630,
+          "name": "Dragonite (4)",
+          "card_number": "04/62"
+        },
+        {
+          "product_id": 42382,
+          "group_id": 604,
+          "name": "Charizard",
+          "card_number": "004/102"
+        },
+        {
+          "product_id": 42385,
+          "group_id": 604,
+          "name": "Wartortle",
+          "card_number": "042/102"
+        },
+        {
+          "product_id": 42387,
+          "group_id": 604,
+          "name": "Bulbasaur",
+          "card_number": "044/102"
+        },
+        {
+          "product_id": 42391,
+          "group_id": 604,
+          "name": "Doduo",
+          "card_number": "048/102"
+        },
+        {
+          "product_id": 42392,
+          "group_id": 604,
+          "name": "Drowzee",
+          "card_number": "049/102"
+        },
+        {
+          "product_id": 42389,
+          "group_id": 604,
+          "name": "Charmander",
+          "card_number": "046/102"
+        },
+        {
+          "product_id": 657516,
+          "group_id": 604,
+          "name": "Charizard (Black Dot Error)",
+          "card_number": "004/102"
+        },
+        {
+          "product_id": 42384,
+          "group_id": 604,
+          "name": "Seel",
+          "card_number": "041/102"
+        },
+        {
+          "product_id": 42386,
+          "group_id": 604,
+          "name": "Abra",
+          "card_number": "043/102"
+        },
+        {
+          "product_id": 42383,
+          "group_id": 604,
+          "name": "Raticate",
+          "card_number": "040/102"
+        },
+        {
+          "product_id": 42388,
+          "group_id": 604,
+          "name": "Caterpie",
+          "card_number": "045/102"
+        },
+        {
+          "product_id": 42390,
+          "group_id": 604,
+          "name": "Diglett",
+          "card_number": "047/102"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "42382": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "42382",
+            "name": "Charizard",
+            "cardNumber": "004/102",
+            "setName": "Base Set",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/42382",
+            "prices": {
+              "market": 561.18
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 3675
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 1400
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 14875
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 450
+                  }
+                },
+                "bgs4": {
+                  "smartMarketPrice": {
+                    "price": 299
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 306.88
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 775
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 190.5
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 464.69
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 987.5
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 5500
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 318.32
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 287
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 1359.15
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 647.5
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 288.15
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 412.5
+                  }
+                },
+                "cgc4": {
+                  "smartMarketPrice": {
+                    "price": 274.25
+                  }
+                },
+                "sgc6": {
+                  "smartMarketPrice": {
+                    "price": 400
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 299.95
+                  }
+                },
+                "tag6": {
+                  "smartMarketPrice": {
+                    "price": 514.96
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 25.5
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 550
+                  }
+                }
+              }
+            }
+          }
+        },
+        "106520": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "106520",
+            "name": "Dragonite (4)",
+            "cardNumber": "04/62",
+            "setName": "Fossil",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/106520",
+            "prices": {
+              "market": 256.09
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 458
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 143.5
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 57
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 159.99
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 129.99
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 352.5
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 67.25
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 105.56
+                  }
+                },
+                "cgc3": {
+                  "smartMarketPrice": {
+                    "price": 42.5
+                  }
+                },
+                "cgc2": {
+                  "smartMarketPrice": {
+                    "price": 115
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 89.99
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 34
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 59.75
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "106520",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "b5b7597a-27da-45f4-8b86-92f7bb35668d",
+        "card_name": "Pikachu (Jungle)",
+        "card_number": "60/64",
+        "set_name": "Jungle",
+        "year": 1999,
+        "ppt_tcgplayer_id": "45163"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 635,
+          "name": "Jungle",
+          "abbreviation": "JU",
+          "published_on": "1999-06-16"
+        },
+        {
+          "group_id": 23722,
+          "name": "Pokemon Jungle",
+          "abbreviation": "",
+          "published_on": "1997-03-05"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 45163,
+          "group_id": 635,
+          "name": "Pikachu",
+          "card_number": "60/64"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "45163": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "45163",
+            "name": "Pikachu",
+            "cardNumber": "60/64",
+            "setName": "Jungle",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/45163",
+            "prices": {
+              "market": 5.73
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 36.5
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 48
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 437.5
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 16.88
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 17.5
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 34.16
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 100
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 899.99
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 25
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 659
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 53.5
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 21.49
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 22.37
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 16.99
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 20.51
+                  }
+                },
+                "ace9": {
+                  "smartMarketPrice": {
+                    "price": 39.4
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 34
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 30
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "45163",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "092b6ab8-a1ae-41b1-aaa0-9341fe2b1d6a",
+        "card_name": "Umbreon VMAX (Alternate Art Secret)",
+        "card_number": "215/203",
+        "set_name": "Evolving Skies",
+        "year": 2021,
+        "ppt_tcgplayer_id": "246723"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 2754,
+          "name": "Shining Fates",
+          "abbreviation": "SHF",
+          "published_on": "2021-02-19"
+        },
+        {
+          "group_id": 2848,
+          "name": "SWSH07: Evolving Skies",
+          "abbreviation": "SWSH07",
+          "published_on": "2021-08-27"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 246723,
+          "group_id": 2848,
+          "name": "Umbreon VMAX (Alternate Art Secret)",
+          "card_number": "215/203"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "246723": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "246723",
+            "name": "Umbreon VMAX (Alternate Art Secret)",
+            "cardNumber": "215/203",
+            "setName": "SWSH07: Evolving Skies",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/246723",
+            "prices": {
+              "market": 2137.65
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 2100
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 1467.5
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 3867.5
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 2850
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 4250
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 1600
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 2928
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 1710.18
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 2073.75
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 1275
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 1800
+                  }
+                },
+                "sgc9": {
+                  "smartMarketPrice": {
+                    "price": 1700
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 1218.75
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "246723",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "67ad6236-f05f-41a8-a213-a7128a831cb2",
+        "card_name": "Charizard Holo (Skyridge)",
+        "card_number": "146/144",
+        "set_name": "Skyridge",
+        "year": 2003,
+        "ppt_tcgplayer_id": "84186"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 1372,
+          "name": "Skyridge",
+          "abbreviation": "SK",
+          "published_on": "2003-05-12"
+        },
+        {
+          "group_id": 1376,
+          "name": "Dragon",
+          "abbreviation": "DR",
+          "published_on": "2003-11-24"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 84186,
+          "group_id": 1372,
+          "name": "Charizard",
+          "card_number": "146/144"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "84186": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "84186",
+            "name": "Charizard",
+            "cardNumber": "146/144",
+            "setName": "Skyridge",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/84186",
+            "prices": {
+              "market": 2400
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 2649.99
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 13260
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 5279.11
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 2210
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 34045.5
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 4875.5
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 7883.84
+                  }
+                },
+                "cgc4": {
+                  "smartMarketPrice": {
+                    "price": 1300
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 5777
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 11000
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 5023.5
+                  }
+                },
+                "bgs6": {
+                  "smartMarketPrice": {
+                    "price": 1445
+                  }
+                },
+                "cgc3": {
+                  "smartMarketPrice": {
+                    "price": 779.69
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 2870
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 1132.49
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 1274.99
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 17378.75
+                  }
+                },
+                "bgs7": {
+                  "smartMarketPrice": {
+                    "price": 7475.75
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 29750
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 5099.96
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 49550
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "84186",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "f8650066-8270-4ef7-a724-994bb7018a77",
+        "card_name": "Charizard V",
+        "card_number": "050",
+        "set_name": "Champion's Path ETB Promo",
+        "year": 2020,
+        "ppt_tcgplayer_id": "223078"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 2585,
+          "name": "SWSH01: Sword & Shield Base Set",
+          "abbreviation": "SWSH01",
+          "published_on": "2020-02-07"
+        },
+        {
+          "group_id": 2685,
+          "name": "Champion's Path",
+          "abbreviation": "CHP",
+          "published_on": "2020-09-25"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 223050,
+          "group_id": 2685,
+          "name": "Bede",
+          "card_number": "50/73"
+        },
+        {
+          "product_id": 206049,
+          "group_id": 2585,
+          "name": "Lapras VMAX",
+          "card_number": "050/202"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "206049": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "206049",
+            "name": "Lapras VMAX",
+            "cardNumber": "050/202",
+            "setName": "SWSH01: Sword & Shield Base Set",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/206049",
+            "prices": {
+              "market": 4.86
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 36.63
+                  }
+                }
+              }
+            }
+          }
+        },
+        "223050": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "223050",
+            "name": "Bede",
+            "cardNumber": "50/73",
+            "setName": "Champion's Path",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/223050",
+            "prices": {
+              "market": 0.13
+            }
+          }
+        },
+        "223078": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "223078",
+            "name": "Charizard V (Secret)",
+            "cardNumber": "79/73",
+            "setName": "Champion's Path",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/223078",
+            "prices": {
+              "market": 257.57
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 446.25
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 228.75
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 255
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 190
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 271.98
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 143.5
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 237.5
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 167.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "223050",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "ab2656b3-efaf-4b90-8f8c-ff5309f005cd",
+        "card_name": "Charizard VSTAR (Ultra Premium Collection)",
+        "card_number": "262",
+        "set_name": "SWSH Black Star Promo",
+        "year": 2022,
+        "ppt_tcgplayer_id": null
+      },
+      "tcg_groups": [
+        {
+          "group_id": 2585,
+          "name": "SWSH01: Sword & Shield Base Set",
+          "abbreviation": "SWSH01",
+          "published_on": "2020-02-07"
+        },
+        {
+          "group_id": 2626,
+          "name": "SWSH02: Rebel Clash",
+          "abbreviation": "SWSH02",
+          "published_on": "2020-05-01"
+        }
+      ],
+      "tcg_products": [],
+      "ppt_response_for_tcgplayer_id": {},
+      "expected": {
+        "tier_matched": null,
+        "ppt_tcgplayer_id": null,
+        "resolved_language": null
+      }
+    },
+    {
+      "identity": {
+        "id": "9dde11d8-0430-411c-9da3-4699e2630e1b",
+        "card_name": "Poncho Pikachu (Mega Charizard X)",
+        "card_number": "097/XY-P",
+        "set_name": "XY Promo",
+        "year": 2014,
+        "ppt_tcgplayer_id": null
+      },
+      "tcg_groups": [
+        {
+          "group_id": 1387,
+          "name": "XY Base Set",
+          "abbreviation": "XY",
+          "published_on": "2014-02-05"
+        },
+        {
+          "group_id": 23908,
+          "name": "XY-P: XY Promos",
+          "abbreviation": "XY-P",
+          "published_on": "2013-08-01"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 90671,
+          "group_id": 1387,
+          "name": "Xerneas EX",
+          "card_number": "97/146"
+        },
+        {
+          "product_id": 602002,
+          "group_id": 23908,
+          "name": "Warm Pikachu - 097/XY-P",
+          "card_number": "097/XY-P"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "90671": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "90671",
+            "name": "Xerneas EX",
+            "cardNumber": "97/146",
+            "setName": "XY Base Set",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/90671",
+            "prices": {
+              "market": 12.11
+            },
+            "ebay": {
+              "salesByGrade": {
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 20.5
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 5.5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "602002": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "602002",
+            "name": "Warm Pikachu - 097/XY-P",
+            "cardNumber": "097/XY-P",
+            "setName": "XY-P: XY Promos",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/602002",
+            "prices": {
+              "market": null
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "90671",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "bc489883-f49a-4531-bf10-3da5fdde6c79",
+        "card_name": "Pikachu (McDonald's)",
+        "card_number": "020",
+        "set_name": "M-P Promo",
+        "year": 2025,
+        "ppt_tcgplayer_id": "649586"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 24423,
+          "name": "M-P Promotional Cards",
+          "abbreviation": "M-P",
+          "published_on": "2025-08-08"
+        },
+        {
+          "group_id": 24607,
+          "name": "MP1: Start Deck 100 Battle Collection CoroCiao Version",
+          "abbreviation": "MP1",
+          "published_on": "2025-12-19"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 649586,
+          "group_id": 24423,
+          "name": "Pikachu - 020/M-P",
+          "card_number": "020/M-P"
+        },
+        {
+          "product_id": 677315,
+          "group_id": 24607,
+          "name": "Waitress",
+          "card_number": "020/023"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "649586": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "649586",
+            "name": "Pikachu - 020/M-P",
+            "cardNumber": "020/M-P",
+            "setName": "M-P Promotional Cards",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/649586",
+            "prices": {
+              "market": 34.76
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 85.5
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 99.5
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 39
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 25.5
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 30.5
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 125
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 75
+                  }
+                }
+              }
+            }
+          }
+        },
+        "677315": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "677315",
+            "name": "Waitress",
+            "cardNumber": "020/023",
+            "setName": "MP1: Start Deck 100 Battle Collection CoroCiao Version",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/677315",
+            "prices": {
+              "market": null
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "649586",
+        "resolved_language": "japanese"
+      }
+    },
+    {
+      "identity": {
+        "id": "f1ff19d0-6711-49df-9555-271cf72ac2b6",
+        "card_name": "Shining Charizard",
+        "card_number": "107/105",
+        "set_name": "Neo Destiny",
+        "year": 2002,
+        "ppt_tcgplayer_id": "89163"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 1389,
+          "name": "Neo Revelation",
+          "abbreviation": "N3",
+          "published_on": "2001-09-21"
+        },
+        {
+          "group_id": 1444,
+          "name": "Neo Destiny",
+          "abbreviation": "N4",
+          "published_on": "2002-02-28"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 89163,
+          "group_id": 1444,
+          "name": "Shining Charizard",
+          "card_number": "107/105"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "89163": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "89163",
+            "name": "Shining Charizard",
+            "cardNumber": "107/105",
+            "setName": "Neo Destiny",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/89163",
+            "prices": {
+              "market": 3998.99
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 6000
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 3500
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 19500
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 1809.98
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 1350
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 2576
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 2800
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 4274.99
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 2050.43
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 1499.99
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 1124.99
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 3500
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 7750
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 2238
+                  }
+                },
+                "tag6": {
+                  "smartMarketPrice": {
+                    "price": 1546.88
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 2345.2
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 3125
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 1187
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 6272
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 1699.5
+                  }
+                },
+                "cgc4": {
+                  "smartMarketPrice": {
+                    "price": 3250
+                  }
+                },
+                "cgc2": {
+                  "smartMarketPrice": {
+                    "price": 1275
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 1072.5
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 14449.99
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "89163",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "165ed7d4-9275-4fc1-b6a7-01b77136397e",
+        "card_name": "Umbreon ex (Special Art Rare)",
+        "card_number": "217",
+        "set_name": "Terastal Festival ex",
+        "year": 2024,
+        "ppt_tcgplayer_id": "602681"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 23796,
+          "name": "SV: Terastal Charizard ex Battle Master Deck",
+          "abbreviation": "svJL",
+          "published_on": "2024-05-17"
+        },
+        {
+          "group_id": 23909,
+          "name": "SV8a: Terastal Fest ex",
+          "abbreviation": "SV8a",
+          "published_on": "2024-12-06"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 602681,
+          "group_id": 23909,
+          "name": "Umbreon ex - 217/187",
+          "card_number": "217/187"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "602681": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "602681",
+            "name": "Umbreon ex - 217/187",
+            "cardNumber": "217/187",
+            "setName": "SV8a: Terastal Fest ex",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/602681",
+            "prices": {
+              "market": 400.26
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 416.07
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 512.5
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 595
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 740
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 735.35
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 717.88
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 255
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 339.99
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "602681",
+        "resolved_language": "japanese"
+      }
+    },
+    {
+      "identity": {
+        "id": "d42ce748-17c0-45cd-9594-0add40087d12",
+        "card_name": "Magikarp (Art Rare)",
+        "card_number": "080",
+        "set_name": "Triplet Beat",
+        "year": 2023,
+        "ppt_tcgplayer_id": "478219"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 17688,
+          "name": "SWSH: Crown Zenith",
+          "abbreviation": "CRZ",
+          "published_on": "2023-01-20"
+        },
+        {
+          "group_id": 23598,
+          "name": "SV1a: Triplet Beat",
+          "abbreviation": "SV1a",
+          "published_on": "2023-03-10"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 568203,
+          "group_id": 23598,
+          "name": "Magikarp - 080/073",
+          "card_number": "080/073"
+        },
+        {
+          "product_id": 478219,
+          "group_id": 17688,
+          "name": "Pangoro",
+          "card_number": "080/159"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "478219": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "478219",
+            "name": "Pangoro",
+            "cardNumber": "080/159",
+            "setName": "SWSH: Crown Zenith",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/478219",
+            "prices": {
+              "market": 0.15
+            }
+          }
+        },
+        "568203": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "568203",
+            "name": "Magikarp - 080/073",
+            "cardNumber": "080/073",
+            "setName": "SV1a: Triplet Beat",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/568203",
+            "prices": {
+              "market": 145.69
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 282.62
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 350
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 165.39
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 210
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 281.47
+                  }
+                },
+                "ace10": {
+                  "smartMarketPrice": {
+                    "price": 209.63
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 144
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 325
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 51.99
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 80
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 99.69
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 110
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "568203",
+        "resolved_language": "japanese"
+      }
+    },
+    {
+      "identity": {
+        "id": "af2e216b-0ec4-4f52-adc8-bc5af39a15ff",
+        "card_name": "Pikachu (Scarlet & Violet Pre-Order Promo)",
+        "card_number": "001",
+        "set_name": "SV-P Promo",
+        "year": 2022,
+        "ppt_tcgplayer_id": "587758"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 22872,
+          "name": "SV: Scarlet & Violet Promo Cards",
+          "abbreviation": "SVP",
+          "published_on": "2023-03-31"
+        },
+        {
+          "group_id": 23779,
+          "name": "SV-P Promotional Cards",
+          "abbreviation": "SV-P",
+          "published_on": "2024-10-18"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 525293,
+          "group_id": 22872,
+          "name": "Oddish - 102",
+          "card_number": "102"
+        },
+        {
+          "product_id": 545661,
+          "group_id": 22872,
+          "name": "Iono - 124",
+          "card_number": "124"
+        },
+        {
+          "product_id": 546448,
+          "group_id": 22872,
+          "name": "Grafaiai ex - 100",
+          "card_number": "100"
+        },
+        {
+          "product_id": 546754,
+          "group_id": 22872,
+          "name": "Houndoom ex - 103",
+          "card_number": "103"
+        },
+        {
+          "product_id": 546755,
+          "group_id": 22872,
+          "name": "Melmetal ex - 104",
+          "card_number": "104"
+        },
+        {
+          "product_id": 547653,
+          "group_id": 22872,
+          "name": "Armarouge ex - 125",
+          "card_number": "125"
+        },
+        {
+          "product_id": 551688,
+          "group_id": 22872,
+          "name": "Thwackey - 115",
+          "card_number": "115"
+        },
+        {
+          "product_id": 551689,
+          "group_id": 22872,
+          "name": "Infernape - 116",
+          "card_number": "116"
+        },
+        {
+          "product_id": 551692,
+          "group_id": 22872,
+          "name": "Tatsugiri - 118",
+          "card_number": "118"
+        },
+        {
+          "product_id": 552785,
+          "group_id": 22872,
+          "name": "Teal Mask Ogerpon - 123",
+          "card_number": "123"
+        },
+        {
+          "product_id": 554189,
+          "group_id": 22872,
+          "name": "Pupitar - 120",
+          "card_number": "120"
+        },
+        {
+          "product_id": 554293,
+          "group_id": 22872,
+          "name": "Toxel - 119",
+          "card_number": "119"
+        },
+        {
+          "product_id": 554296,
+          "group_id": 22872,
+          "name": "Revavroom - 121",
+          "card_number": "121"
+        },
+        {
+          "product_id": 554298,
+          "group_id": 22872,
+          "name": "Walking Wake ex - 127",
+          "card_number": "127"
+        },
+        {
+          "product_id": 554299,
+          "group_id": 22872,
+          "name": "Iron Leaves ex - 128",
+          "card_number": "128"
+        },
+        {
+          "product_id": 560618,
+          "group_id": 22872,
+          "name": "Revavroom - 121 (Cosmos Holo)",
+          "card_number": "121"
+        },
+        {
+          "product_id": 562018,
+          "group_id": 22872,
+          "name": "Greninja ex - 132",
+          "card_number": "132"
+        },
+        {
+          "product_id": 562019,
+          "group_id": 22872,
+          "name": "Kingdra ex - 131",
+          "card_number": "131"
+        },
+        {
+          "product_id": 562025,
+          "group_id": 22872,
+          "name": "Pecharunt - 149",
+          "card_number": "149"
+        },
+        {
+          "product_id": 562088,
+          "group_id": 22872,
+          "name": "Pikachu - 190",
+          "card_number": "190"
+        },
+        {
+          "product_id": 587758,
+          "group_id": 23779,
+          "name": "Pikachu - 001/SV-P",
+          "card_number": "001/SV-P"
+        },
+        {
+          "product_id": 587859,
+          "group_id": 23779,
+          "name": "Defiance Band - 109/SV-P",
+          "card_number": "109/SV-P"
+        },
+        {
+          "product_id": 587865,
+          "group_id": 23779,
+          "name": "Garganacl ex - 115/SV-P",
+          "card_number": "115/SV-P"
+        },
+        {
+          "product_id": 587866,
+          "group_id": 23779,
+          "name": "Porygon2 - 116/SV-P",
+          "card_number": "116/SV-P"
+        },
+        {
+          "product_id": 587867,
+          "group_id": 23779,
+          "name": "Raifort - 117/SV-P",
+          "card_number": "117/SV-P"
+        },
+        {
+          "product_id": 587871,
+          "group_id": 23779,
+          "name": "Wooper - 121/SV-P",
+          "card_number": "121/SV-P"
+        },
+        {
+          "product_id": 587872,
+          "group_id": 23779,
+          "name": "Quagsire - 122/SV-P",
+          "card_number": "122/SV-P"
+        },
+        {
+          "product_id": 587877,
+          "group_id": 23779,
+          "name": "Tyme - 127/SV-P",
+          "card_number": "127/SV-P"
+        },
+        {
+          "product_id": 587888,
+          "group_id": 23779,
+          "name": "Wally - 139/S-P",
+          "card_number": "139/S-P"
+        },
+        {
+          "product_id": 587897,
+          "group_id": 23779,
+          "name": "Nemona - 154/SV-P",
+          "card_number": "154/SV-P"
+        },
+        {
+          "product_id": 587903,
+          "group_id": 23779,
+          "name": "Roto-Stick - 160/SV-P",
+          "card_number": "160/SV-P"
+        },
+        {
+          "product_id": 587919,
+          "group_id": 23779,
+          "name": "Pikachu - 197/SV-P",
+          "card_number": "197/SV-P"
+        },
+        {
+          "product_id": 650395,
+          "group_id": 23779,
+          "name": "Meowth",
+          "card_number": "192/SV-P"
+        },
+        {
+          "product_id": 672425,
+          "group_id": 23779,
+          "name": "Rabsca ex - 184/SV-P",
+          "card_number": "184/SV-P"
+        },
+        {
+          "product_id": 680962,
+          "group_id": 23779,
+          "name": "Pikachu - 291/SV-P",
+          "card_number": "120/SV-P"
+        },
+        {
+          "product_id": 687696,
+          "group_id": 23779,
+          "name": "Energy Sticker - 143/SV-P",
+          "card_number": "143/SV-P"
+        },
+        {
+          "product_id": 692380,
+          "group_id": 23779,
+          "name": "Basic Fighting Energy - 105/SV-P",
+          "card_number": "105/SV-P"
+        },
+        {
+          "product_id": 692382,
+          "group_id": 23779,
+          "name": "Basic Metal Energy - 107/SV-P",
+          "card_number": "107/SV-P"
+        },
+        {
+          "product_id": 692381,
+          "group_id": 23779,
+          "name": "Basic Darkness Energy - 106/SV-P",
+          "card_number": "106/SV-P"
+        },
+        {
+          "product_id": 587858,
+          "group_id": 23779,
+          "name": "Zapdos ex - 108/SV-P",
+          "card_number": "108/SV-P"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "587758": {
+          "language": "japanese",
+          "card": {
+            "tcgPlayerId": "587758",
+            "name": "Pikachu - 001/SV-P",
+            "cardNumber": "001/SV-P",
+            "setName": "SV-P Promotional Cards",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/587758",
+            "prices": {
+              "market": 19.22
+            },
+            "ebay": {
+              "salesByGrade": {
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 109.48
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 122.47
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 61.01
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 36
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 6.5
+                  }
+                },
+                "ace10": {
+                  "smartMarketPrice": {
+                    "price": 69.87
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 11.99
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 43
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 21.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "587758",
+        "resolved_language": "japanese"
+      }
+    },
+    {
+      "identity": {
+        "id": "31af2b18-ed6d-4ea4-9068-f69a90f9f015",
+        "card_name": "Charizard Mega ex",
+        "card_number": null,
+        "set_name": "Mega Evolution",
+        "year": 2025,
+        "ppt_tcgplayer_id": null
+      },
+      "tcg_groups": [
+        {
+          "group_id": 24380,
+          "name": "ME01: Mega Evolution",
+          "abbreviation": "MEG",
+          "published_on": "2025-09-26"
+        },
+        {
+          "group_id": 24451,
+          "name": "ME: Mega Evolution Promo",
+          "abbreviation": "MEP",
+          "published_on": "2025-09-26"
+        }
+      ],
+      "tcg_products": [],
+      "ppt_response_for_tcgplayer_id": {},
+      "expected": {
+        "tier_matched": null,
+        "ppt_tcgplayer_id": null,
+        "resolved_language": null
+      }
+    },
+    {
+      "identity": {
+        "id": "03438f4e-e4d3-470a-a0ce-d8a020761046",
+        "card_name": "Bandai Carddass Charizard (Prism)",
+        "card_number": null,
+        "set_name": "Bandai Carddass",
+        "year": 1996,
+        "ppt_tcgplayer_id": null
+      },
+      "tcg_groups": [
+        {
+          "group_id": 23721,
+          "name": "Expansion Pack",
+          "abbreviation": "",
+          "published_on": "1996-10-20"
+        },
+        {
+          "group_id": 23740,
+          "name": "Expansion Pack (No Rarity)",
+          "abbreviation": "",
+          "published_on": "1996-10-20"
+        }
+      ],
+      "tcg_products": [],
+      "ppt_response_for_tcgplayer_id": {},
+      "expected": {
+        "tier_matched": null,
+        "ppt_tcgplayer_id": null,
+        "resolved_language": null
+      }
+    },
+    {
+      "identity": {
+        "id": "6f184907-70ff-49f2-aca7-c4ad50c9350e",
+        "card_name": "Charizard ex (Special Illustration Rare)",
+        "card_number": "199",
+        "set_name": "Scarlet & Violet 151",
+        "year": 2023,
+        "ppt_tcgplayer_id": "517045"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 22872,
+          "name": "SV: Scarlet & Violet Promo Cards",
+          "abbreviation": "SVP",
+          "published_on": "2023-03-31"
+        },
+        {
+          "group_id": 23237,
+          "name": "SV: Scarlet & Violet 151",
+          "abbreviation": "MEW",
+          "published_on": "2023-09-22"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 517045,
+          "group_id": 23237,
+          "name": "Charizard ex - 199/165",
+          "card_number": "199/165"
+        },
+        {
+          "product_id": 637662,
+          "group_id": 22872,
+          "name": "Zarude - 199 (Cosmos Holo)",
+          "card_number": "199"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "517045": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "517045",
+            "name": "Charizard ex - 199/165",
+            "cardNumber": "199/165",
+            "setName": "SV: Scarlet & Violet 151",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/517045",
+            "prices": {
+              "market": 432.58
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 361.1
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 1799.49
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 425.67
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 457.5
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 837.5
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 1586.25
+                  }
+                },
+                "ace10": {
+                  "smartMarketPrice": {
+                    "price": 1016.82
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 365
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 362
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 243.12
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 245.75
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 401.88
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 358.75
+                  }
+                },
+                "ace8": {
+                  "smartMarketPrice": {
+                    "price": 281.83
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 825
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 396.65
+                  }
+                },
+                "sgc9": {
+                  "smartMarketPrice": {
+                    "price": 242.25
+                  }
+                },
+                "ace9": {
+                  "smartMarketPrice": {
+                    "price": 399.47
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 212.5
+                  }
+                },
+                "sgc10": {
+                  "smartMarketPrice": {
+                    "price": 548.5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "637662": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "637662",
+            "name": "Zarude - 199 (Cosmos Holo)",
+            "cardNumber": "199",
+            "setName": "SV: Scarlet & Violet Promo Cards",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/637662",
+            "prices": {
+              "market": 0.26
+            },
+            "ebay": {
+              "salesByGrade": {}
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "517045",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "0558c338-5c83-4fbe-b0c5-6e5785533a57",
+        "card_name": "Blastoise ex (Special Illustration Rare)",
+        "card_number": "200",
+        "set_name": "Scarlet & Violet 151",
+        "year": 2023,
+        "ppt_tcgplayer_id": "517046"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 22872,
+          "name": "SV: Scarlet & Violet Promo Cards",
+          "abbreviation": "SVP",
+          "published_on": "2023-03-31"
+        },
+        {
+          "group_id": 23237,
+          "name": "SV: Scarlet & Violet 151",
+          "abbreviation": "MEW",
+          "published_on": "2023-09-22"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 517046,
+          "group_id": 23237,
+          "name": "Blastoise ex - 200/165",
+          "card_number": "200/165"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "517046": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "517046",
+            "name": "Blastoise ex - 200/165",
+            "cardNumber": "200/165",
+            "setName": "SV: Scarlet & Violet 151",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/517046",
+            "prices": {
+              "market": 151.94
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 147.5
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 174.3
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 687.5
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 175.1
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 311.43
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 226.25
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 246.25
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 71.16
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 624.38
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 167.5
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 127.49
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 106.12
+                  }
+                },
+                "ace10": {
+                  "smartMarketPrice": {
+                    "price": 261.99
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 84.99
+                  }
+                },
+                "tag7": {
+                  "smartMarketPrice": {
+                    "price": 175
+                  }
+                },
+                "ace9": {
+                  "smartMarketPrice": {
+                    "price": 164.89
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "517046",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "1c97cf9f-d17f-4a1d-9752-3c0d63936e62",
+        "card_name": "Umbreon ex (Special Illustration Rare)",
+        "card_number": "161/131",
+        "set_name": "Prismatic Evolutions",
+        "year": 2025,
+        "ppt_tcgplayer_id": "610516"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 23821,
+          "name": "SV: Prismatic Evolutions",
+          "abbreviation": "PRE",
+          "published_on": "2025-01-17"
+        },
+        {
+          "group_id": 24073,
+          "name": "SV09: Journey Together",
+          "abbreviation": "JTG",
+          "published_on": "2025-03-28"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 610516,
+          "group_id": 23821,
+          "name": "Umbreon ex - 161/131",
+          "card_number": "161/131"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "610516": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "610516",
+            "name": "Umbreon ex - 161/131",
+            "cardNumber": "161/131",
+            "setName": "SV: Prismatic Evolutions",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/610516",
+            "prices": {
+              "market": 1473.51
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 1275.5
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 5150
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 1550
+                  }
+                },
+                "tag9": {
+                  "smartMarketPrice": {
+                    "price": 1704
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 2213.5
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 1317.5
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 4437.5
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 2214.26
+                  }
+                },
+                "tag8": {
+                  "smartMarketPrice": {
+                    "price": 1200
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 1940
+                  }
+                },
+                "ace10": {
+                  "smartMarketPrice": {
+                    "price": 3803.24
+                  }
+                },
+                "ace8": {
+                  "smartMarketPrice": {
+                    "price": 803.31
+                  }
+                },
+                "ace9": {
+                  "smartMarketPrice": {
+                    "price": 1406.8
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 1400.5
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 1020
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "610516",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "bcb58ca7-bd2d-486a-adf7-b343a156a936",
+        "card_name": "Shining Celebi",
+        "card_number": "106/105",
+        "set_name": "Neo Destiny",
+        "year": 2002,
+        "ppt_tcgplayer_id": null
+      },
+      "tcg_groups": [
+        {
+          "group_id": 1389,
+          "name": "Neo Revelation",
+          "abbreviation": "N3",
+          "published_on": "2001-09-21"
+        },
+        {
+          "group_id": 1444,
+          "name": "Neo Destiny",
+          "abbreviation": "N4",
+          "published_on": "2002-02-28"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 89162,
+          "group_id": 1444,
+          "name": "Shining Celebi",
+          "card_number": "106/105"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "89162": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "89162",
+            "name": "Shining Celebi",
+            "cardNumber": "106/105",
+            "setName": "Neo Destiny",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/89162",
+            "prices": {
+              "market": 400
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 803
+                  }
+                },
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 815
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 3225
+                  }
+                },
+                "psa7": {
+                  "smartMarketPrice": {
+                    "price": 465
+                  }
+                },
+                "cgc5": {
+                  "smartMarketPrice": {
+                    "price": 350
+                  }
+                },
+                "bgs9": {
+                  "smartMarketPrice": {
+                    "price": 722.5
+                  }
+                },
+                "psa5": {
+                  "smartMarketPrice": {
+                    "price": 352.5
+                  }
+                },
+                "psa1": {
+                  "smartMarketPrice": {
+                    "price": 286.25
+                  }
+                },
+                "psa3": {
+                  "smartMarketPrice": {
+                    "price": 259.5
+                  }
+                },
+                "cgc8": {
+                  "smartMarketPrice": {
+                    "price": 445.2
+                  }
+                },
+                "bgs8": {
+                  "smartMarketPrice": {
+                    "price": 552
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 728.75
+                  }
+                },
+                "bgs10": {
+                  "smartMarketPrice": {
+                    "price": 2393
+                  }
+                },
+                "tag10": {
+                  "smartMarketPrice": {
+                    "price": 4744
+                  }
+                },
+                "psa6": {
+                  "smartMarketPrice": {
+                    "price": 214.62
+                  }
+                },
+                "psa2": {
+                  "smartMarketPrice": {
+                    "price": 198.5
+                  }
+                },
+                "cgc7": {
+                  "smartMarketPrice": {
+                    "price": 247.77
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 306.5
+                  }
+                },
+                "bgs6": {
+                  "smartMarketPrice": {
+                    "price": 382.5
+                  }
+                },
+                "cgc6": {
+                  "smartMarketPrice": {
+                    "price": 337.5
+                  }
+                },
+                "psa4": {
+                  "smartMarketPrice": {
+                    "price": 283.75
+                  }
+                },
+                "ace8": {
+                  "smartMarketPrice": {
+                    "price": 530.36
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 485
+                  }
+                },
+                "cgc4": {
+                  "smartMarketPrice": {
+                    "price": 285
+                  }
+                },
+                "sgc5": {
+                  "smartMarketPrice": {
+                    "price": 257
+                  }
+                },
+                "bgs7": {
+                  "smartMarketPrice": {
+                    "price": 415
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "89162",
+        "resolved_language": "english"
+      }
+    },
+    {
+      "identity": {
+        "id": "9b24ad3b-c568-4c2d-9943-a9aeaa7e58f4",
+        "card_name": "Charizard V (Brilliant Stars Trainer Gallery)",
+        "card_number": "TG03/TG30",
+        "set_name": "Brilliant Stars",
+        "year": 2022,
+        "ppt_tcgplayer_id": "264212"
+      },
+      "tcg_groups": [
+        {
+          "group_id": 2948,
+          "name": "SWSH09: Brilliant Stars",
+          "abbreviation": "SWSH09",
+          "published_on": "2022-02-25"
+        },
+        {
+          "group_id": 3020,
+          "name": "SWSH09: Brilliant Stars Trainer Gallery",
+          "abbreviation": "SWSH09:TG",
+          "published_on": "2022-02-25"
+        }
+      ],
+      "tcg_products": [
+        {
+          "product_id": 264212,
+          "group_id": 3020,
+          "name": "Octillery",
+          "card_number": "TG03/TG30"
+        }
+      ],
+      "ppt_response_for_tcgplayer_id": {
+        "264212": {
+          "language": "english",
+          "card": {
+            "tcgPlayerId": "264212",
+            "name": "Octillery",
+            "cardNumber": "TG03/TG30",
+            "setName": "SWSH09: Brilliant Stars Trainer Gallery",
+            "tcgPlayerUrl": "https://www.tcgplayer.com/product/264212",
+            "prices": {
+              "market": 2.4
+            },
+            "ebay": {
+              "salesByGrade": {
+                "psa8": {
+                  "smartMarketPrice": {
+                    "price": 12
+                  }
+                },
+                "psa10": {
+                  "smartMarketPrice": {
+                    "price": 82
+                  }
+                },
+                "psa9": {
+                  "smartMarketPrice": {
+                    "price": 17.38
+                  }
+                },
+                "cgc10": {
+                  "smartMarketPrice": {
+                    "price": 13.99
+                  }
+                },
+                "cgc9": {
+                  "smartMarketPrice": {
+                    "price": 17
+                  }
+                },
+                "ungraded": {
+                  "smartMarketPrice": {
+                    "price": 37
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "tier_matched": "A",
+        "ppt_tcgplayer_id": "264212",
+        "resolved_language": "english"
+      }
+    }
+  ]
+}
