@@ -23,6 +23,19 @@ struct NewLotSheet: View {
                             .foregroundStyle(AppColor.text)
                             .tint(AppColor.gold)
                             .accessibilityIdentifier("new-lot-name-field")
+                        if !name.isEmpty {
+                            Button {
+                                name = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(AppColor.dim)
+                                    .frame(width: 18, height: 18)
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel("Clear lot name")
+                            .accessibilityIdentifier("new-lot-clear-button")
+                        }
                     }
                     .padding(.horizontal, Spacing.l)
                     .padding(.vertical, Spacing.md)

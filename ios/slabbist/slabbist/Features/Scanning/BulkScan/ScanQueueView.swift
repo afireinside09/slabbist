@@ -3,11 +3,11 @@ import SwiftUI
 struct ScanQueueView: View {
     let scans: [Scan]
 
-    /// Max height for the queue panel. Sized to ~3 rows so the panel never
-    /// grows tall enough to cover the centered `CapturedReviewCard` modal
-    /// during a bulk-scan session — older entries stay reachable through
-    /// the inner ScrollView without pushing the live UI off screen.
-    private static let maxPanelHeight: CGFloat = 192
+    /// Max height for the queue panel. Sized to ~2 compact rows so the
+    /// camera area keeps the majority of the screen — older entries stay
+    /// reachable through the inner ScrollView without pushing the live UI
+    /// off screen.
+    private static let maxPanelHeight: CGFloat = 116
 
     var body: some View {
         if scans.isEmpty {
@@ -47,17 +47,16 @@ struct ScanQueueView: View {
             Circle()
                 .fill(statusColor(for: scan))
                 .frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("\(scan.grader.rawValue) · \(scan.certNumber)")
-                    .slabRowTitle()
-                Text(scan.status.rawValue.replacingOccurrences(of: "_", with: " "))
-                    .font(SlabFont.mono(size: 11))
-                    .foregroundStyle(AppColor.dim)
-            }
-            Spacer()
+            Text("\(scan.grader.rawValue) · \(scan.certNumber)")
+                .slabRowTitle()
+            Spacer(minLength: Spacing.s)
+            Text(scan.status.rawValue.replacingOccurrences(of: "_", with: " "))
+                .font(SlabFont.mono(size: 11))
+                .foregroundStyle(AppColor.dim)
+                .lineLimit(1)
         }
         .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.m)
+        .padding(.vertical, Spacing.s)
     }
 
     private func statusColor(for scan: Scan) -> Color {

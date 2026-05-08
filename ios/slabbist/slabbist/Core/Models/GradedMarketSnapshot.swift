@@ -9,7 +9,15 @@ final class GradedMarketSnapshot {
 
     /// "pokemonpricetracker" | "poketrace". Two snapshots can coexist for the
     /// same (identity, service, grade) — one per source.
-    var source: String
+    ///
+    /// The default literal matters: SwiftData's lightweight migration uses it
+    /// to backfill existing rows from the pre-poketrace schema (which had no
+    /// `source` column). Without the default, migration fails with
+    /// NSCocoaErrorDomain 134110 ("missing attribute values on mandatory
+    /// destination attribute") and the catch-init-failure path in
+    /// ModelContainer.swift has to nuke the store. Existing rows pre-date
+    /// the poketrace integration so PPT is the correct backfill.
+    var source: String = "pokemonpricetracker"
 
     var headlinePriceCents: Int64?
 

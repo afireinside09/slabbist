@@ -168,12 +168,12 @@ struct BulkScanView: View {
                     simulatorScanButton
                     #endif
                     if let viewModel = controller.viewModel {
-                        VStack(alignment: .leading, spacing: Spacing.m) {
+                        VStack(alignment: .leading, spacing: Spacing.s) {
                             summaryHeader(for: viewModel)
                             ScanQueueView(scans: viewModel.recentScans)
                         }
                         .padding(.horizontal, Spacing.xxl)
-                        .padding(.vertical, Spacing.l)
+                        .padding(.vertical, Spacing.m)
                         .background(AppColor.ink.opacity(0.92))
                     }
                 }
