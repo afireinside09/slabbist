@@ -83,10 +83,16 @@ struct SlabbistApp: App {
                     if newStatus == .online { kicker.kick() }
                 }
                 .onChange(of: session.userId) { _, newId in
-                    // Sign-in (or session restored from keychain) → kick.
-                    // Sign-out (newId == nil) is handled by SessionStore;
-                    // the drainer's pause flag (Task 10) clears separately.
-                    if newId != nil { kicker.kick() }
+                    // Sign-in (or session restored from keychain) → unpause
+                    // then kick so that a 401-paused queue self-heals as soon
+                    // as supabase-swift auto-refreshes the token or the user
+                    // signs in manually.
+                    guard newId != nil else { return }
+                    let drainer = self.drainer
+                    Task.detached(priority: .utility) {
+                        await drainer.unpause()
+                        await drainer.kick()
+                    }
                 }
                 .preferredColorScheme(.dark)
         }
