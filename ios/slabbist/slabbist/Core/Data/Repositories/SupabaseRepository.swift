@@ -212,6 +212,18 @@ nonisolated struct SupabaseRepository<Row: Codable & Sendable>: Sendable {
         }
     }
 
+    /// Partial update — sends only the fields you specify. Required by
+    /// the outbox drainer for `updateScan` / `updateScanOffer` / `updateLot`
+    /// kinds whose payloads are intentionally partial (only changed columns).
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        try await execute {
+            _ = try await client.from(tableName)
+                .update(fields, returning: .minimal)
+                .eq("id", value: id.uuidString)
+                .execute()
+        }
+    }
+
     func delete(id: UUID) async throws {
         try await execute {
             _ = try await client.from(tableName)

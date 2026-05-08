@@ -48,6 +48,7 @@ nonisolated protocol LotRepository: Sendable {
     @discardableResult func insertAndReturn(_ lot: LotDTO) async throws -> LotDTO
     func upsert(_ lot: LotDTO) async throws
     func upsertMany(_ lots: [LotDTO]) async throws
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws
     func delete(id: UUID) async throws
 }
 
@@ -73,6 +74,7 @@ nonisolated protocol ScanRepository: Sendable {
     @discardableResult func insertAndReturn(_ scan: ScanDTO) async throws -> ScanDTO
     func upsert(_ scan: ScanDTO) async throws
     func upsertMany(_ scans: [ScanDTO]) async throws
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws
     func delete(id: UUID) async throws
 }
 

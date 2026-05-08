@@ -109,6 +109,10 @@ nonisolated struct SupabaseLotRepository: LotRepository, Sendable {
         try await base.upsertMany(lots)
     }
 
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        try await base.patch(id: id, fields: fields)
+    }
+
     func delete(id: UUID) async throws {
         try await base.delete(id: id)
     }

@@ -103,6 +103,10 @@ nonisolated struct SupabaseScanRepository: ScanRepository, Sendable {
         try await base.upsertMany(scans)
     }
 
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        try await base.patch(id: id, fields: fields)
+    }
+
     func delete(id: UUID) async throws {
         try await base.delete(id: id)
     }
