@@ -75,7 +75,7 @@ git checkout -b feat/outbox-worker
 ```bash
 xcodebuild -project ios/slabbist/slabbist.xcodeproj \
   -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   build 2>&1 | tail -20
 ```
 
@@ -119,7 +119,7 @@ func updateLotPayloadEncoding() throws {
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxItem/updateLotPayloadEncoding' 2>&1 | tail -20
 ```
 
@@ -223,7 +223,7 @@ NB: `PostgrestError` is `public` from supabase-swift; if its memberwise init isn
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/SupabaseError' 2>&1 | tail -20
 ```
 
@@ -266,7 +266,7 @@ Same xcodebuild command as Step 3. Expected: PASS for both new tests.
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' 2>&1 | tail -10
+  -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -10
 ```
 
 Expected: all tests pass.
@@ -360,7 +360,7 @@ In `ScanRepository.swift`, mirror the same:
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild build -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' 2>&1 | tail -10
+  -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -10
 ```
 
 Expected: `** BUILD SUCCEEDED **`. (No unit test for `patch` here — it's a one-line passthrough; integration test in Task 13 covers the wire shape.)
@@ -441,7 +441,7 @@ struct OutboxStatusTests {
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxStatus' 2>&1 | tail -20
 ```
 
@@ -557,7 +557,7 @@ private actor Counter {
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxKicker' 2>&1 | tail -20
 ```
 
@@ -699,7 +699,7 @@ struct OutboxErrorClassifierTests {
 
 ```bash
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxErrorClassifier' 2>&1 | tail -20
 ```
 
@@ -983,7 +983,7 @@ final class TestClock: @unchecked Sendable {
 
 ```bash
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxDrainer/happyPathInsertScan' 2>&1 | tail -30
 ```
 
@@ -1211,7 +1211,7 @@ struct SystemClock: OutboxClock {
 
 ```bash
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxDrainer/happyPathInsertScan' 2>&1 | tail -20
 ```
 
@@ -1737,7 +1737,7 @@ NB: don't touch `RootView` yet — Task 12 places the pill.
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild build -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' 2>&1 | tail -10
+  -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -10
 ```
 
 Expected: `** BUILD SUCCEEDED **`. If `OutboxKicker` capture / `_status.wrappedValue` complains, fall back to constructing inside the body via `.task { ... }` — the production behavior is the same.
@@ -1746,7 +1746,7 @@ Expected: `** BUILD SUCCEEDED **`. If `OutboxKicker` capture / `_status.wrappedV
 
 ```bash
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' 2>&1 | tail -10
+  -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -10
 ```
 
 Expected: all green.
@@ -2098,7 +2098,7 @@ The integration test needs a real signed-in Supabase session. The simplest path 
 SLABBIST_INTEGRATION_TESTS=1 \
 SLABBIST_DEV_SERVICE_ROLE_KEY=… \
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing 'slabbistTests/OutboxDrainer integration' 2>&1 | tail -20
 ```
 
@@ -2168,7 +2168,7 @@ EOF
 ```bash
 cd /Users/dixoncider/slabbist/ios/slabbist
 xcodebuild test -project slabbist.xcodeproj -scheme slabbist \
-  -destination 'platform=iOS Simulator,name=iPhone 16' 2>&1 | tail -20
+  -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -20
 ```
 
 Expected: all green.
