@@ -4,27 +4,30 @@ struct RootTabView: View {
     @Environment(SessionStore.self) private var session
 
     var body: some View {
-        TabView {
-            Tab("Lots", systemImage: "square.stack.3d.up") {
-                LotsListView()
+        VStack(spacing: 0) {
+            SyncStatusPill()
+            TabView {
+                Tab("Lots", systemImage: "square.stack.3d.up") {
+                    LotsListView()
+                }
+                Tab("Scan", systemImage: "viewfinder") {
+                    ScanShortcutView()
+                }
+                Tab("Pre-grade", systemImage: "checkmark.seal") {
+                    gradeTab
+                }
+                Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
+                    MoversListView()
+                }
+                Tab("More", systemImage: "ellipsis.circle") {
+                    SettingsView()
+                }
             }
-            Tab("Scan", systemImage: "viewfinder") {
-                ScanShortcutView()
-            }
-            Tab("Pre-grade", systemImage: "checkmark.seal") {
-                gradeTab
-            }
-            Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
-                MoversListView()
-            }
-            Tab("More", systemImage: "ellipsis.circle") {
-                SettingsView()
-            }
+            .tint(AppColor.gold)
+            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .toolbarColorScheme(.dark, for: .tabBar)
         }
-        .tint(AppColor.gold)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarColorScheme(.dark, for: .tabBar)
     }
 
     /// Force-unwrap is safe: `RootTabView` only renders when the parent
