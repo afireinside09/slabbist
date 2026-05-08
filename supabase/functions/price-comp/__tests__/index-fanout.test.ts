@@ -182,10 +182,14 @@ function makeRequest() {
 
 // Temporarily replaces globalThis.fetch for the duration of fn().
 // Both PPT and Poketrace clients ultimately call global fetch.
-function withStubFetch<T>(stub: typeof fetch, fn: () => Promise<T>): Promise<T> {
+async function withStubFetch<T>(stub: typeof fetch, fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch;
   globalThis.fetch = stub;
-  return fn().finally(() => { globalThis.fetch = original; });
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
