@@ -218,7 +218,7 @@ async function probeIdentity(
 
 async function main() {
   // Read token — never echo
-  let pptToken: string;
+  let pptToken = "";
   try {
     pptToken = (await Deno.readTextFile(TOKEN_PATH)).trim();
   } catch {
@@ -243,9 +243,7 @@ async function main() {
     const identity = identities[i];
     const label = `${identity.set_name} / ${identity.card_name}`;
     const progress = `(${i + 1}/${identities.length})`;
-    process.stdout?.write?.(`Probing ${progress} ${label} ...`);
-    // Deno-compatible progress output
-    Deno.stdout.write(
+    Deno.stdout.writeSync(
       new TextEncoder().encode(`\rProbing ${progress} ${label} ...          `)
     );
 

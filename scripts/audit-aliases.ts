@@ -141,7 +141,7 @@ function tokenOverlap(a: string, b: string): number {
 
 async function main() {
   // 1. Load alias CSV
-  let csvText: string;
+  let csvText = "";
   try {
     csvText = await Deno.readTextFile(ALIAS_CSV_PATH);
   } catch {

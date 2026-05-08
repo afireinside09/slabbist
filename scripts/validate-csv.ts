@@ -129,7 +129,7 @@ function isEmptyOrNumber(s: string): boolean {
 async function main() {
   console.log(`Validating ${CSV_PATH} ...`);
 
-  let text: string;
+  let text = "";
   try {
     text = await Deno.readTextFile(CSV_PATH);
   } catch {
