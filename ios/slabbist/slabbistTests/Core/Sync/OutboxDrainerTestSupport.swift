@@ -222,6 +222,18 @@ final class Harness {
         )
     }
 
+    func enqueueCorruptItem(kind: OutboxKind, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let payload = Data("not json".utf8)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: kind,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
     func outboxCount() async -> Int {
         await drainer._testOutboxCount()
     }

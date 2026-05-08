@@ -202,9 +202,20 @@ actor OutboxDrainer: ModelActor {
     }
 
     private func handle(error: Error, item: OutboxItem) {
+        let kindStr = String(describing: item.kind)
+
+        // Bridge errors (decode failures, UUID parsing) are always permanent —
+        // retrying won't fix corrupt local payload. Route them directly.
+        if let bridgeError = error as? OutboxBridgeError {
+            item.status = .failed
+            item.lastError = String(describing: bridgeError).prefix(1024).description
+            item.attempts += 1
+            Self.log.error("permanent failure (bridge) on \(kindStr, privacy: .public): \(String(describing: bridgeError), privacy: .public)")
+            return
+        }
+
         let mapped = SupabaseError.map(error)
         let disposition = OutboxErrorClassifier.classify(mapped, for: item.kind)
-        let kindStr = String(describing: item.kind)
         let errStr = String(describing: mapped).prefix(1024).description
 
         switch disposition {
@@ -242,18 +253,29 @@ actor OutboxDrainer: ModelActor {
         }
     }
 
+    /// Decode `data` as `T`, rethrowing any `DecodingError` as
+    /// `OutboxBridgeError.malformedPayload` so the error classifier
+    /// routes it directly to `.failed` instead of the transient-retry path.
+    private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw OutboxBridgeError.malformedPayload(reason: "decode \(type) failed: \(error)")
+        }
+    }
+
     private func dispatch(kind: OutboxKind, payload: Data) async throws {
         switch kind {
         case .insertScan:
-            let p = try JSONDecoder().decode(OutboxPayloads.InsertScan.self, from: payload)
+            let p = try decode(OutboxPayloads.InsertScan.self, payload)
             try await repositories.scans.insert(try ScanDTO(from: p))
 
         case .insertLot:
-            let p = try JSONDecoder().decode(OutboxPayloads.InsertLot.self, from: payload)
+            let p = try decode(OutboxPayloads.InsertLot.self, payload)
             try await repositories.lots.insert(try LotDTO(from: p))
 
         case .updateLot:
-            let p = try JSONDecoder().decode(OutboxPayloads.UpdateLot.self, from: payload)
+            let p = try decode(OutboxPayloads.UpdateLot.self, payload)
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateLot: invalid UUID")
             }
@@ -264,14 +286,14 @@ actor OutboxDrainer: ModelActor {
             try await repositories.lots.patch(id: id, fields: fields)
 
         case .deleteLot:
-            let p = try JSONDecoder().decode(OutboxPayloads.DeleteLot.self, from: payload)
+            let p = try decode(OutboxPayloads.DeleteLot.self, payload)
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "DeleteLot: invalid UUID")
             }
             try await repositories.lots.delete(id: id)
 
         case .updateScan:
-            let p = try JSONDecoder().decode(OutboxPayloads.UpdateScan.self, from: payload)
+            let p = try decode(OutboxPayloads.UpdateScan.self, payload)
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateScan: invalid UUID")
             }
@@ -284,7 +306,7 @@ actor OutboxDrainer: ModelActor {
             try await repositories.scans.patch(id: id, fields: fields)
 
         case .updateScanOffer:
-            let p = try JSONDecoder().decode(OutboxPayloads.UpdateScanOffer.self, from: payload)
+            let p = try decode(OutboxPayloads.UpdateScanOffer.self, payload)
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: invalid UUID")
             }
@@ -300,7 +322,7 @@ actor OutboxDrainer: ModelActor {
             try await repositories.scans.patch(id: id, fields: fields)
 
         case .deleteScan:
-            let p = try JSONDecoder().decode(OutboxPayloads.DeleteScan.self, from: payload)
+            let p = try decode(OutboxPayloads.DeleteScan.self, payload)
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "DeleteScan: invalid UUID")
             }

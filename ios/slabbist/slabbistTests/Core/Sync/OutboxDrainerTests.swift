@@ -271,4 +271,28 @@ struct OutboxDrainerTests {
         let count = await h.outboxCount()
         #expect(count == 0)
     }
+
+    // MARK: - 7.5 decode-failure resilience
+
+    @Test("corrupt payload marks item .failed without crashing the loop")
+    @MainActor
+    func decodeFailureMarksFailed() async throws {
+        let h = Harness()
+        // Insert one valid + one corrupt; the valid one should still drain.
+        let valid = UUID()
+        try await h.enqueueInsertScan(id: valid)
+        try await h.enqueueCorruptItem(kind: .insertScan)
+
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // The valid item drained successfully.
+        #expect(h.fakeScans.insertedIds == [valid])
+
+        // The corrupt one is still in the outbox, marked .failed.
+        let count = await h.outboxCount()
+        #expect(count == 1)
+        let item = try await h.firstOutboxItem()
+        #expect(item.status == .failed)
+    }
 }
