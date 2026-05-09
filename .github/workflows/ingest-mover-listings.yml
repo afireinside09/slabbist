@@ -15,7 +15,6 @@ jobs:
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
       EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
-      EBAY_OAUTH_TOKEN: ${{ secrets.EBAY_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
