@@ -71,9 +71,23 @@ export interface PoketraceTierFields {
   sale_count:       number | null;
 }
 
+/**
+ * Per-tier ladder map for the iOS comp-card. Keys are the same
+ * snake_case ids the PPT branch uses for its column names
+ * ("loose", "psa_7", "psa_8", "psa_9", "psa_9_5", "psa_10", "bgs_10",
+ * "cgc_10", "sgc_10"); values are integer cents.
+ *
+ * Populated when the Poketrace card-detail response contains a matching
+ * tier under any of its top-level price source keys (typically `ebay`
+ * for US graded data). Tiers that aren't present are simply absent from
+ * the map — iOS treats absence as "no data" for that cell.
+ */
+export type PoketraceLadderCents = Record<string, number>;
+
 export interface PoketraceBlock extends PoketraceTierFields {
   card_id: string;
   tier:    string;                 // e.g. "PSA_10"
+  tier_prices_cents: PoketraceLadderCents;
   price_history: PriceHistoryWirePoint[];
   fetched_at: string;
 }

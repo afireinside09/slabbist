@@ -153,6 +153,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
         trend:            cachedPt.poketrace.trend,
         confidence:       cachedPt.poketrace.confidence,
         sale_count:       cachedPt.poketrace.saleCount,
+        tier_prices_cents: cachedPt.poketrace.tierPricesCents,
         price_history:    cachedPt.priceHistory,
         fetched_at:       cachedPt.updatedAt ?? new Date().toISOString(),
       };
@@ -203,6 +204,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
                 trend:          poketraceBlock.trend,
                 confidence:     poketraceBlock.confidence,
                 saleCount:      poketraceBlock.sale_count,
+                tierPricesCents: poketraceBlock.tier_prices_cents,
               },
             });
           } catch (e) {
@@ -411,6 +413,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
           trend:          poketraceBlock.trend,
           confidence:     poketraceBlock.confidence,
           saleCount:      poketraceBlock.sale_count,
+          tierPricesCents: poketraceBlock.tier_prices_cents,
         },
       });
     } catch (e) {
@@ -489,6 +492,7 @@ async function fetchPoketraceBranch(
     card_id: cardId,
     tier: tierKey,
     ...prices.fields,
+    tier_prices_cents: prices.ladderCents,
     price_history: history,
     fetched_at: new Date().toISOString(),
   };

@@ -2,6 +2,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   extractTierPrice,
+  extractPoketraceLadder,
   tierPriceToBlock,
   parseHistoryResponse,
   type RawTierPrice,
@@ -91,4 +92,41 @@ Deno.test("parseHistoryResponse: missing or non-array data → []", () => {
   assertEquals(parseHistoryResponse({} as Record<string, unknown>), []);
   assertEquals(parseHistoryResponse({ data: null }), []);
   assertEquals(parseHistoryResponse({ data: "nope" } as Record<string, unknown>), []);
+});
+
+Deno.test("extractPoketraceLadder: maps Poketrace tier keys → iOS ladder ids in cents", () => {
+  const card = {
+    data: {
+      id: "uuid-1",
+      prices: {
+        ebay: {
+          NEAR_MINT: { avg: 282.78 },
+          PSA_7:     { avg: 89.99 },
+          PSA_8:     { avg: 165.00 },
+          PSA_9:     { avg: 300.00 },
+          PSA_9_5:   { avg: 600.50 },
+          PSA_10:    { avg: 1236.00 },
+          BGS_10:    { avg: 1750.00 },
+          CGC_10:    { avg: 554.99 },
+          // SGC_10 deliberately missing → absent from output
+        },
+      },
+    },
+  };
+  const ladder = extractPoketraceLadder(card);
+  assertEquals(ladder, {
+    loose:   28278,
+    psa_7:   8999,
+    psa_8:   16500,
+    psa_9:   30000,
+    psa_9_5: 60050,
+    psa_10:  123600,
+    bgs_10:  175000,
+    cgc_10:  55499,
+  });
+});
+
+Deno.test("extractPoketraceLadder: empty input → {}", () => {
+  assertEquals(extractPoketraceLadder({}), {});
+  assertEquals(extractPoketraceLadder({ data: { id: "x" } }), {});
 });

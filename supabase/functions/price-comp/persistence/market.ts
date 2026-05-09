@@ -29,6 +29,10 @@ export interface MarketUpsertInput {
     trend:           "up" | "down" | "stable" | null;
     confidence:      "high" | "medium" | "low" | null;
     saleCount:       number | null;
+    /// iOS comp-card ladder for the source toggle, keyed by snake_case
+    /// tier ids ("loose"/"psa_7".."sgc_10"), values in integer cents.
+    /// Empty `{}` is allowed (= card has no graded tiers in the ladder).
+    tierPricesCents: Record<string, number>;
   };
 }
 
@@ -80,6 +84,7 @@ export async function upsertMarketLadder(
       pt_trend:      input.poketrace.trend,
       pt_confidence: input.poketrace.confidence,
       pt_sale_count: input.poketrace.saleCount,
+      pt_tier_prices_cents: input.poketrace.tierPricesCents,
     });
   }
 
@@ -110,6 +115,8 @@ export interface MarketReadResult {
     trend:           "up" | "down" | "stable" | null;
     confidence:      "high" | "medium" | "low" | null;
     saleCount:       number | null;
+    /// iOS comp-card ladder for the source toggle.
+    tierPricesCents: Record<string, number>;
   } | null;
 }
 
@@ -136,7 +143,7 @@ export async function readMarketLadder(
       "price_history, ppt_tcgplayer_id, ppt_url, updated_at, " +
       "pt_avg, pt_low, pt_high, pt_avg_1d, pt_avg_7d, pt_avg_30d, " +
       "pt_median_3d, pt_median_7d, pt_median_30d, " +
-      "pt_trend, pt_confidence, pt_sale_count",
+      "pt_trend, pt_confidence, pt_sale_count, pt_tier_prices_cents",
     )
     .eq("identity_id", identityId)
     .eq("grading_service", gradingService)
@@ -180,7 +187,24 @@ export async function readMarketLadder(
           trend:          (data.pt_trend ?? null) as ("up" | "down" | "stable" | null),
           confidence:     (data.pt_confidence ?? null) as ("high" | "medium" | "low" | null),
           saleCount:      typeof data.pt_sale_count === "number" ? data.pt_sale_count : null,
+          tierPricesCents: parseTierPricesCents(data.pt_tier_prices_cents),
         }
       : null,
   };
+}
+
+/**
+ * Defensive decoder for the JSONB `pt_tier_prices_cents` column. Throws
+ * away keys whose values aren't finite integers; returns `{}` when the
+ * column is null or malformed.
+ */
+function parseTierPricesCents(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[k] = Math.round(v);
+    }
+  }
+  return out;
 }

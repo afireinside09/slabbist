@@ -50,6 +50,14 @@ final class GradedMarketSnapshot {
     var ptSaleCount: Int?
     var poketraceCardId: String?
 
+    /// JSON-encoded `[String: Int64]` map of Poketrace's per-tier
+    /// average prices in cents, keyed by snake_case tier ids
+    /// ("loose"/"psa_7".."sgc_10") so the iOS source toggle can flip the
+    /// ladder. Same string-encoded-blob convention as `priceHistoryJSON`
+    /// — SwiftData lightweight migration handles a String? field cleanly,
+    /// whereas a Codable dictionary property risks migration failures.
+    var ptTierPricesJSON: String?
+
     /// JSON-encoded `[PriceHistoryPoint]`. Decoded on demand for the
     /// sparkline view; SwiftData prefers a single primitive blob over
     /// a Codable property of a value-array type, which can fail lightweight
@@ -90,6 +98,7 @@ final class GradedMarketSnapshot {
         ptConfidence: String? = nil,
         ptSaleCount: Int? = nil,
         poketraceCardId: String? = nil,
+        ptTierPricesJSON: String? = nil,
         priceHistoryJSON: String?,
         fetchedAt: Date,
         cacheHit: Bool,
@@ -124,6 +133,7 @@ final class GradedMarketSnapshot {
         self.ptConfidence = ptConfidence
         self.ptSaleCount = ptSaleCount
         self.poketraceCardId = poketraceCardId
+        self.ptTierPricesJSON = ptTierPricesJSON
         self.priceHistoryJSON = priceHistoryJSON
         self.fetchedAt = fetchedAt
         self.cacheHit = cacheHit
@@ -137,6 +147,15 @@ final class GradedMarketSnapshot {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([PriceHistoryPoint].self, from: data)) ?? []
+    }
+
+    /// Decoded view of `ptTierPricesJSON`. Keys are snake_case ladder ids
+    /// ("loose"/"psa_7".."sgc_10"); values are integer cents. Empty
+    /// dictionary when missing or malformed — `CompCardView` treats
+    /// missing keys as "no data" for that ladder cell.
+    var ptTierPricesCents: [String: Int64] {
+        guard let json = ptTierPricesJSON, let data = json.data(using: .utf8) else { return [:] }
+        return (try? JSONDecoder().decode([String: Int64].self, from: data)) ?? [:]
     }
 }
 

@@ -258,6 +258,7 @@ final class CompFetchService {
 
         if let pt = decoded.poketrace {
             let ptHistoryJSON = encodePriceHistory(pt.priceHistory)
+            let ptTierPricesJSON = encodeTierPrices(pt.tierPricesCents)
             let snapshot = GradedMarketSnapshot(
                 identityId: identityId,
                 gradingService: service,
@@ -277,6 +278,7 @@ final class CompFetchService {
                 ptConfidence: pt.confidence,
                 ptSaleCount: pt.saleCount,
                 poketraceCardId: pt.cardId,
+                ptTierPricesJSON: ptTierPricesJSON,
                 priceHistoryJSON: ptHistoryJSON,
                 fetchedAt: pt.fetchedAt,
                 cacheHit: decoded.cacheHit,
@@ -303,6 +305,15 @@ final class CompFetchService {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(points) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Encodes Poketrace's per-tier ladder map as the JSON blob persisted
+    /// on `GradedMarketSnapshot.ptTierPricesJSON`. Returns `nil` for an
+    /// empty dictionary so consumers can short-circuit on JSON == nil.
+    private static func encodeTierPrices(_ prices: [String: Int64]) -> String? {
+        guard !prices.isEmpty else { return nil }
+        guard let data = try? JSONEncoder().encode(prices) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 

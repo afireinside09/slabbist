@@ -31,9 +31,15 @@ struct CompCardView: View {
                 sourcesRow
                     .padding(.horizontal, Spacing.l)
                     .padding(.vertical, Spacing.md)
-                if hasAnySparklineHistory {
+                if showsSourceToggle {
                     SlabCardDivider()
-                    sparklineSection
+                    sourceTogglePicker
+                        .padding(.horizontal, Spacing.l)
+                        .padding(.vertical, Spacing.md)
+                }
+                if !activeSparklinePoints.isEmpty {
+                    SlabCardDivider()
+                    CompSparklineView(points: activeSparklinePoints)
                         .padding(.horizontal, Spacing.l)
                         .padding(.vertical, Spacing.md)
                 }
@@ -55,6 +61,9 @@ struct CompCardView: View {
                     .padding(.vertical, Spacing.md)
             }
         }
+        .onAppear { reconcileActiveSource() }
+        .onChange(of: pptSnapshot == nil) { _, _ in reconcileActiveSource() }
+        .onChange(of: poketraceSnapshot == nil) { _, _ in reconcileActiveSource() }
     }
 
     // MARK: - Hero (reconciled)
@@ -167,7 +176,7 @@ struct CompCardView: View {
         }
     }
 
-    // MARK: - Sparkline + source toggle
+    // MARK: - Source toggle + sparkline
 
     private var pptHistoryPoints: [PriceHistoryPoint] {
         (pptSnapshot?.priceHistory ?? []).sorted { $0.ts < $1.ts }
@@ -177,10 +186,6 @@ struct CompCardView: View {
         (poketraceSnapshot?.priceHistory ?? []).sorted { $0.ts < $1.ts }
     }
 
-    private var hasAnySparklineHistory: Bool {
-        !pptHistoryPoints.isEmpty || !poketraceHistoryPoints.isEmpty
-    }
-
     private var activeSparklinePoints: [PriceHistoryPoint] {
         switch sparklineSource {
         case .ppt:       return pptHistoryPoints
@@ -188,35 +193,34 @@ struct CompCardView: View {
         }
     }
 
-    @ViewBuilder
-    private var sparklineSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
-            // Show the toggle only when both providers have history; if
-            // only one has data, just render the chart.
-            if !pptHistoryPoints.isEmpty && !poketraceHistoryPoints.isEmpty {
-                Picker("History source", selection: $sparklineSource) {
-                    Text("PPT").tag(SparklineSource.ppt)
-                    Text("Poketrace").tag(SparklineSource.poketrace)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Sparkline source")
-            }
-            if !activeSparklinePoints.isEmpty {
-                CompSparklineView(points: activeSparklinePoints)
-            }
-        }
-        .onAppear { reconcileSparklineSource() }
-        .onChange(of: pptHistoryPoints.isEmpty) { _, _ in reconcileSparklineSource() }
-        .onChange(of: poketraceHistoryPoints.isEmpty) { _, _ in reconcileSparklineSource() }
+    /// Show the toggle only when both providers have something the user
+    /// could actually be flipping between — either ladder data or
+    /// sparkline history. With one source missing, the cells already
+    /// degrade to "—" and a toggle would be misleading.
+    private var showsSourceToggle: Bool {
+        let pptHas = pptSnapshot != nil && (!pptHistoryPoints.isEmpty || !pptLadderTiers.isEmpty)
+        let ptHas  = poketraceSnapshot != nil && (!poketraceHistoryPoints.isEmpty || !poketraceLadderTiers.isEmpty)
+        return pptHas && ptHas
     }
 
-    /// If the currently-selected source has no points but the other
-    /// does, swap to the populated one so the user never sees an empty
-    /// chart inside an open card.
-    private func reconcileSparklineSource() {
-        if sparklineSource == .ppt, pptHistoryPoints.isEmpty, !poketraceHistoryPoints.isEmpty {
+    private var sourceTogglePicker: some View {
+        Picker("Comp source", selection: $sparklineSource) {
+            Text("PPT").tag(SparklineSource.ppt)
+            Text("Poketrace").tag(SparklineSource.poketrace)
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Comp source")
+    }
+
+    /// If the currently-selected source has no ladder AND no history but
+    /// the other does, swap to the populated one so the operator never
+    /// stares at a card full of "—" and an empty chart.
+    private func reconcileActiveSource() {
+        let pptEmpty = pptHistoryPoints.isEmpty && pptLadderTiers.isEmpty
+        let ptEmpty  = poketraceHistoryPoints.isEmpty && poketraceLadderTiers.isEmpty
+        if sparklineSource == .ppt, pptEmpty, !ptEmpty {
             sparklineSource = .poketrace
-        } else if sparklineSource == .poketrace, poketraceHistoryPoints.isEmpty, !pptHistoryPoints.isEmpty {
+        } else if sparklineSource == .poketrace, ptEmpty, !pptEmpty {
             sparklineSource = .ppt
         }
     }
@@ -235,9 +239,9 @@ struct CompCardView: View {
         let isHeadline: Bool
     }
 
-    /// Ordered tiers in the ladder rail. The cell matching the scan's
-    /// (gradingService, grade) gets a gold border.
-    private var ladderTiers: [Tier] {
+    /// Tiers from the PPT snapshot's typed columns. Returns `[]` when
+    /// the PPT snapshot is missing.
+    private var pptLadderTiers: [Tier] {
         guard let snapshot = pptSnapshot else { return [] }
         let entries: [(id: String, label: String, cents: Int64?, headlineKey: (service: String, grade: String)?)] = [
             ("loose",    "Raw",     snapshot.loosePriceCents,     nil),
@@ -256,6 +260,42 @@ struct CompCardView: View {
                 $0.service == snapshot.gradingService && $0.grade == snapshot.grade
             } ?? false
             return Tier(id: e.id, label: e.label, cents: cents, isHeadline: isHeadline)
+        }
+    }
+
+    /// Tiers from the Poketrace snapshot's JSON-encoded ladder map.
+    /// Same ordered cell set as PPT so the toggle just swaps values
+    /// without reflowing the rail.
+    private var poketraceLadderTiers: [Tier] {
+        guard let snapshot = poketraceSnapshot else { return [] }
+        let prices = snapshot.ptTierPricesCents
+        let entries: [(id: String, label: String, headlineKey: (service: String, grade: String)?)] = [
+            ("loose",    "Raw",     nil),
+            ("psa_7",    "PSA 7",   ("PSA", "7")),
+            ("psa_8",    "PSA 8",   ("PSA", "8")),
+            ("psa_9",    "PSA 9",   ("PSA", "9")),
+            ("psa_9_5",  "PSA 9.5", ("PSA", "9.5")),
+            ("psa_10",   "PSA 10",  ("PSA", "10")),
+            ("bgs_10",   "BGS 10",  ("BGS", "10")),
+            ("cgc_10",   "CGC 10",  ("CGC", "10")),
+            ("sgc_10",   "SGC 10",  ("SGC", "10")),
+        ]
+        return entries.compactMap { e in
+            guard let cents = prices[e.id] else { return nil }
+            let isHeadline = e.headlineKey.map {
+                $0.service == snapshot.gradingService && $0.grade == snapshot.grade
+            } ?? false
+            return Tier(id: e.id, label: e.label, cents: cents, isHeadline: isHeadline)
+        }
+    }
+
+    /// Ordered tiers in the ladder rail, sourced from whichever provider
+    /// the toggle currently points at. The cell matching the scan's
+    /// (gradingService, grade) gets a gold border.
+    private var ladderTiers: [Tier] {
+        switch sparklineSource {
+        case .ppt:       return pptLadderTiers
+        case .poketrace: return poketraceLadderTiers
         }
     }
 

@@ -31,6 +31,10 @@ struct CompFetchServicePersistTests {
             trend: "stable",
             confidence: "high",
             saleCount: 24,
+            tierPricesCents: [
+                "loose": 400, "psa_8": 3400, "psa_9": 6800, "psa_9_5": 11200,
+                "psa_10": 19500, "bgs_10": 22000, "cgc_10": 17000,
+            ],
             priceHistory: [
                 PriceHistoryPoint(ts: ISO8601DateFormatter().date(from: "2026-04-30T00:00:00Z")!, priceCents: 19200),
             ],

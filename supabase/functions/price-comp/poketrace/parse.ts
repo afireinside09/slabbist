@@ -57,6 +57,44 @@ export function extractTierPrice(
   return null;
 }
 
+/**
+ * iOS comp-card ladder ids → Poketrace tier keys. Mirrors the PPT ladder
+ * shape (Raw + PSA 7–10 + BGS/CGC/SGC 10) so the source toggle has the
+ * same set of cells regardless of provider. NEAR_MINT stands in for
+ * "Raw" — Poketrace doesn't expose a graded "loose" tier, but ungraded
+ * NEAR_MINT is the closest analogue an operator references for raw.
+ */
+const LADDER_KEY_MAP: Record<string, string> = {
+  loose:   "NEAR_MINT",
+  psa_7:   "PSA_7",
+  psa_8:   "PSA_8",
+  psa_9:   "PSA_9",
+  psa_9_5: "PSA_9_5",
+  psa_10:  "PSA_10",
+  bgs_10:  "BGS_10",
+  cgc_10:  "CGC_10",
+  sgc_10:  "SGC_10",
+};
+
+/**
+ * Walks the Poketrace card-detail response and extracts a price for
+ * every iOS ladder slot we have a Poketrace tier for. Returns an
+ * iOS-friendly map keyed by ladder id with integer-cent values.
+ * Missing tiers are absent from the map (iOS treats absence as "no
+ * data" for that cell).
+ */
+export function extractPoketraceLadder(
+  card: CardDetailEnvelope,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [iosId, ptKey] of Object.entries(LADDER_KEY_MAP)) {
+    const tp = extractTierPrice(card, ptKey);
+    const cents = dollarsToCents(tp?.avg);
+    if (cents !== null) out[iosId] = cents;
+  }
+  return out;
+}
+
 export function tierPriceToBlock(tp: RawTierPrice): PoketraceTierFields {
   const trend: PoketraceTierFields["trend"] =
     typeof tp.trend === "string" && TREND_VALUES.has(tp.trend)

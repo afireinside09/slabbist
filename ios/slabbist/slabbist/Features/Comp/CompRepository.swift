@@ -51,6 +51,10 @@ final class CompRepository {
             let trend: String?
             let confidence: String?
             let sale_count: Int?
+            /// Per-tier ladder for the iOS source toggle. Optional so
+            /// pre-ladder responses still decode; absent keys are
+            /// rendered as "no data" cells.
+            let tier_prices_cents: [String: Int64]?
             let price_history: [PriceHistoryPoint]
             let fetched_at: Date
         }
@@ -98,6 +102,9 @@ final class CompRepository {
             let trend: String?
             let confidence: String?
             let saleCount: Int?
+            /// Per-tier ladder for the source toggle, keyed by snake_case
+            /// ladder ids ("loose"/"psa_7".."sgc_10"); values in cents.
+            let tierPricesCents: [String: Int64]
             let priceHistory: [PriceHistoryPoint]
             let fetchedAt: Date
         }
@@ -126,6 +133,7 @@ final class CompRepository {
                 avg1dCents: pt.avg_1d_cents, avg7dCents: pt.avg_7d_cents, avg30dCents: pt.avg_30d_cents,
                 median3dCents: pt.median_3d_cents, median7dCents: pt.median_7d_cents, median30dCents: pt.median_30d_cents,
                 trend: pt.trend, confidence: pt.confidence, saleCount: pt.sale_count,
+                tierPricesCents: pt.tier_prices_cents ?? [:],
                 priceHistory: pt.price_history, fetchedAt: pt.fetched_at
             )
         }
