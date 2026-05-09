@@ -10,11 +10,13 @@ nonisolated struct StoreDTO: Codable, Sendable, Identifiable, Equatable {
     var name: String
     var ownerUserId: UUID
     var createdAt: Date
+    var defaultMarginPct: Double = 0.6
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
         case ownerUserId = "owner_user_id"
         case createdAt = "created_at"
+        case defaultMarginPct = "default_margin_pct"
     }
 }
