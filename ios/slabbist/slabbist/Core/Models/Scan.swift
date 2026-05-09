@@ -55,6 +55,12 @@ final class Scan {
     /// otherwise). Mirrored locally so list views render without re-decoding
     /// the snapshots.
     var reconciledHeadlinePriceCents: Int64?
+    /// Which provider (or rule) produced `reconciledHeadlinePriceCents`.
+    /// One of: "avg" | "ppt-only" | "poketrace-only" | "poketrace-preferred".
+    /// Drives the caption under the comp-card hero. Optional + no default
+    /// → SwiftData lightweight migration leaves existing rows nil and the
+    /// CompCardView falls back to inferring from snapshot presence.
+    var reconciledSource: String?
     var createdAt: Date
     var updatedAt: Date
 
@@ -91,6 +97,7 @@ final class Scan {
         self.compFetchError = nil
         self.compFetchedAt = nil
         self.reconciledHeadlinePriceCents = nil
+        self.reconciledSource = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

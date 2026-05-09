@@ -201,6 +201,7 @@ final class CompFetchService {
         // (which may not be the same object identity as the fetched row in
         // some test contexts) reflects it too.
         scan.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
+        scan.reconciledSource = decoded.reconciledSource
         try context.save()
     }
 
@@ -284,12 +285,13 @@ final class CompFetchService {
             context.insert(snapshot)
         }
 
-        // Mirror the reconciled headline onto the originating scan. The
-        // `flipMatching` call site below also touches `compFetch*`, but the
-        // hero number lives independently so we update it here next to the
-        // snapshot writes that produced it.
+        // Mirror the reconciled headline + source onto the originating scan.
+        // The `flipMatching` call site below also touches `compFetch*`, but
+        // the hero number and its caption live independently so we update
+        // them here next to the snapshot writes that produced them.
         if let target = fetchScan(scanId, in: context) {
             target.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
+            target.reconciledSource = decoded.reconciledSource
         }
     }
 

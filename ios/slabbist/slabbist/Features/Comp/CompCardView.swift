@@ -81,17 +81,41 @@ struct CompCardView: View {
         return formatCents(cents)
     }
 
-    /// Caption beneath the hero. The four states map directly to which
-    /// of the two source snapshots have a usable headline number.
+    /// Caption beneath the hero. Prefers `scan.reconciledSource` (set by
+    /// the server-side reconciliation rule) and falls back to inferring
+    /// from snapshot presence for legacy rows that pre-date the source
+    /// being plumbed through.
     private var reconciledCaption: String {
-        let pptOK = pptSnapshot?.headlinePriceCents != nil
-        let ptOK = poketraceSnapshot?.ptAvgCents != nil
-        switch (pptOK, ptOK) {
-        case (true,  true):  return "avg of 2 sources · \(scan.grader.rawValue) \(scan.grade ?? "")".trimmingCharacters(in: .whitespaces)
-        case (true,  false): return "PPT only · \(scan.grader.rawValue) \(scan.grade ?? "")".trimmingCharacters(in: .whitespaces)
-        case (false, true):  return "Poketrace only · \(scan.grader.rawValue) \(scan.grade ?? "")".trimmingCharacters(in: .whitespaces)
-        case (false, false): return "no price data"
+        let graderTier = "\(scan.grader.rawValue) \(scan.grade ?? "")".trimmingCharacters(in: .whitespaces)
+        let suffix = graderTier.isEmpty ? "" : " · \(graderTier)"
+        let lead: String
+        switch scan.reconciledSource {
+        case "avg":
+            lead = "avg of 2 sources"
+        case "ppt-only":
+            lead = "PPT only"
+        case "poketrace-only":
+            lead = "Poketrace only"
+        case "poketrace-preferred":
+            // Surface the sale count so the operator sees *why* Poketrace
+            // wins over the simple average — "n=57" makes the override
+            // legible without explaining the rule in copy.
+            if let n = poketraceSnapshot?.ptSaleCount {
+                return "Poketrace · n=\(n)\(suffix)"
+            }
+            lead = "Poketrace preferred"
+        default:
+            // Legacy fallback when reconciledSource hasn't been written.
+            let pptOK = pptSnapshot?.headlinePriceCents != nil
+            let ptOK  = poketraceSnapshot?.ptAvgCents != nil
+            switch (pptOK, ptOK) {
+            case (true,  true):  lead = "avg of 2 sources"
+            case (true,  false): lead = "PPT only"
+            case (false, true):  lead = "Poketrace only"
+            case (false, false): return "no price data"
+            }
         }
+        return "\(lead)\(suffix)"
     }
 
     // MARK: - Sources strip
