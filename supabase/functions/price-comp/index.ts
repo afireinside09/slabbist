@@ -157,6 +157,63 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
         fetched_at:       cachedPt.updatedAt ?? new Date().toISOString(),
       };
     }
+
+    // Cache-hit backfill: if PPT is fresh but Poketrace was never resolved
+    // for this slab (typical of scans whose comp was fetched while the
+    // Poketrace API key was unset, or while the user was on a Poketrace
+    // plan tier that didn't expose graded data), run a live Poketrace
+    // fetch on the cache-hit path. Persist the result so subsequent
+    // cache hits read it from the DB. Failures are logged and swallowed
+    // so they never poison the PPT happy path.
+    if (poketraceBlock === null && deps.poketraceApiKey) {
+      try {
+        poketraceBlock = await fetchPoketraceBranch(
+          deps,
+          {
+            id: identity.id,
+            ppt_tcgplayer_id: identity.ppt_tcgplayer_id ?? null,
+            poketrace_card_id: identity.poketrace_card_id ?? null,
+            poketrace_card_id_resolved_at: identity.poketrace_card_id_resolved_at ?? null,
+          },
+          body.grading_service,
+          body.grade,
+        );
+        if (poketraceBlock) {
+          try {
+            await upsertMarketLadder(supabase, {
+              identityId: body.graded_card_identity_id,
+              gradingService: body.grading_service,
+              grade: body.grade,
+              source: "poketrace",
+              headlinePriceCents: poketraceBlock.avg_cents,
+              ladderCents: { loose: null, psa_7: null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null, bgs_10: null, cgc_10: null, sgc_10: null },
+              priceHistory: poketraceBlock.price_history,
+              pptTCGPlayerId: "",
+              pptUrl: "",
+              poketrace: {
+                avgCents:       poketraceBlock.avg_cents,
+                lowCents:       poketraceBlock.low_cents,
+                highCents:      poketraceBlock.high_cents,
+                avg1dCents:     poketraceBlock.avg_1d_cents,
+                avg7dCents:     poketraceBlock.avg_7d_cents,
+                avg30dCents:    poketraceBlock.avg_30d_cents,
+                median3dCents:  poketraceBlock.median_3d_cents,
+                median7dCents:  poketraceBlock.median_7d_cents,
+                median30dCents: poketraceBlock.median_30d_cents,
+                trend:          poketraceBlock.trend,
+                confidence:     poketraceBlock.confidence,
+                saleCount:      poketraceBlock.sale_count,
+              },
+            });
+          } catch (e) {
+            console.error("poketrace.cache_hit_persist_failed", { message: (e as Error).message });
+          }
+        }
+      } catch (e) {
+        console.error("poketrace.cache_hit_backfill_failed", { message: (e as Error).message });
+      }
+    }
+
     const reconciledBlock = reconcile(pptResponse.headline_price_cents, poketraceBlock);
     const v2: PriceCompResponseV2 = { ...pptResponse, poketrace: poketraceBlock, reconciled: reconciledBlock };
     return json(200, v2);
@@ -437,12 +494,35 @@ async function fetchPoketraceBranch(
   };
 }
 
+// Confidence rule for preferring Poketrace over a simple average.
+// PPT's headline doesn't carry a sale-count, so we can't truly weight by
+// volume — but Poketrace's saleCount is a strong signal that its number
+// reflects real recent sales. When PPT and Poketrace disagree by more
+// than the divergence threshold AND Poketrace has at least
+// MIN_PT_SALES_FOR_PREFERENCE recent sales, treat Poketrace as the
+// authoritative number.
+//
+// Concrete case driving these defaults: Charizard CP6 #011 (Japanese
+// 20th Anniversary holo) where PPT reported $500 with no sales metadata
+// and Poketrace reported $1,236 across 57 sales — averaging produced
+// $868, which is closer to PPT's wrong number than to truth.
+const MIN_PT_SALES_FOR_PREFERENCE = 5;
+const DIVERGENCE_THRESHOLD = 0.20;
+
 function reconcile(
   pptHeadlineCents: number | null,
   poketrace: PoketraceBlock | null,
 ): ReconciledBlock {
   const ptAvg = poketrace?.avg_cents ?? null;
+  const ptSaleCount = poketrace?.sale_count ?? 0;
+
   if (pptHeadlineCents !== null && ptAvg !== null) {
+    const divergence = pptHeadlineCents > 0
+      ? Math.abs(ptAvg - pptHeadlineCents) / pptHeadlineCents
+      : 0;
+    if (ptSaleCount >= MIN_PT_SALES_FOR_PREFERENCE && divergence > DIVERGENCE_THRESHOLD) {
+      return { headline_price_cents: ptAvg, source: "poketrace-preferred" };
+    }
     return {
       headline_price_cents: Math.round((pptHeadlineCents + ptAvg) / 2),
       source: "avg",

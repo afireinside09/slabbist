@@ -325,6 +325,194 @@ Deno.test("v2 envelope: poketrace down (5xx) → reconciled = ppt-only, ppt data
   assertEquals(body.reconciled.headline_price_cents, 18500);
 });
 
+Deno.test("v2 envelope: poketrace saleCount >=5 + divergence >20% → poketrace-preferred", async () => {
+  _resetPauseForTests();
+  const supabase = makeSupabase({ identity: { ...IDENTITY } });
+
+  // PPT reports psa10 = $500 (deliberately wrong, the Charizard JP case).
+  // Poketrace reports $1,236 across 57 sales.
+  // Divergence = |1236-500|/500 = 147% → poketrace-preferred kicks in.
+  const PPT_BAD_BODY = {
+    ...PPT_CARD_BODY,
+    ebay: {
+      ...PPT_CARD_BODY.ebay,
+      salesByGrade: {
+        ...PPT_CARD_BODY.ebay.salesByGrade,
+        psa10: { count: 12, smartMarketPrice: { price: 500.0, confidence: "low" } },
+      },
+    },
+  };
+  const POKETRACE_HIGH_VOL_BODY = {
+    data: {
+      id: POKETRACE_CARD_ID,
+      prices: {
+        ebay: {
+          PSA_10: { avg: 1236.0, low: 949.99, high: 1236.0, saleCount: 57, trend: null, confidence: null },
+        },
+      },
+    },
+  };
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    if (url.includes("pokemonpricetracker.com")) {
+      return Promise.resolve(new Response(JSON.stringify([PPT_BAD_BODY]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("tcgplayer_ids=")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: POKETRACE_CARD_ID }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HIGH_VOL_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const deps: HandleDeps = {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), deps));
+  assertEquals(resp.status, 200);
+  const body = await resp.json();
+
+  assertEquals(body.headline_price_cents, 50000, "PPT psa_10 = $500");
+  assertEquals(body.poketrace.avg_cents, 123600, "Poketrace avg = $1,236");
+  assertEquals(body.poketrace.sale_count, 57);
+  assertEquals(body.reconciled.source, "poketrace-preferred");
+  assertEquals(body.reconciled.headline_price_cents, 123600, "Reconciled = Poketrace avg, not the simple-average $868");
+});
+
+Deno.test("v2 envelope: poketrace saleCount <5 → simple avg even when divergence is high", async () => {
+  _resetPauseForTests();
+  const supabase = makeSupabase({ identity: { ...IDENTITY } });
+
+  // Same wide divergence, but only 3 Poketrace sales — below the
+  // confidence threshold, so we fall back to a simple average.
+  const PPT_BAD_BODY = {
+    ...PPT_CARD_BODY,
+    ebay: {
+      ...PPT_CARD_BODY.ebay,
+      salesByGrade: {
+        ...PPT_CARD_BODY.ebay.salesByGrade,
+        psa10: { count: 12, smartMarketPrice: { price: 500.0, confidence: "low" } },
+      },
+    },
+  };
+  const POKETRACE_LOW_VOL_BODY = {
+    data: {
+      id: POKETRACE_CARD_ID,
+      prices: { ebay: { PSA_10: { avg: 1236.0, low: 1236.0, high: 1236.0, saleCount: 3 } } },
+    },
+  };
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    if (url.includes("pokemonpricetracker.com")) {
+      return Promise.resolve(new Response(JSON.stringify([PPT_BAD_BODY]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("tcgplayer_ids=")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: POKETRACE_CARD_ID }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_LOW_VOL_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const deps: HandleDeps = {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), deps));
+  const body = await resp.json();
+  assertEquals(body.poketrace.sale_count, 3);
+  assertEquals(body.reconciled.source, "avg");
+  // (50000 + 123600) / 2 = 86800
+  assertEquals(body.reconciled.headline_price_cents, 86800);
+});
+
+Deno.test("v2 envelope: cache-hit path live-fetches Poketrace when no cached PT row exists", async () => {
+  _resetPauseForTests();
+  // Pre-populated: PPT cache row, fresh, but no Poketrace row yet.
+  const FRESH_PPT_ROW = {
+    identity_id: IDENTITY.id,
+    grading_service: "PSA",
+    grade: "10",
+    source: "pokemonpricetracker",
+    headline_price: 500.0,
+    psa_10_price: 500.0,
+    ppt_tcgplayer_id: "243172",
+    ppt_url: "https://www.pokemonpricetracker.com/card/charizard",
+    price_history: [],
+    updated_at: "2026-05-08T11:00:00Z", // 1h before now → fresh
+  };
+  const supabase = makeSupabase({ identity: { ...IDENTITY }, market: FRESH_PPT_ROW });
+
+  let pptCalls = 0;
+  let ptCardCalls = 0;
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    if (url.includes("pokemonpricetracker.com")) {
+      pptCalls += 1;
+      return Promise.resolve(new Response(JSON.stringify([PPT_CARD_BODY]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("tcgplayer_ids=")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: POKETRACE_CARD_ID }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      ptCardCalls += 1;
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_CARD_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const deps: HandleDeps = {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), deps));
+  assertEquals(resp.status, 200);
+  const body = await resp.json();
+
+  assertEquals(body.cache_hit, true, "PPT path is a cache hit");
+  assertEquals(pptCalls, 0, "no PPT HTTP call on cache hit");
+  assert(ptCardCalls >= 1, "Poketrace was live-fetched as backfill");
+  assert(body.poketrace !== null, "Poketrace block populated by backfill");
+  assertEquals(body.poketrace.avg_cents, 19500);
+
+  // Verify the backfill persisted
+  const tables = (supabase as any)._tables();
+  const ptRow = tables.graded_market.find((r: Record<string, unknown>) => r.source === "poketrace");
+  assert(ptRow, "Poketrace row was persisted by the cache-hit backfill");
+});
+
 Deno.test("v2 envelope: poketrace api key not configured → branch quietly skipped, no poketrace HTTP calls", async () => {
   _resetPauseForTests();
   const supabase = makeSupabase({ identity: { ...IDENTITY } });

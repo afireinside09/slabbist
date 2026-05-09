@@ -78,7 +78,11 @@ export interface PoketraceBlock extends PoketraceTierFields {
   fetched_at: string;
 }
 
-export type ReconciledSource = "avg" | "ppt-only" | "poketrace-only";
+export type ReconciledSource =
+  | "avg"                  // simple average of both sources
+  | "ppt-only"             // only PPT had data
+  | "poketrace-only"       // only Poketrace had data
+  | "poketrace-preferred"; // both present, but Poketrace's saleCount + divergence override the simple average
 
 export interface ReconciledBlock {
   headline_price_cents: number | null;
