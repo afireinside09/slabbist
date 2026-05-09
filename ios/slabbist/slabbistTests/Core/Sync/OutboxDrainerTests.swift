@@ -122,6 +122,47 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
+    @Test("dispatches upsertVendor with full DTO")
+    @MainActor
+    func dispatchesUpsertVendor() async throws {
+        let h = Harness()
+        let vendorId = UUID()
+        let storeId = UUID()
+        try await h.enqueueUpsertVendor(
+            id: vendorId,
+            storeId: storeId,
+            displayName: "Acme Cards"
+        )
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeVendors.upsertedVendors.count == 1)
+        #expect(h.fakeVendors.upsertedVendors[0].id == vendorId)
+        #expect(h.fakeVendors.upsertedVendors[0].storeId == storeId)
+        #expect(h.fakeVendors.upsertedVendors[0].displayName == "Acme Cards")
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("dispatches archiveVendor with archived_at + matching updated_at")
+    @MainActor
+    func dispatchesArchiveVendor() async throws {
+        let h = Harness()
+        let vendorId = UUID()
+        let archivedAt = h.clock.current()
+        try await h.enqueueArchiveVendor(id: vendorId, archivedAt: archivedAt)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeVendors.patchCalls.count == 1)
+        #expect(h.fakeVendors.patchCalls[0].id == vendorId)
+        let stamp = ISO8601DateFormatter().string(from: archivedAt)
+        #expect(h.fakeVendors.patchCalls[0].fields["archived_at"] == .string(stamp))
+        #expect(h.fakeVendors.patchCalls[0].fields["updated_at"] == .string(stamp))
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
     // MARK: - 7.3 error-classifier tests
 
     @Test("409 (uniqueViolation) on insertScan deletes the item — idempotent success")

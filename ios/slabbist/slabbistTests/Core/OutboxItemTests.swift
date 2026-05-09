@@ -47,7 +47,7 @@ struct OutboxItemTests {
         #expect(OutboxKind.upsertVendor.priority > OutboxKind.updateLot.priority)
     }
 
-    @Test("UpsertVendor payload encodes snake_case keys")
+    @Test("UpsertVendor payload encodes snake_case keys and round-trips created_at")
     func upsertVendorPayloadEncoding() throws {
         let payload = OutboxPayloads.UpsertVendor(
             id: "22222222-2222-2222-2222-222222222222",
@@ -57,6 +57,7 @@ struct OutboxItemTests {
             contact_value: "555-0100",
             notes: "preferred dealer",
             archived_at: "2026-05-08T12:00:00Z",
+            created_at: "2026-05-01T08:00:00Z",
             updated_at: "2026-05-08T12:00:00Z"
         )
         let data = try JSONEncoder().encode(payload)
@@ -68,7 +69,15 @@ struct OutboxItemTests {
         #expect(json.contains("\"contact_value\":\"555-0100\""))
         #expect(json.contains("\"notes\":\"preferred dealer\""))
         #expect(json.contains("\"archived_at\":\"2026-05-08T12:00:00Z\""))
+        #expect(json.contains("\"created_at\":\"2026-05-01T08:00:00Z\""))
         #expect(json.contains("\"updated_at\":\"2026-05-08T12:00:00Z\""))
+
+        // Round-trip: created_at decodes back as an independent value
+        // (distinct from updated_at) so the upsert path can preserve it.
+        let decoded = try JSONDecoder().decode(OutboxPayloads.UpsertVendor.self, from: data)
+        #expect(decoded.created_at == "2026-05-01T08:00:00Z")
+        #expect(decoded.updated_at == "2026-05-08T12:00:00Z")
+        #expect(decoded.created_at != decoded.updated_at)
     }
 
     @Test("ArchiveVendor payload encodes id and archived_at")

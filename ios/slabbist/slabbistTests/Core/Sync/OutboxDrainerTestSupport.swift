@@ -13,6 +13,7 @@ final class Harness {
     let container: ModelContainer
     let fakeLots = FakeLotRepository()
     let fakeScans = FakeScanRepository()
+    let fakeVendors = FakeVendorRepository()
     let status = OutboxStatus()
     let clock = TestClock()
     let drainer: OutboxDrainer
@@ -41,7 +42,7 @@ final class Harness {
             members: NullStoreMemberRepo(),
             lots: fakeLots,
             scans: fakeScans,
-            vendors: NullVendorRepo(),
+            vendors: fakeVendors,
             gradeEstimates: NullGradeEstimateRepo()
         )
         let statusBox = self.status
@@ -217,6 +218,58 @@ final class Harness {
         try await drainer._testEnqueue(
             id: UUID(),
             kind: .updateLot,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueUpsertVendor(
+        id: UUID,
+        storeId: UUID = UUID(),
+        displayName: String = "Acme Cards",
+        archivedAt: Date? = nil,
+        createdAt: Date? = nil
+    ) async throws {
+        let stamp = createdAt ?? clock.current()
+        let iso = ISO8601DateFormatter()
+        let dto = OutboxPayloads.UpsertVendor(
+            id: id.uuidString,
+            store_id: storeId.uuidString,
+            display_name: displayName,
+            contact_method: "phone",
+            contact_value: "555-0100",
+            notes: nil,
+            archived_at: archivedAt.map { iso.string(from: $0) },
+            created_at: iso.string(from: stamp),
+            updated_at: iso.string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .upsertVendor,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueArchiveVendor(
+        id: UUID,
+        archivedAt: Date? = nil,
+        createdAt: Date? = nil
+    ) async throws {
+        let stamp = createdAt ?? clock.current()
+        let archStamp = archivedAt ?? stamp
+        let iso = ISO8601DateFormatter()
+        let dto = OutboxPayloads.ArchiveVendor(
+            id: id.uuidString,
+            archived_at: iso.string(from: archStamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .archiveVendor,
             payload: payload,
             createdAt: stamp,
             nextAttemptAt: stamp
@@ -419,6 +472,53 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
         await recorder.appendDeleted(id)
         _lock.lock(); defer { _lock.unlock() }
         _deletedIds.append(id)
+    }
+}
+
+/// Fake `VendorRepository`. Same shape as `FakeLotRepository` /
+/// `FakeScanRepository` so dispatch tests can assert that the drainer
+/// invoked the right method with the expected DTO / patch fields.
+final class FakeVendorRepository: VendorRepository, @unchecked Sendable {
+    private let recorder = Recorder()
+    var nextError: Error?
+
+    actor Recorder {
+        var upsertedVendors: [VendorDTO] = []
+        var patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+        func appendUpsert(_ vendor: VendorDTO) { upsertedVendors.append(vendor) }
+        func appendPatch(id: UUID, fields: [String: AnyJSON]) { patchCalls.append((id: id, fields: fields)) }
+    }
+
+    private let _lock = NSLock()
+    private var _upsertedVendors: [VendorDTO] = []
+    private var _patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+
+    var upsertedVendors: [VendorDTO] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _upsertedVendors
+    }
+
+    var patchCalls: [(id: UUID, fields: [String: AnyJSON])] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _patchCalls
+    }
+
+    func find(id: UUID) async throws -> VendorDTO? { nil }
+
+    func listActive(storeId: UUID, page: Page) async throws -> [VendorDTO] { [] }
+
+    func upsert(_ vendor: VendorDTO) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendUpsert(vendor)
+        _lock.lock(); defer { _lock.unlock() }
+        _upsertedVendors.append(vendor)
+    }
+
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        if let e = nextError { nextError = nil; throw e }
+        await recorder.appendPatch(id: id, fields: fields)
+        _lock.lock(); defer { _lock.unlock() }
+        _patchCalls.append((id: id, fields: fields))
     }
 }
 

@@ -95,6 +95,10 @@ nonisolated extension OutboxPayloads {
     /// the outbox worker UPSERTs against the `id` primary key. `archived_at`
     /// is `nil` for active vendors; the dedicated `ArchiveVendor` payload
     /// flips it without rewriting the rest of the row.
+    ///
+    /// `created_at` is carried on the wire so the on-conflict UPSERT path
+    /// preserves the original insert timestamp instead of clobbering it
+    /// with whatever the producer happens to stamp at retry time.
     struct UpsertVendor: Codable {
         let id: String
         let store_id: String
@@ -103,6 +107,7 @@ nonisolated extension OutboxPayloads {
         let contact_value: String?
         let notes: String?
         let archived_at: String?
+        let created_at: String
         let updated_at: String
     }
 

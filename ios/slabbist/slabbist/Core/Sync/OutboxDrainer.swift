@@ -444,15 +444,18 @@ extension VendorDTO {
     /// Bridge an `OutboxPayloads.UpsertVendor` (snake_case wire shape) to
     /// the camelCase `VendorDTO` the repository expects. Throws
     /// `OutboxBridgeError.malformedPayload` if any UUID or timestamp field
-    /// is invalid. `created_at` is server-defaulted on insert; we mirror
-    /// `updated_at` here because the Postgres `on conflict` path preserves
-    /// the original `created_at` and the wire shape does not carry it.
+    /// is invalid. The wire payload carries the original `created_at` so
+    /// the Postgres on-conflict UPSERT preserves it instead of overwriting
+    /// it with a synthesised value at retry time.
     init(from p: OutboxPayloads.UpsertVendor) throws {
         guard let id = UUID(uuidString: p.id),
               let storeId = UUID(uuidString: p.store_id) else {
             throw OutboxBridgeError.malformedPayload(reason: "UpsertVendor: invalid UUID")
         }
         let iso = OutboxDateFormatter.iso8601
+        guard let createdAt = iso.date(from: p.created_at) else {
+            throw OutboxBridgeError.malformedPayload(reason: "UpsertVendor: invalid created_at")
+        }
         guard let updatedAt = iso.date(from: p.updated_at) else {
             throw OutboxBridgeError.malformedPayload(reason: "UpsertVendor: invalid updated_at")
         }
@@ -465,7 +468,7 @@ extension VendorDTO {
             contactValue: p.contact_value,
             notes: p.notes,
             archivedAt: archivedAt,
-            createdAt: updatedAt,
+            createdAt: createdAt,
             updatedAt: updatedAt
         )
     }
