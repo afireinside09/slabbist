@@ -98,9 +98,10 @@ The **graded-card surface** (`graded_card_identities`, `graded_cards`, `graded_m
               │              │ vendor agrees
               │              ▼
               │         ┌──────────┐
-              │         │ accepted │  payment method picked, ready to pay
-              │         └────┬─────┘
-              │              │ /transaction-commit
+              │ ◄───────┤ accepted │  payment method picked, ready to pay
+              │         └────┬─────┘   (can drop back to presented or declined
+              │              │          while a commit is pending offline)
+              │              │ /transaction-commit returns 200
               │              ▼
               │         ┌──────────┐
               │         │   paid   │  transactions row written; lot frozen
@@ -252,6 +253,7 @@ Key invariants encoded in the schema:
 - A void is `voided_at is not null` AND `void_of_transaction_id` references the original. The original keeps its `voided_at` null — voids are append-only.
 - `vendor_name_snapshot` is `not null` because a vendor record can later be archived/renamed without rewriting receipts.
 - `transaction_lines.identity_snapshot` is `not null` because a future schema change to `graded_card_identities` (new fields, splits, merges) cannot retroactively change a paid receipt's contents.
+- Post-commit immutability lives in `transaction_lines`, not in `scans`. After a lot reaches `paid`, the iOS UI gates `Lot` and `Scan` editors behind a "frozen — paid" banner so an operator cannot accidentally edit a line that is already on a receipt; server-side, RLS still permits store-member updates on `scans` because `transaction_lines` is the read-side-of-truth and any drift on `scans` is irrelevant to the ledger.
 
 ### SwiftData mirrors (device-side)
 
@@ -416,6 +418,21 @@ final class OfferRepository {
 
 `OfferRepository` is the single funnel for state transitions; `LotsViewModel` and `OfferReviewView` call into it. The repo also enforces invariants client-side (e.g., refuses to commit a lot with zero scans or a scan with no buy price) before enqueueing the outbox item — server-side enforcement is the source of truth, but the client-side check provides immediate UX feedback.
 
+The legal transitions (which `OfferRepository` enforces and the offline-commit window depends on):
+
+| From | To | Trigger |
+|---|---|---|
+| `drafting` | `priced` | first scan with non-null `buy_price_cents` |
+| `priced` | `presented` | "Send to offer" |
+| `presented` | `priced` | "Bounce back" |
+| `presented` | `declined` | "Decline" |
+| `presented` | `accepted` | payment method picked + "Mark paid" tapped |
+| `accepted` | `presented` | operator backs out before commit lands (offline window only) |
+| `accepted` | `declined` | vendor walks before commit lands (offline window only) |
+| `accepted` | `paid` | `/transaction-commit` returns 200 |
+| `paid` | `voided` | `/transaction-void` returns 200 |
+| `declined` | `priced` | "Re-open as new offer" |
+
 A new `VendorsRepository` and `TransactionsRepository` follow the same pattern.
 
 ## Edge Functions
@@ -564,7 +581,7 @@ The aggregate strip already shows "Estimated $X." It adds:
 Adds a buy-price card above the existing comp card:
 
 - Big buy-price number with a "tap to edit" affordance.
-- Source pill: "Auto · 60% of avg" / "Override" / "Manual (no comp)".
+- Source pill: "Auto · 60% × comp" / "Override" / "Manual (no comp)". The "comp" word is a hyperlink-styled tap target that opens the underlying `CompCardView` so the operator can see *which* reconciled source produced the value (PPT/Poketrace/avg).
 - A "Reset to auto" link when overridden.
 - Edit sheet uses the existing `ManualPriceSheet` UI shell with new copy.
 
@@ -650,7 +667,7 @@ Each of the items below is a named follow-up captured here so future plans can p
 
 ### Customer presenter mode
 
-A flipped-device layout that shows only buy prices and totals — hiding margin %, comp source labels, and any internal numerics. Reuses `OfferReviewView`'s data with a `.presenter` style. The brief: when the operator hands the iPad to the vendor, the vendor sees "Here's our offer for your 12 slabs: $1,847" and can scroll a clean per-line list. No edit affordances. Probably gated behind a long-press on the offer total in `OfferReviewView`. Future plan should pull design from `.impeccable.md`'s "vendor handoff" section.
+A flipped-device layout that shows only buy prices and totals — hiding margin %, comp source labels, and any internal numerics. Reuses `OfferReviewView`'s data with a `.presenter` style. The brief: when the operator hands the iPad to the vendor, the vendor sees "Here's our offer for your 12 slabs: $1,847" and can scroll a clean per-line list. No edit affordances. Probably gated behind a long-press on the offer total in `OfferReviewView`. The follow-up plan should consult `.impeccable.md` (the canonical design direction) and the existing dark+gold language in `LotDetailView` / `CompCardView` for the visual treatment.
 
 ### PDF / email offer sheet
 
