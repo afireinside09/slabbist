@@ -78,6 +78,13 @@ nonisolated protocol ScanRepository: Sendable {
     func delete(id: UUID) async throws
 }
 
+nonisolated protocol VendorRepository: Sendable {
+    func find(id: UUID) async throws -> VendorDTO?
+    func listActive(storeId: UUID, page: Page) async throws -> [VendorDTO]
+    func upsert(_ vendor: VendorDTO) async throws
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws
+}
+
 nonisolated protocol GradeEstimateRepository: Sendable {
     func listForCurrentUser(page: Page, includeTotalCount: Bool) async throws -> PagedResult<GradeEstimateDTO>
     func find(id: UUID) async throws -> GradeEstimateDTO?
@@ -103,6 +110,7 @@ nonisolated struct AppRepositories: Sendable {
     var members: any StoreMemberRepository
     var lots: any LotRepository
     var scans: any ScanRepository
+    var vendors: any VendorRepository
     var gradeEstimates: any GradeEstimateRepository
 
     static func live(client: SupabaseClient = AppSupabase.shared.client) -> AppRepositories {
@@ -111,6 +119,7 @@ nonisolated struct AppRepositories: Sendable {
             members: SupabaseStoreMemberRepository(client: client),
             lots: SupabaseLotRepository(client: client),
             scans: SupabaseScanRepository(client: client),
+            vendors: SupabaseVendorRepository(client: client),
             gradeEstimates: SupabaseGradeEstimateRepository(client: client)
         )
     }

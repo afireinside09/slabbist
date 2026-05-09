@@ -90,4 +90,27 @@ nonisolated extension OutboxPayloads {
         let status: String?
         let updated_at: String
     }
+
+    /// Full upsert payload for a vendor row. Used both on create and edit —
+    /// the outbox worker UPSERTs against the `id` primary key. `archived_at`
+    /// is `nil` for active vendors; the dedicated `ArchiveVendor` payload
+    /// flips it without rewriting the rest of the row.
+    struct UpsertVendor: Codable {
+        let id: String
+        let store_id: String
+        let display_name: String
+        let contact_method: String?
+        let contact_value: String?
+        let notes: String?
+        let archived_at: String?
+        let updated_at: String
+    }
+
+    /// Patch payload that flips a vendor's `archived_at` from NULL to the
+    /// given timestamp. Pickers exclude archived vendors; existing scans /
+    /// lots that already reference the row keep working.
+    struct ArchiveVendor: Codable {
+        let id: String
+        let archived_at: String
+    }
 }

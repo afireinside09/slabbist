@@ -6,9 +6,10 @@ import Supabase
 /// Background actor that drains the outbox.
 ///
 /// Group A complete (insertScan, insertLot, updateLot, deleteLot,
-/// updateScan, updateScanOffer, deleteScan). Group B kinds
-/// (certLookupJob, priceCompJob) throw `OutboxBridgeError.malformedPayload`
-/// — the classifier (added in 7.3) will route them to `.failed`.
+/// updateScan, updateScanOffer, deleteScan, upsertVendor, archiveVendor).
+/// Group B kinds (certLookupJob, priceCompJob) throw
+/// `OutboxBridgeError.malformedPayload` — the classifier (added in 7.3)
+/// will route them to `.failed`.
 ///
 /// The `@ModelActor` macro is convenient but doesn't allow injecting
 /// custom dependencies through the synthesized init. We use the
@@ -328,6 +329,24 @@ actor OutboxDrainer: ModelActor {
             }
             try await repositories.scans.delete(id: id)
 
+        case .upsertVendor:
+            let p = try decode(OutboxPayloads.UpsertVendor.self, payload)
+            let dto = try VendorDTO(from: p)
+            try await repositories.vendors.upsert(dto)
+
+        case .archiveVendor:
+            let p = try decode(OutboxPayloads.ArchiveVendor.self, payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "ArchiveVendor: invalid UUID")
+            }
+            try await repositories.vendors.patch(
+                id: id,
+                fields: [
+                    "archived_at": .string(p.archived_at),
+                    "updated_at": .string(p.archived_at)
+                ]
+            )
+
         case .certLookupJob, .priceCompJob:
             // Group B kinds are out of scope for v1 — surface as permanent
             // failure so the classifier (7.3) routes them to .failed.
@@ -417,6 +436,37 @@ extension LotDTO {
             transactionStamp: nil,
             createdAt: iso.date(from: p.created_at) ?? Date(),
             updatedAt: iso.date(from: p.updated_at) ?? Date()
+        )
+    }
+}
+
+extension VendorDTO {
+    /// Bridge an `OutboxPayloads.UpsertVendor` (snake_case wire shape) to
+    /// the camelCase `VendorDTO` the repository expects. Throws
+    /// `OutboxBridgeError.malformedPayload` if any UUID or timestamp field
+    /// is invalid. `created_at` is server-defaulted on insert; we mirror
+    /// `updated_at` here because the Postgres `on conflict` path preserves
+    /// the original `created_at` and the wire shape does not carry it.
+    init(from p: OutboxPayloads.UpsertVendor) throws {
+        guard let id = UUID(uuidString: p.id),
+              let storeId = UUID(uuidString: p.store_id) else {
+            throw OutboxBridgeError.malformedPayload(reason: "UpsertVendor: invalid UUID")
+        }
+        let iso = OutboxDateFormatter.iso8601
+        guard let updatedAt = iso.date(from: p.updated_at) else {
+            throw OutboxBridgeError.malformedPayload(reason: "UpsertVendor: invalid updated_at")
+        }
+        let archivedAt = p.archived_at.flatMap { iso.date(from: $0) }
+        self.init(
+            id: id,
+            storeId: storeId,
+            displayName: p.display_name,
+            contactMethod: p.contact_method,
+            contactValue: p.contact_value,
+            notes: p.notes,
+            archivedAt: archivedAt,
+            createdAt: updatedAt,
+            updatedAt: updatedAt
         )
     }
 }

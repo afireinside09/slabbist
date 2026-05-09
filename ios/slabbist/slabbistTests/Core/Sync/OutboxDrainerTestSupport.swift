@@ -41,6 +41,7 @@ final class Harness {
             members: NullStoreMemberRepo(),
             lots: fakeLots,
             scans: fakeScans,
+            vendors: NullVendorRepo(),
             gradeEstimates: NullGradeEstimateRepo()
         )
         let statusBox = self.status
@@ -437,6 +438,13 @@ struct NullStoreMemberRepo: StoreMemberRepository {
     func membership(storeId: UUID, userId: UUID) async throws -> StoreMemberDTO? { nil }
     func upsert(_ member: StoreMemberDTO) async throws {}
     func remove(storeId: UUID, userId: UUID) async throws {}
+}
+
+struct NullVendorRepo: VendorRepository {
+    func find(id: UUID) async throws -> VendorDTO? { nil }
+    func listActive(storeId: UUID, page: Page) async throws -> [VendorDTO] { [] }
+    func upsert(_ vendor: VendorDTO) async throws {}
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
 }
 
 struct NullGradeEstimateRepo: GradeEstimateRepository {

@@ -8,6 +8,8 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
     case insertLot
     case updateLot
     case deleteLot
+    case upsertVendor
+    case archiveVendor
     case certLookupJob
     case priceCompJob
 
@@ -25,6 +27,8 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
         case .insertLot:       return 15
         case .updateScan:      return 10
         case .updateScanOffer: return 10
+        case .upsertVendor:    return 8
+        case .archiveVendor:   return 8
         case .updateLot:       return 5
         }
     }
