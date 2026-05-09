@@ -5,7 +5,7 @@
 -- in supabase/tests/rls_tenant_isolation.sql.
 
 begin;
-select plan(7);
+select plan(8);
 
 create extension if not exists pgtap;
 
@@ -34,7 +34,12 @@ select lives_ok($$
   where owner_user_id = '00000000-0000-0000-0000-0000000000a1';
 $$, 'A can insert a vendor in their own store');
 
-select is((select count(*)::int from vendors), 1, 'A sees exactly one vendor');
+select is(
+  (select display_name from vendors
+   where store_id = (select store_id from _store_ids
+                     where owner_user_id = '00000000-0000-0000-0000-0000000000a1')),
+  'Acme Cards',
+  'A reads back their own vendor');
 
 -- USER B: cannot see A's vendors
 select set_config('request.jwt.claims',
@@ -57,6 +62,15 @@ select lives_ok($$
   from _store_ids
   where owner_user_id = '00000000-0000-0000-0000-0000000000b1';
 $$, 'B can insert their own vendor');
+
+-- USER A: still cannot see B's vendor (symmetric isolation check)
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+
+select is(
+  (select count(*)::int from vendors where display_name = 'B Vendor'),
+  0,
+  'A cannot see B''s vendor');
 
 -- USER B: cannot update A's vendor (returns 0 rows updated under RLS, no row matches USING)
 select set_config('request.jwt.claims',
