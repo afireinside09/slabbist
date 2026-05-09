@@ -262,7 +262,7 @@ struct LotsListView: View {
     }
 
     private func row(for lot: Lot) -> some View {
-        HStack(alignment: .top, spacing: Spacing.m) {
+        HStack(alignment: .center, spacing: Spacing.m) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(lot.name).slabRowTitle()
                 Text(rowSubtitle(for: lot))
@@ -276,6 +276,8 @@ struct LotsListView: View {
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func rowSubtitle(for lot: Lot) -> String {

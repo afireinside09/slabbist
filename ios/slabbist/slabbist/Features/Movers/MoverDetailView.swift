@@ -289,6 +289,9 @@ struct MoverDetailView: View {
                         .foregroundStyle(AppColor.dim)
                 }
             }
+            Text("Affiliate links — Slabbist may earn a commission.")
+                .font(SlabFont.sans(size: 11))
+                .foregroundStyle(AppColor.dim)
             switch viewModel.listingsState {
             case .idle, .loading:
                 listingsSkeleton
@@ -315,7 +318,7 @@ struct MoverDetailView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: Spacing.m) {
                 ForEach(rows) { listing in
-                    if let url = URL(string: listing.url) {
+                    if let url = EbayAffiliateLink.rewrite(listing.url) {
                         Link(destination: url) {
                             listingTile(listing)
                         }

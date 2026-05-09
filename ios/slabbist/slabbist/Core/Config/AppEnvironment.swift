@@ -43,6 +43,18 @@ nonisolated enum AppEnvironment {
         return host == "127.0.0.1" || host == "localhost"
     }
 
+    /// eBay Partner Network campaign ID. Empty string when unset, in
+    /// which case affiliate-link rewriting is skipped (URLs open raw).
+    static let epnCampaignID: String = lookup("EPN_CAMPAIGN_ID") ?? ""
+
+    /// Free-form tracking tag appended as `customid` on affiliate links.
+    /// Defaults to "slabbist-ios" so click reports stay attributable
+    /// even if the build forgets to set it.
+    static let epnCustomID: String = {
+        if let value = lookup("EPN_CUSTOM_ID"), !value.isEmpty { return value }
+        return "slabbist-ios"
+    }()
+
     private static func lookup(_ name: String) -> String? {
         if let raw = ProcessInfo.processInfo.environment[name], !raw.isEmpty {
             return raw

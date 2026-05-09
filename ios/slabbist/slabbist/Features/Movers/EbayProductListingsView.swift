@@ -128,6 +128,9 @@ struct EbayProductListingsView: View {
     private var listings: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             KickerLabel("eBay listings")
+            Text("Affiliate links — Slabbist may earn a commission.")
+                .font(SlabFont.sans(size: 11))
+                .foregroundStyle(AppColor.dim)
             SlabCard {
                 VStack(spacing: 0) {
                     ForEach(Array(group.listings.enumerated()), id: \.element.id) { index, listing in
@@ -148,7 +151,7 @@ private struct EbayProductListingRow: View {
 
     var body: some View {
         Button {
-            if let url = URL(string: listing.url) {
+            if let url = EbayAffiliateLink.rewrite(listing.url) {
                 UIApplication.shared.open(url)
             }
         } label: {

@@ -6,6 +6,10 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_PUBLISHABLE_KEY</key>
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>EPN_CAMPAIGN_ID</key>
+	<string>$(EPN_CAMPAIGN_ID)</string>
+	<key>EPN_CUSTOM_ID</key>
+	<string>$(EPN_CUSTOM_ID)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>InstrumentSerif-Regular.ttf</string>

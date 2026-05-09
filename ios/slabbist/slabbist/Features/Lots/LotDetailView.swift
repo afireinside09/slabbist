@@ -238,9 +238,16 @@ struct LotDetailView: View {
     }
 
     /// Resolves the price shown on the trailing edge of a slab row.
-    /// Prefers the live PPT comp; falls back to the user's manual price
-    /// when no comp exists yet (or PPT returned no_data / failed).
+    /// Mirrors the comp-card hero by reading `scan.reconciledHeadlinePriceCents`
+    /// — the server-reconciled value that respects the PPT/Poketrace
+    /// reconciliation rule (e.g. "poketrace-preferred" when sale count is
+    /// high enough). Falls back to a per-source snapshot for legacy scans
+    /// persisted before reconciliation was plumbed, and finally to the
+    /// user's manual price.
     private func trailingValue(for scan: Scan) -> (cents: Int64, isManual: Bool)? {
+        if let cents = scan.reconciledHeadlinePriceCents {
+            return (cents, false)
+        }
         if let snap = latestSnapshot(for: scan), let cents = snap.headlinePriceCents {
             return (cents, false)
         }

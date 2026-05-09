@@ -392,6 +392,9 @@ struct MoversListView: View {
                         )
                 }
             }
+            Text("Affiliate links — Slabbist may earn a commission.")
+                .font(SlabFont.sans(size: 11))
+                .foregroundStyle(AppColor.dim)
             SlabCard {
                 MoversEbayProductsBody(
                     state: viewModel.ebayListingsState,
