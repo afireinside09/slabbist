@@ -239,53 +239,62 @@ struct CompCardView: View {
         let isHeadline: Bool
     }
 
+    /// Canonical ladder layout: Raw at the front, then highest grades
+    /// descending within each grading company (PSA → CGC → BGS → SGC).
+    /// Both PPT and Poketrace render against this single ordering so
+    /// the toggle swaps values without reflowing cells.
+    ///
+    /// CGC's "Pristine 10" is bundled into `CGC_10` by both Poketrace
+    /// and PPT — neither source distinguishes Gem Mint 10 from Pristine
+    /// 10, so the rail has a single CGC 10 cell.
+    private static let ladderLayout: [(id: String, label: String, headlineKey: (service: String, grade: String)?)] = [
+        ("loose",    "Raw",     nil),
+        ("psa_10",   "PSA 10",  ("PSA", "10")),
+        ("psa_9_5",  "PSA 9.5", ("PSA", "9.5")),
+        ("psa_9",    "PSA 9",   ("PSA", "9")),
+        ("psa_8",    "PSA 8",   ("PSA", "8")),
+        ("psa_7",    "PSA 7",   ("PSA", "7")),
+        ("cgc_10",   "CGC 10",  ("CGC", "10")),
+        ("bgs_10",   "BGS 10",  ("BGS", "10")),
+        ("sgc_10",   "SGC 10",  ("SGC", "10")),
+    ]
+
     /// Tiers from the PPT snapshot's typed columns. Returns `[]` when
     /// the PPT snapshot is missing.
     private var pptLadderTiers: [Tier] {
         guard let snapshot = pptSnapshot else { return [] }
-        let entries: [(id: String, label: String, cents: Int64?, headlineKey: (service: String, grade: String)?)] = [
-            ("loose",    "Raw",     snapshot.loosePriceCents,     nil),
-            ("psa_7",    "PSA 7",   snapshot.psa7PriceCents,      ("PSA", "7")),
-            ("psa_8",    "PSA 8",   snapshot.psa8PriceCents,      ("PSA", "8")),
-            ("psa_9",    "PSA 9",   snapshot.psa9PriceCents,      ("PSA", "9")),
-            ("psa_9_5",  "PSA 9.5", snapshot.psa9_5PriceCents,    ("PSA", "9.5")),
-            ("psa_10",   "PSA 10",  snapshot.psa10PriceCents,     ("PSA", "10")),
-            ("bgs_10",   "BGS 10",  snapshot.bgs10PriceCents,     ("BGS", "10")),
-            ("cgc_10",   "CGC 10",  snapshot.cgc10PriceCents,     ("CGC", "10")),
-            ("sgc_10",   "SGC 10",  snapshot.sgc10PriceCents,     ("SGC", "10")),
+        let cents: [String: Int64?] = [
+            "loose":   snapshot.loosePriceCents,
+            "psa_7":   snapshot.psa7PriceCents,
+            "psa_8":   snapshot.psa8PriceCents,
+            "psa_9":   snapshot.psa9PriceCents,
+            "psa_9_5": snapshot.psa9_5PriceCents,
+            "psa_10":  snapshot.psa10PriceCents,
+            "bgs_10":  snapshot.bgs10PriceCents,
+            "cgc_10":  snapshot.cgc10PriceCents,
+            "sgc_10":  snapshot.sgc10PriceCents,
         ]
-        return entries.compactMap { e in
-            guard let cents = e.cents else { return nil }
-            let isHeadline = e.headlineKey.map {
+        return Self.ladderLayout.compactMap { layout in
+            guard let optCents = cents[layout.id], let c = optCents else { return nil }
+            let isHeadline = layout.headlineKey.map {
                 $0.service == snapshot.gradingService && $0.grade == snapshot.grade
             } ?? false
-            return Tier(id: e.id, label: e.label, cents: cents, isHeadline: isHeadline)
+            return Tier(id: layout.id, label: layout.label, cents: c, isHeadline: isHeadline)
         }
     }
 
     /// Tiers from the Poketrace snapshot's JSON-encoded ladder map.
-    /// Same ordered cell set as PPT so the toggle just swaps values
+    /// Same ordering as the PPT side so the toggle just swaps values
     /// without reflowing the rail.
     private var poketraceLadderTiers: [Tier] {
         guard let snapshot = poketraceSnapshot else { return [] }
         let prices = snapshot.ptTierPricesCents
-        let entries: [(id: String, label: String, headlineKey: (service: String, grade: String)?)] = [
-            ("loose",    "Raw",     nil),
-            ("psa_7",    "PSA 7",   ("PSA", "7")),
-            ("psa_8",    "PSA 8",   ("PSA", "8")),
-            ("psa_9",    "PSA 9",   ("PSA", "9")),
-            ("psa_9_5",  "PSA 9.5", ("PSA", "9.5")),
-            ("psa_10",   "PSA 10",  ("PSA", "10")),
-            ("bgs_10",   "BGS 10",  ("BGS", "10")),
-            ("cgc_10",   "CGC 10",  ("CGC", "10")),
-            ("sgc_10",   "SGC 10",  ("SGC", "10")),
-        ]
-        return entries.compactMap { e in
-            guard let cents = prices[e.id] else { return nil }
-            let isHeadline = e.headlineKey.map {
+        return Self.ladderLayout.compactMap { layout in
+            guard let cents = prices[layout.id] else { return nil }
+            let isHeadline = layout.headlineKey.map {
                 $0.service == snapshot.gradingService && $0.grade == snapshot.grade
             } ?? false
-            return Tier(id: e.id, label: e.label, cents: cents, isHeadline: isHeadline)
+            return Tier(id: layout.id, label: layout.label, cents: cents, isHeadline: isHeadline)
         }
     }
 
