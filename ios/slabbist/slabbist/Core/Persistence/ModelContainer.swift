@@ -8,6 +8,7 @@ enum AppModelContainer {
             StoreMember.self,
             Lot.self,
             Scan.self,
+            Vendor.self,
             OutboxItem.self,
             GradedCardIdentity.self,
             GradedMarketSnapshot.self
@@ -52,7 +53,7 @@ enum AppModelContainer {
     static func inMemory() -> ModelContainer {
         let schema = Schema([
             Store.self, StoreMember.self, Lot.self,
-            Scan.self, OutboxItem.self,
+            Scan.self, Vendor.self, OutboxItem.self,
             GradedCardIdentity.self,
             GradedMarketSnapshot.self
         ])
