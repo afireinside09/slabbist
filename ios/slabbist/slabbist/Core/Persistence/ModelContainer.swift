@@ -11,7 +11,9 @@ enum AppModelContainer {
             Vendor.self,
             OutboxItem.self,
             GradedCardIdentity.self,
-            GradedMarketSnapshot.self
+            GradedMarketSnapshot.self,
+            StoreTransaction.self,
+            TransactionLine.self
             // Plan 2 adds: GradedCard
         ])
         let configurationName = "slabbist"
@@ -55,7 +57,8 @@ enum AppModelContainer {
             Store.self, StoreMember.self, Lot.self,
             Scan.self, Vendor.self, OutboxItem.self,
             GradedCardIdentity.self,
-            GradedMarketSnapshot.self
+            GradedMarketSnapshot.self,
+            StoreTransaction.self, TransactionLine.self
         ])
         let config = ModelConfiguration("slabbist-tests", schema: schema, isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
