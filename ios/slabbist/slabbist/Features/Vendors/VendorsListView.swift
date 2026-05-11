@@ -35,6 +35,13 @@ struct VendorsListView: View {
             viewModel = VendorsViewModel.resolve(context: context, kicker: kicker, session: session)
             viewModel?.refresh()
         }
+        .onAppear {
+            // Pick up writes (archive/reactivate/edit) made on
+            // VendorDetailView when the user pops back. The detail view
+            // owns its own VendorsViewModel instance, so this list's
+            // cached `active`/`archived` arrays would otherwise be stale.
+            viewModel?.refresh()
+        }
         .sheet(isPresented: $presentingNew) {
             if let viewModel {
                 VendorEditSheet(initial: nil) { id, name, method, value, notes in
@@ -100,7 +107,16 @@ struct VendorsListView: View {
     }
 
     private func row(for vendor: Vendor) -> some View {
-        NavigationLink(value: vendor.id) {
+        // Destination-style NavigationLink. We previously used
+        // `NavigationLink(value: vendor.id)` with a top-level
+        // `.navigationDestination(for: UUID.self)` resolver, but that
+        // path didn't reliably dispatch under iOS 26 — the push fired
+        // and immediately popped, leaving the user on the list with a
+        // stale back-button label pointing at the detail view they
+        // never actually saw. The destination-style form is robust.
+        NavigationLink {
+            VendorDetailView(vendor: vendor)
+        } label: {
             HStack(alignment: .center, spacing: Spacing.m) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(vendor.displayName).slabRowTitle()

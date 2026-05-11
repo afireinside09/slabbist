@@ -4,19 +4,29 @@ struct SettingsView: View {
     @Environment(SessionStore.self) private var session
 
     var body: some View {
-        SlabbedRoot {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xxl) {
-                    header
+        // RootTabView mounts this view directly into a `Tab`, so we own
+        // the NavigationStack here. The Vendors row uses a vanilla
+        // destination-style NavigationLink, and VendorsListView's row
+        // does the same — that pattern dispatches reliably under iOS 26
+        // where a value-based push to a root-level destination resolver
+        // intermittently fired-then-popped (leaving a stale back-button
+        // label).
+        NavigationStack {
+            SlabbedRoot {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xxl) {
+                        header
 
-                    accountSection
-                    aboutSection
+                        toolsSection
+                        accountSection
+                        aboutSection
 
-                    Spacer(minLength: Spacing.xxxl)
+                        Spacer(minLength: Spacing.xxxl)
+                    }
+                    .padding(.horizontal, Spacing.xxl)
+                    .padding(.top, Spacing.l)
+                    .padding(.bottom, Spacing.xxl)
                 }
-                .padding(.horizontal, Spacing.xxl)
-                .padding(.top, Spacing.l)
-                .padding(.bottom, Spacing.xxl)
             }
         }
     }
@@ -31,6 +41,26 @@ struct SettingsView: View {
     }
 
     // MARK: - Sections
+
+    private var toolsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Tools")
+            SlabCard {
+                NavigationLink {
+                    VendorsListView()
+                } label: {
+                    settingsRow(
+                        icon: "person.2",
+                        title: "Vendors",
+                        detail: nil,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("settings-vendors-row")
+            }
+        }
+    }
 
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
