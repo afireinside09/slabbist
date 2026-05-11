@@ -14,6 +14,14 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
     var ocrConfidence: Double?
     var capturedPhotoURL: String?
     var vendorAskCents: Int64?
+    /// Per-scan buy price (cents) — the store-side counterpart to
+    /// `vendorAskCents`. Set by `OfferRepository` (auto-derived or override).
+    /// Nullable on the wire because a fresh scan has no buy price yet.
+    var buyPriceCents: Int64?
+    /// `true` when the user manually overrode the auto-derived `buyPriceCents`.
+    /// Persisted so a refetch on a fresh device knows whether to recompute
+    /// the value or keep the operator's manual entry.
+    var buyPriceOverridden: Bool
     var createdAt: Date
     var updatedAt: Date
 
@@ -30,6 +38,8 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
         case ocrConfidence = "ocr_confidence"
         case capturedPhotoURL = "captured_photo_url"
         case vendorAskCents = "vendor_ask_cents"
+        case buyPriceCents = "buy_price_cents"
+        case buyPriceOverridden = "buy_price_overridden"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

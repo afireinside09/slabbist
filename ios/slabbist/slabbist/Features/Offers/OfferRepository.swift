@@ -73,6 +73,28 @@ final class OfferRepository {
         enqueueLotPatch(lot)
     }
 
+    /// Mirrors server-side `computeNewState`: when scans now total > 0 and the lot
+    /// is in a non-terminal pre-offer state, flip to `.priced` (or back to `.drafting`
+    /// when prices clear). Called from `setBuyPrice` and `applyAutoBuyPrice` so the
+    /// local state matches what the server would compute, even fully offline.
+    private func reconcileDraftingOrPriced(_ lot: Lot) throws {
+        let current = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        guard current == .drafting || current == .priced else { return }
+
+        let lotId = lot.id
+        let descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.lotId == lotId })
+        let scans = (try? context.fetch(descriptor)) ?? []
+        let totalCents = scans.compactMap(\.buyPriceCents).reduce(0, +)
+
+        let next: LotOfferState = totalCents > 0 ? .priced : .drafting
+        if next != current {
+            lot.lotOfferState = next.rawValue
+            lot.lotOfferStateUpdatedAt = Date()
+            lot.updatedAt = Date()
+            enqueueLotPatch(lot)
+        }
+    }
+
     // MARK: - Public API
 
     /// Snapshot the store's default margin onto a freshly-created lot. No-op
@@ -91,11 +113,31 @@ final class OfferRepository {
     /// Set a per-scan buy price, marking it overridden. Pass `nil` for
     /// `cents` (with `overridden = false`) to revert to the auto-derived
     /// value next time the comp lands or the lot margin changes.
+    ///
+    /// Rejects edits when the lot has already moved into a terminal/locked
+    /// state (`.accepted`, `.paid`, `.declined`, `.voided`). The server's
+    /// `/lot-offer-recompute` would 409 such writes; gating here keeps local
+    /// SwiftData from silently diverging from server truth.
     func setBuyPrice(_ cents: Int64?, scan: Scan, overridden: Bool) throws {
+        let lotId = scan.lotId
+        let lot = try context.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
+        let state = LotOfferState(rawValue: lot?.lotOfferState ?? "drafting") ?? .drafting
+        let editableStates: Set<LotOfferState> = [.drafting, .priced, .presented]
+        guard editableStates.contains(state) else {
+            throw InvalidTransition.notAllowed(from: state, to: state)
+        }
+
         scan.buyPriceCents = cents
         scan.buyPriceOverridden = overridden
         scan.updatedAt = Date()
         enqueueScanBuyPricePatch(scan)
+        // Keep local lot state in sync with the buy total so the action bar
+        // surfaces "Send to offer" without waiting for the server recompute.
+        if let lot {
+            try reconcileDraftingOrPriced(lot)
+        }
         try recompute(lot: scan.lotId)
         try context.save()
         kicker.kick()
@@ -115,6 +157,9 @@ final class OfferRepository {
         scan.buyPriceCents = auto
         scan.updatedAt = Date()
         enqueueScanBuyPricePatch(scan)
+        // Mirror the server-side state recompute locally so the lot's offer
+        // state flips drafting→priced (or back) without waiting on the outbox.
+        try reconcileDraftingOrPriced(lot)
         try recompute(lot: lot.id)
         return auto
     }

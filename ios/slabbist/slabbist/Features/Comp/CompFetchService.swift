@@ -127,18 +127,28 @@ final class CompFetchService {
                 // pre-date the offer flow) or when the scan was overridden
                 // by the user. The kicker is needed to drain the outbox
                 // patch + recompute item that `applyAutoBuyPrice` enqueues.
+                //
+                // Gated on the lot's offer state: a deferred comp that
+                // arrives while the operator is presenting (or later) must
+                // not silently revise the number the vendor is looking at,
+                // so we only auto-derive in `.drafting` / `.priced`. Future
+                // enhancement: surface a "comp updated since presentation"
+                // banner in those late-arrival cases.
                 if let kicker,
                    let target = Self.fetchScan(scanId, in: context),
                    let lot = Self.fetchLot(target.lotId, in: context) {
-                    let repo = OfferRepository(
-                        context: context,
-                        kicker: kicker,
-                        currentStoreId: target.storeId,
-                        currentUserId: target.userId
-                    )
-                    _ = try? repo.applyAutoBuyPrice(scan: target, lot: lot)
-                    try? context.save()
-                    kicker.kick()
+                    let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+                    if state == .drafting || state == .priced {
+                        let repo = OfferRepository(
+                            context: context,
+                            kicker: kicker,
+                            currentStoreId: target.storeId,
+                            currentUserId: target.userId
+                        )
+                        _ = try? repo.applyAutoBuyPrice(scan: target, lot: lot)
+                        try? context.save()
+                        kicker.kick()
+                    }
                 }
             } catch {
                 let (state, message) = Self.classify(error)

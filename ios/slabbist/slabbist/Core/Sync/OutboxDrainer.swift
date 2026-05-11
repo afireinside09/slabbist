@@ -455,6 +455,8 @@ extension ScanDTO {
             ocrConfidence: p.ocr_confidence,
             capturedPhotoURL: nil,
             vendorAskCents: nil,
+            buyPriceCents: nil,
+            buyPriceOverridden: false,
             createdAt: iso.date(from: p.created_at) ?? Date(),
             updatedAt: iso.date(from: p.updated_at) ?? Date()
         )

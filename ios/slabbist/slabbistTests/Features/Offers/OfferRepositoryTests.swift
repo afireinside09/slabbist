@@ -99,4 +99,37 @@ struct OfferRepositoryTests {
             try repo.sendToOffer(lot)
         }
     }
+
+    @Test func setBuyPriceFlipsDraftingToPriced() throws {
+        let (repo, _, lot, scan) = makeContext()
+        // makeContext() leaves the lot at its `.drafting` default.
+        #expect(lot.lotOfferState == LotOfferState.drafting.rawValue)
+        try repo.setBuyPrice(500, scan: scan, overridden: true)
+        #expect(lot.lotOfferState == LotOfferState.priced.rawValue)
+    }
+
+    @Test func setBuyPriceFlipsPricedBackToDraftingWhenCleared() throws {
+        let (repo, _, lot, scan) = makeContext()
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        scan.buyPriceCents = 500
+        try repo.setBuyPrice(nil, scan: scan, overridden: false)
+        #expect(lot.lotOfferState == LotOfferState.drafting.rawValue)
+    }
+
+    @Test func applyAutoBuyPriceFlipsDraftingToPriced() throws {
+        let (repo, _, lot, scan) = makeContext()
+        #expect(lot.lotOfferState == LotOfferState.drafting.rawValue)
+        _ = try repo.applyAutoBuyPrice(scan: scan, lot: lot)
+        #expect(lot.lotOfferState == LotOfferState.priced.rawValue)
+    }
+
+    @Test func setBuyPriceRejectedOnTerminalLotState() throws {
+        let (repo, _, lot, scan) = makeContext()
+        lot.lotOfferState = LotOfferState.paid.rawValue
+        #expect(throws: OfferRepository.InvalidTransition.self) {
+            try repo.setBuyPrice(500, scan: scan, overridden: true)
+        }
+        // Scan value must not have shifted under the failed write.
+        #expect(scan.buyPriceCents == nil)
+    }
 }

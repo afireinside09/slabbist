@@ -266,21 +266,31 @@ struct ScanDetailView: View {
                             .font(SlabFont.mono(size: 11))
                             .foregroundStyle(AppColor.dim)
                     }
-                    HStack(spacing: Spacing.m) {
-                        Button("Edit") { showingBuyPriceSheet = true }
-                            .buttonStyle(.plain)
-                            .font(SlabFont.sans(size: 13, weight: .semibold))
-                            .foregroundStyle(AppColor.gold)
-                            .accessibilityIdentifier("buy-price-edit")
-                        if scan.buyPriceOverridden {
-                            Button("Reset to auto") {
-                                try? offerRepository().setBuyPrice(nil, scan: scan, overridden: false)
+                    if lotIsPricingEditable {
+                        HStack(spacing: Spacing.m) {
+                            Button("Edit") { showingBuyPriceSheet = true }
+                                .buttonStyle(.plain)
+                                .font(SlabFont.sans(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColor.gold)
+                                .accessibilityIdentifier("buy-price-edit")
+                            if scan.buyPriceOverridden {
+                                Button("Reset to auto") {
+                                    try? offerRepository().setBuyPrice(nil, scan: scan, overridden: false)
+                                }
+                                .buttonStyle(.plain)
+                                .font(SlabFont.sans(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColor.muted)
+                                .accessibilityIdentifier("buy-price-reset")
                             }
-                            .buttonStyle(.plain)
-                            .font(SlabFont.sans(size: 13, weight: .semibold))
-                            .foregroundStyle(AppColor.muted)
-                            .accessibilityIdentifier("buy-price-reset")
                         }
+                    } else {
+                        // Lot is in a terminal/locked offer state — hide
+                        // the edit affordances and surface a short status
+                        // string so operators understand why.
+                        Text("Locked — \(lookupLot()?.lotOfferState ?? "—")")
+                            .font(SlabFont.mono(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                            .accessibilityIdentifier("buy-price-locked")
                     }
                 }
                 .padding(.horizontal, Spacing.l)
@@ -322,6 +332,16 @@ struct ScanDetailView: View {
         return try? context.fetch(
             FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
         ).first
+    }
+
+    /// True when the parent lot is in a state where the per-scan buy price
+    /// can still be edited. Mirrors the guard in `OfferRepository.setBuyPrice`
+    /// (which would throw on terminal states); hiding the buttons here makes
+    /// the constraint visible instead of producing a silent no-op tap.
+    private var lotIsPricingEditable: Bool {
+        guard let lot = lookupLot() else { return true }
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        return [.drafting, .priced, .presented].contains(state)
     }
 
     /// Standalone card showing the manual price the user set when no PPT

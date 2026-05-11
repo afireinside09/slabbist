@@ -1,15 +1,13 @@
 import Foundation
 
-/// Pure pricing math used by the lot-offer flow. Lives in its own type so the
-/// rules — how the per-scan buy price is derived from a reconciled comp + the
-/// store's margin — are testable in isolation and never duplicated across the
-/// repository, the view models, or the recompute Edge Function's local mirror.
+/// Pure helpers for client-side buy-price derivation.
 ///
-/// Mirrors the server-side derivation in `/lot-offer-recompute`: clients
-/// auto-populate `scans.buy_price_cents` locally so the UI is responsive, the
-/// outbox pushes the override flag + value, and the Edge Function reconciles
-/// the lot total. Keeping the formula here (and not inside `OfferRepository`)
-/// guarantees both producers stay in lock-step.
+/// `defaultBuyPrice` is the auto-pricing rule (comp × margin, half-up rounding)
+/// that the iOS app applies when a scan's comp lands. The server-side
+/// `/lot-offer-recompute` Edge Function does NOT re-derive — it sums the
+/// `buy_price_cents` values the client wrote. So this is the single source of
+/// truth for the auto-pricing formula; the server is the source of truth for
+/// per-lot totals.
 enum OfferPricingService {
     /// Auto-derived per-line buy price, in cents.
     ///
