@@ -50,6 +50,20 @@ nonisolated protocol LotRepository: Sendable {
     func upsertMany(_ lots: [LotDTO]) async throws
     func patch(id: UUID, fields: [String: AnyJSON]) async throws
     func delete(id: UUID) async throws
+
+    /// Invokes the `/lot-offer-recompute` Edge Function for a lot. Returns
+    /// the server-computed `{ offered_total_cents, lot_offer_state }` so
+    /// the iOS cache can refresh without a second round-trip.
+    func recomputeOffer(lotId: UUID) async throws -> LotOfferRecomputeResponse
+}
+
+/// Response from `/lot-offer-recompute`. The Edge Function returns the
+/// freshly-summed offer total plus the (possibly-flipped) state so the
+/// drainer can avoid a follow-up SELECT.
+nonisolated struct LotOfferRecomputeResponse: Codable, Sendable {
+    let lot_id: String
+    let offered_total_cents: Int64
+    let lot_offer_state: String
 }
 
 nonisolated protocol ScanRepository: Sendable {

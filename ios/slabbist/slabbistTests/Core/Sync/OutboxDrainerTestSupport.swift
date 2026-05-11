@@ -276,6 +276,72 @@ final class Harness {
         )
     }
 
+    func enqueueUpdateLotOffer(
+        id: UUID,
+        vendorId: UUID? = nil,
+        vendorNameSnapshot: String? = nil,
+        marginPctSnapshot: Double? = nil,
+        lotOfferState: String? = nil,
+        lotOfferStateUpdatedAt: Date? = nil,
+        createdAt: Date? = nil
+    ) async throws {
+        let stamp = createdAt ?? clock.current()
+        let iso = ISO8601DateFormatter()
+        let dto = OutboxPayloads.UpdateLotOffer(
+            id: id.uuidString,
+            vendor_id: vendorId?.uuidString,
+            vendor_name_snapshot: vendorNameSnapshot,
+            margin_pct_snapshot: marginPctSnapshot,
+            lot_offer_state: lotOfferState,
+            lot_offer_state_updated_at: lotOfferStateUpdatedAt.map { iso.string(from: $0) },
+            updated_at: iso.string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateLotOffer,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueRecomputeLotOffer(lotId: UUID, createdAt: Date? = nil) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.RecomputeLotOffer(lot_id: lotId.uuidString)
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .recomputeLotOffer,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
+    func enqueueUpdateScanBuyPrice(
+        id: UUID,
+        cents: Int64?,
+        overridden: Bool,
+        createdAt: Date? = nil
+    ) async throws {
+        let stamp = createdAt ?? clock.current()
+        let dto = OutboxPayloads.UpdateScanBuyPrice(
+            id: id.uuidString,
+            buy_price_cents: cents,
+            buy_price_overridden: overridden,
+            updated_at: ISO8601DateFormatter().string(from: stamp)
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateScanBuyPrice,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
     func enqueueCorruptItem(kind: OutboxKind, createdAt: Date? = nil) async throws {
         let stamp = createdAt ?? clock.current()
         let payload = Data("not json".utf8)
@@ -395,14 +461,27 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
 final class FakeLotRepository: LotRepository, @unchecked Sendable {
     private let recorder = Recorder()
     var nextError: Error?
+    /// Optional canned error to throw on the next `recomputeOffer` call.
+    /// Separate from `nextError` so dispatch tests can stage a 409 (terminal
+    /// state) without disturbing the patch-path recording.
+    var nextRecomputeError: Error?
+    /// Canned response returned from `recomputeOffer`. Tests can override
+    /// to assert downstream behaviour against specific server payloads.
+    var recomputeResponse: LotOfferRecomputeResponse = LotOfferRecomputeResponse(
+        lot_id: UUID().uuidString,
+        offered_total_cents: 0,
+        lot_offer_state: "pending"
+    )
 
     actor Recorder {
         var insertedIds: [UUID] = []
         var deletedIds: [UUID] = []
         var patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+        var recomputeCalls: [UUID] = []
         func appendInserted(_ id: UUID) { insertedIds.append(id) }
         func appendDeleted(_ id: UUID) { deletedIds.append(id) }
         func appendPatch(id: UUID, fields: [String: AnyJSON]) { patchCalls.append((id: id, fields: fields)) }
+        func appendRecompute(_ id: UUID) { recomputeCalls.append(id) }
         func snapshotInserted() -> [UUID] { insertedIds }
     }
 
@@ -410,6 +489,7 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
     private var _insertedIds: [UUID] = []
     private var _deletedIds: [UUID] = []
     private var _patchCalls: [(id: UUID, fields: [String: AnyJSON])] = []
+    private var _recomputeCalls: [UUID] = []
 
     var insertedIds: [UUID] {
         _lock.lock(); defer { _lock.unlock() }
@@ -424,6 +504,11 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
     var patchCalls: [(id: UUID, fields: [String: AnyJSON])] {
         _lock.lock(); defer { _lock.unlock() }
         return _patchCalls
+    }
+
+    var recomputeCalls: [UUID] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _recomputeCalls
     }
 
     func snapshotInsertedIds() async -> [UUID] { await recorder.snapshotInserted() }
@@ -472,6 +557,14 @@ final class FakeLotRepository: LotRepository, @unchecked Sendable {
         await recorder.appendDeleted(id)
         _lock.lock(); defer { _lock.unlock() }
         _deletedIds.append(id)
+    }
+
+    func recomputeOffer(lotId: UUID) async throws -> LotOfferRecomputeResponse {
+        if let e = nextRecomputeError { nextRecomputeError = nil; throw e }
+        await recorder.appendRecompute(lotId)
+        _lock.lock(); defer { _lock.unlock() }
+        _recomputeCalls.append(lotId)
+        return recomputeResponse
     }
 }
 

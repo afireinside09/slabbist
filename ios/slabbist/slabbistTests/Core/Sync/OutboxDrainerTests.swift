@@ -163,6 +163,127 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
+    @Test("dispatches updateLotOffer with snake_case patch fields")
+    @MainActor
+    func dispatchesUpdateLotOffer() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        let vendorId = UUID()
+        let stateStamp = h.clock.current()
+        try await h.enqueueUpdateLotOffer(
+            id: lotId,
+            vendorId: vendorId,
+            vendorNameSnapshot: "Acme Cards",
+            marginPctSnapshot: 0.18,
+            lotOfferState: "offered",
+            lotOfferStateUpdatedAt: stateStamp
+        )
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeLots.patchCalls.count == 1)
+        #expect(h.fakeLots.patchCalls[0].id == lotId)
+        let f = h.fakeLots.patchCalls[0].fields
+        #expect(f["vendor_id"] == .string(vendorId.uuidString))
+        #expect(f["vendor_name_snapshot"] == .string("Acme Cards"))
+        #expect(f["margin_pct_snapshot"] == .double(0.18))
+        #expect(f["lot_offer_state"] == .string("offered"))
+        let stateIso = ISO8601DateFormatter().string(from: stateStamp)
+        #expect(f["lot_offer_state_updated_at"] == .string(stateIso))
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("updateLotOffer omits nil optional fields from the wire patch")
+    @MainActor
+    func updateLotOfferOmitsNilFields() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        // Only `lot_offer_state` changes; vendor / margin stay untouched.
+        try await h.enqueueUpdateLotOffer(
+            id: lotId,
+            lotOfferState: "completed"
+        )
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeLots.patchCalls.count == 1)
+        let f = h.fakeLots.patchCalls[0].fields
+        #expect(f["lot_offer_state"] == .string("completed"))
+        #expect(f["updated_at"] != nil)
+        // None of these were set — must not be present in the patch.
+        #expect(f["vendor_id"] == nil)
+        #expect(f["vendor_name_snapshot"] == nil)
+        #expect(f["margin_pct_snapshot"] == nil)
+        #expect(f["lot_offer_state_updated_at"] == nil)
+    }
+
+    @Test("dispatches updateScanBuyPrice with cents + overridden flag")
+    @MainActor
+    func dispatchesUpdateScanBuyPrice() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueUpdateScanBuyPrice(id: scanId, cents: 7500, overridden: true)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.patchCalls.count == 1)
+        #expect(h.fakeScans.patchCalls[0].id == scanId)
+        let f = h.fakeScans.patchCalls[0].fields
+        #expect(f["buy_price_cents"] == .integer(7500))
+        #expect(f["buy_price_overridden"] == .bool(true))
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("updateScanBuyPrice with cents nil clears the override (writes .null)")
+    @MainActor
+    func dispatchesUpdateScanBuyPriceClearing() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueUpdateScanBuyPrice(id: scanId, cents: nil, overridden: false)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.patchCalls.count == 1)
+        let f = h.fakeScans.patchCalls[0].fields
+        #expect(f["buy_price_cents"] == .null)
+        #expect(f["buy_price_overridden"] == .bool(false))
+    }
+
+    @Test("dispatches recomputeLotOffer by invoking the Edge Function")
+    @MainActor
+    func dispatchesRecomputeLotOffer() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeLots.recomputeCalls == [lotId])
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("recomputeLotOffer 409 (terminal state) drains as success")
+    @MainActor
+    func recomputeLotOfferTreats409AsSuccess() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        // FunctionsError.httpError(409, ...) — simulates the server's
+        // terminal-state guard. The drainer should swallow it.
+        h.fakeLots.nextRecomputeError = FunctionsError.httpError(code: 409, data: Data())
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // The error was thrown before the call recorded, so recomputeCalls is empty.
+        #expect(h.fakeLots.recomputeCalls.isEmpty)
+        // But the outbox item drained — no retry queued.
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
     // MARK: - 7.3 error-classifier tests
 
     @Test("409 (uniqueViolation) on insertScan deletes the item — idempotent success")

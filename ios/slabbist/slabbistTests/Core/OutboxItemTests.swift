@@ -108,4 +108,78 @@ struct OutboxItemTests {
         #expect(json.contains("\"notes\":null"))
         #expect(json.contains("\"updated_at\":\"2026-05-07T12:00:00Z\""))
     }
+
+    @Test("UpdateLotOffer payload encodes snake_case keys and round-trips margin_pct")
+    func updateLotOfferPayloadEncoding() throws {
+        let payload = OutboxPayloads.UpdateLotOffer(
+            id: "11111111-1111-1111-1111-111111111111",
+            vendor_id: "22222222-2222-2222-2222-222222222222",
+            vendor_name_snapshot: "Acme Cards",
+            margin_pct_snapshot: 0.18,
+            lot_offer_state: "offered",
+            lot_offer_state_updated_at: "2026-05-08T12:00:00Z",
+            updated_at: "2026-05-08T12:00:00Z"
+        )
+        let data = try JSONEncoder().encode(payload)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"id\":\"11111111-1111-1111-1111-111111111111\""))
+        #expect(json.contains("\"vendor_id\":\"22222222-2222-2222-2222-222222222222\""))
+        #expect(json.contains("\"vendor_name_snapshot\":\"Acme Cards\""))
+        #expect(json.contains("\"margin_pct_snapshot\":0.18"))
+        #expect(json.contains("\"lot_offer_state\":\"offered\""))
+        #expect(json.contains("\"lot_offer_state_updated_at\":\"2026-05-08T12:00:00Z\""))
+        #expect(json.contains("\"updated_at\":\"2026-05-08T12:00:00Z\""))
+
+        let decoded = try JSONDecoder().decode(OutboxPayloads.UpdateLotOffer.self, from: data)
+        #expect(decoded.vendor_id == "22222222-2222-2222-2222-222222222222")
+        #expect(decoded.margin_pct_snapshot == 0.18)
+        #expect(decoded.lot_offer_state == "offered")
+    }
+
+    @Test("RecomputeLotOffer payload carries lot_id only")
+    func recomputeLotOfferPayloadEncoding() throws {
+        let payload = OutboxPayloads.RecomputeLotOffer(
+            lot_id: "55555555-5555-5555-5555-555555555555"
+        )
+        let data = try JSONEncoder().encode(payload)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"lot_id\":\"55555555-5555-5555-5555-555555555555\""))
+        let decoded = try JSONDecoder().decode(OutboxPayloads.RecomputeLotOffer.self, from: data)
+        #expect(decoded.lot_id == "55555555-5555-5555-5555-555555555555")
+    }
+
+    @Test("UpdateScanBuyPrice payload encodes cents, overridden flag, and updated_at")
+    func updateScanBuyPricePayloadEncoding() throws {
+        let payload = OutboxPayloads.UpdateScanBuyPrice(
+            id: "66666666-6666-6666-6666-666666666666",
+            buy_price_cents: 7500,
+            buy_price_overridden: true,
+            updated_at: "2026-05-08T12:00:00Z"
+        )
+        let data = try JSONEncoder().encode(payload)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"id\":\"66666666-6666-6666-6666-666666666666\""))
+        #expect(json.contains("\"buy_price_cents\":7500"))
+        #expect(json.contains("\"buy_price_overridden\":true"))
+        #expect(json.contains("\"updated_at\":\"2026-05-08T12:00:00Z\""))
+
+        // Clearing: cents nil — JSONEncoder omits nil optionals from the wire
+        // shape; the drainer dispatch path is what writes `.null` into the
+        // server patch (covered by OutboxDrainerTests.dispatchesUpdateScanBuyPriceClearing).
+        let clearPayload = OutboxPayloads.UpdateScanBuyPrice(
+            id: "66666666-6666-6666-6666-666666666666",
+            buy_price_cents: nil,
+            buy_price_overridden: false,
+            updated_at: "2026-05-08T12:00:00Z"
+        )
+        let clearData = try JSONEncoder().encode(clearPayload)
+        let clearJson = String(data: clearData, encoding: .utf8) ?? ""
+        #expect(!clearJson.contains("buy_price_cents"))
+        #expect(clearJson.contains("\"buy_price_overridden\":false"))
+
+        // Round-trip the cleared payload to confirm `nil` survives decode.
+        let decoded = try JSONDecoder().decode(OutboxPayloads.UpdateScanBuyPrice.self, from: clearData)
+        #expect(decoded.buy_price_cents == nil)
+        #expect(decoded.buy_price_overridden == false)
+    }
 }

@@ -6,6 +6,7 @@ import Supabase
 /// jsonb); detail paths use the full `LotDTO`.
 nonisolated struct SupabaseLotRepository: LotRepository, Sendable {
     static let tableName = "lots"
+    static let recomputeFunctionName = "lot-offer-recompute"
 
     private let base: SupabaseRepository<LotDTO>
     private let client: SupabaseClient
@@ -115,5 +116,23 @@ nonisolated struct SupabaseLotRepository: LotRepository, Sendable {
 
     func delete(id: UUID) async throws {
         try await base.delete(id: id)
+    }
+
+    // MARK: - Edge Functions
+
+    /// Invokes `/lot-offer-recompute`. The Edge Function sums per-scan
+    /// `buy_price_cents` for the lot, flips `lot_offer_state` as the lot
+    /// crosses thresholds, and returns the resulting snapshot so the iOS
+    /// cache can refresh without a second round-trip.
+    func recomputeOffer(lotId: UUID) async throws -> LotOfferRecomputeResponse {
+        struct Body: Encodable { let lot_id: String }
+        let body = Body(lot_id: lotId.uuidString)
+        do {
+            let response: LotOfferRecomputeResponse = try await client.functions
+                .invoke(Self.recomputeFunctionName, options: FunctionInvokeOptions(body: body))
+            return response
+        } catch {
+            throw SupabaseError.map(error)
+        }
     }
 }

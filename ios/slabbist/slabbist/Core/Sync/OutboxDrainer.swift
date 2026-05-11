@@ -322,6 +322,58 @@ actor OutboxDrainer: ModelActor {
             }
             try await repositories.scans.patch(id: id, fields: fields)
 
+        case .updateScanBuyPrice:
+            let p = try decode(OutboxPayloads.UpdateScanBuyPrice.self, payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateScanBuyPrice: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = [
+                "buy_price_overridden": .bool(p.buy_price_overridden),
+                "updated_at": .string(p.updated_at)
+            ]
+            if let cents = p.buy_price_cents {
+                guard let safe = Int(exactly: cents) else {
+                    throw OutboxBridgeError.malformedPayload(reason: "UpdateScanBuyPrice: buy_price_cents overflows Int")
+                }
+                fields["buy_price_cents"] = .integer(safe)
+            } else {
+                fields["buy_price_cents"] = .null
+            }
+            try await repositories.scans.patch(id: id, fields: fields)
+
+        case .updateLotOffer:
+            let p = try decode(OutboxPayloads.UpdateLotOffer.self, payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateLotOffer: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
+            if let v = p.vendor_id                 { fields["vendor_id"]                  = .string(v) }
+            if let v = p.vendor_name_snapshot      { fields["vendor_name_snapshot"]       = .string(v) }
+            if let v = p.margin_pct_snapshot       { fields["margin_pct_snapshot"]        = .double(v) }
+            if let v = p.lot_offer_state           { fields["lot_offer_state"]            = .string(v) }
+            if let v = p.lot_offer_state_updated_at {
+                fields["lot_offer_state_updated_at"] = .string(v)
+            }
+            try await repositories.lots.patch(id: id, fields: fields)
+
+        case .recomputeLotOffer:
+            let p = try decode(OutboxPayloads.RecomputeLotOffer.self, payload)
+            guard let lotId = UUID(uuidString: p.lot_id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "RecomputeLotOffer: invalid lot_id")
+            }
+            // The Edge Function returns 409 when the lot is in a terminal
+            // state (the iOS local state is the authority for completed
+            // lots); treat that as success so the outbox item drains.
+            do {
+                _ = try await repositories.lots.recomputeOffer(lotId: lotId)
+            } catch let error as FunctionsError {
+                if case let .httpError(code, _) = error, code == 409 {
+                    // Terminal-state guard; local cache is fine.
+                } else {
+                    throw error
+                }
+            }
+
         case .deleteScan:
             let p = try decode(OutboxPayloads.DeleteScan.self, payload)
             guard let id = UUID(uuidString: p.id) else {

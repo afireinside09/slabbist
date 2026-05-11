@@ -125,4 +125,37 @@ nonisolated extension OutboxPayloads {
         let id: String
         let archived_at: String
     }
+
+    /// Patch payload for the new offer columns on a lot. Any field that's nil
+    /// is omitted from the wire patch (don't accidentally clear server values).
+    /// `updated_at` is always sent so the row's `updated_at` advances.
+    struct UpdateLotOffer: Codable {
+        let id: String
+        let vendor_id: String?
+        let vendor_name_snapshot: String?
+        let margin_pct_snapshot: Double?
+        let lot_offer_state: String?
+        let lot_offer_state_updated_at: String?
+        let updated_at: String
+    }
+
+    /// Trigger payload for `/lot-offer-recompute`. Server-side sums per-scan
+    /// `buy_price_cents` and flips `lot_offer_state` as the lot crosses
+    /// thresholds. Carries only `lot_id`; the Edge Function looks up the
+    /// rest from the row.
+    struct RecomputeLotOffer: Codable {
+        let lot_id: String
+    }
+
+    /// Patch payload for per-scan buy price. `buy_price_cents == nil` clears
+    /// the override (server falls back to the comp-derived value);
+    /// `buy_price_overridden` is always sent so the toggle reflects intent
+    /// even when reverting to the auto-computed price.
+    struct UpdateScanBuyPrice: Codable {
+        let id: String
+        let buy_price_cents: Int64?
+        let buy_price_overridden: Bool
+        let updated_at: String
+    }
 }
+
