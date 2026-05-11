@@ -11,6 +11,8 @@ enum LotsRoute: Hashable {
     case lot(UUID)
     case scan(UUID)
     case offerReview(UUID)
+    case transaction(UUID)
+    case transactionsList
 }
 
 struct LotsListView: View {
@@ -24,6 +26,18 @@ struct LotsListView: View {
     @State private var path: [LotsRoute] = []
     @State private var viewModel: LotsViewModel?
     @State private var lotPendingDelete: Lot?
+
+    /// All transactions, newest-first. Filtered to the last 7 days and capped
+    /// at 8 rows for the dashboard surface — Plan 3 / Task 12. Storing in a
+    /// `@Query` (vs ad-hoc fetch) keeps the section reactive when a new lot
+    /// is marked paid in another view.
+    @Query(sort: [SortDescriptor(\StoreTransaction.paidAt, order: .reverse)])
+    private var allTransactions: [StoreTransaction]
+
+    private var recentTransactions: [StoreTransaction] {
+        let since = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date.distantPast
+        return Array(allTransactions.filter { $0.paidAt >= since }.prefix(8))
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -50,6 +64,8 @@ struct LotsListView: View {
                         } else {
                             openLotsSection
                         }
+
+                        recentTransactionsSection
 
                         Spacer(minLength: Spacing.xxxl)
                     }
@@ -254,7 +270,68 @@ struct LotsListView: View {
             } else {
                 missingEntityView(label: "Lot")
             }
+        case .transaction(let txnId):
+            if let txn = try? context.fetch(
+                FetchDescriptor<StoreTransaction>(predicate: #Predicate { $0.id == txnId })
+            ).first {
+                TransactionDetailView(transaction: txn)
+            } else {
+                missingEntityView(label: "Transaction")
+            }
+        case .transactionsList:
+            TransactionsListView()
         }
+    }
+
+    /// Last-7-days transaction list shown beneath open lots. Empty case is a
+    /// no-op so the dashboard stays focused for stores that haven't paid a
+    /// lot recently. Each row is a typed `NavigationLink` into the same
+    /// `LotsRoute` stack so deep-links survive tab switches.
+    @ViewBuilder
+    private var recentTransactionsSection: some View {
+        if !recentTransactions.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.m) {
+                HStack {
+                    KickerLabel("Recent transactions")
+                    Spacer()
+                    NavigationLink(value: LotsRoute.transactionsList) {
+                        Text("View all")
+                            .font(SlabFont.sans(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColor.gold)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recent-transactions-view-all")
+                }
+                SlabCard {
+                    VStack(spacing: 0) {
+                        ForEach(recentTransactions, id: \.id) { txn in
+                            if txn.id != recentTransactions.first?.id { SlabCardDivider() }
+                            NavigationLink(value: LotsRoute.transaction(txn.id)) {
+                                HStack {
+                                    Text(txn.vendorNameSnapshot).slabRowTitle()
+                                    Spacer()
+                                    Text(formatCents(txn.totalBuyCents))
+                                        .font(SlabFont.mono(size: 12, weight: .semibold))
+                                }
+                                .padding(.horizontal, Spacing.l)
+                                .padding(.vertical, Spacing.md)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("recent-txn-row-\(txn.id.uuidString)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatCents(_ cents: Int64) -> String {
+        let dollars = Double(cents) / 100
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = "USD"
+        return f.string(from: dollars as NSNumber) ?? "$\(dollars)"
     }
 
     private func missingEntityView(label: String) -> some View {

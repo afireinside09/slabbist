@@ -50,6 +50,7 @@ struct ScanDetailView: View {
         SlabbedRoot {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    scanFrozenBanner
                     header
                     buyPriceCard
                     if pptSnapshot != nil || poketraceSnapshot != nil {
@@ -342,6 +343,34 @@ struct ScanDetailView: View {
         guard let lot = lookupLot() else { return true }
         let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
         return [.drafting, .priced, .presented].contains(state)
+    }
+
+    /// True when the parent lot is `.paid` or `.voided` — the slab is part of
+    /// a sealed transaction and must read-only. Drives `scanFrozenBanner`.
+    private var lotIsTerminal: Bool {
+        guard let lot = lookupLot() else { return false }
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        return state == .paid || state == .voided
+    }
+
+    /// Top-of-page lock strip shown when this scan's parent lot is terminal.
+    /// Communicates immutability before the operator scrolls into editing
+    /// affordances that are already disabled by `lotIsPricingEditable`.
+    @ViewBuilder
+    private var scanFrozenBanner: some View {
+        if lotIsTerminal {
+            SlabCard {
+                HStack {
+                    Image(systemName: "lock.fill").foregroundStyle(AppColor.gold)
+                    Text("Frozen — this scan is part of a paid lot")
+                        .font(SlabFont.mono(size: 11, weight: .semibold))
+                        .tracking(0.8)
+                    Spacer()
+                }
+                .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.s)
+            }
+            .accessibilityIdentifier("scan-frozen-banner")
+        }
     }
 
     /// Standalone card showing the manual price the user set when no PPT

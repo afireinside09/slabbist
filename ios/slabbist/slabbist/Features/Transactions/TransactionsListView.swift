@@ -25,7 +25,7 @@ struct TransactionsListView: View {
                             VStack(spacing: 0) {
                                 ForEach(transactions, id: \.id) { txn in
                                     if txn.id != transactions.first?.id { SlabCardDivider() }
-                                    NavigationLink(value: txn.id) {
+                                    NavigationLink(value: LotsRoute.transaction(txn.id)) {
                                         row(for: txn)
                                     }
                                     .buttonStyle(.plain)

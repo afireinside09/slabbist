@@ -39,6 +39,7 @@ struct LotDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
                     header
+                    frozenBanner
                     aggregateStrip
                     vendorStrip
                     marginRow
@@ -191,8 +192,9 @@ struct LotDetailView: View {
                 Spacer()
                 Button(lot.vendorId == nil ? "Attach" : "Change") { showingVendorPicker = true }
                     .buttonStyle(.plain)
-                    .foregroundStyle(AppColor.gold)
+                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.gold)
                     .accessibilityIdentifier("lot-vendor-attach")
+                    .disabled(lotIsFrozen)
             }
             .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
         }
@@ -212,10 +214,65 @@ struct LotDetailView: View {
                 Spacer()
                 Button("Adjust") { showingMarginSheet = true }
                     .buttonStyle(.plain)
-                    .foregroundStyle(AppColor.gold)
+                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.gold)
                     .accessibilityIdentifier("lot-margin-adjust")
+                    .disabled(lotIsFrozen)
             }
             .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
+        }
+    }
+
+    /// True when the lot has reached a terminal offer state (paid or voided).
+    /// Hides editing affordances and surfaces the "Frozen" banner — the
+    /// underlying transaction snapshot must stay immutable once written.
+    private var lotIsFrozen: Bool {
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        return state == .paid || state == .voided
+    }
+
+    /// Newest transaction id associated with this lot. Used to deep-link the
+    /// "View receipt" CTA on the frozen banner + action bar. Returns `nil`
+    /// (CTA hidden) when the row hasn't synced down yet — the banner still
+    /// renders so the lock state is communicated immediately.
+    private func matchingTransactionId() -> UUID? {
+        let lotId = lot.id
+        var desc = FetchDescriptor<StoreTransaction>(
+            predicate: #Predicate<StoreTransaction> { $0.lotId == lotId },
+            sortBy: [SortDescriptor(\.paidAt, order: .reverse)]
+        )
+        desc.fetchLimit = 1
+        return (try? context.fetch(desc).first)?.id
+    }
+
+    /// Top-of-page lock banner shown when the lot is in a terminal state.
+    /// Pairs a state-coloured label with a "View receipt" deep-link so the
+    /// operator can jump from the frozen lot directly into the underlying
+    /// transaction row without hunting for it via the recent-transactions
+    /// section.
+    @ViewBuilder
+    private var frozenBanner: some View {
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        if state == .paid || state == .voided {
+            SlabCard {
+                HStack {
+                    Image(systemName: "lock.fill").foregroundStyle(AppColor.gold)
+                    Text(state == .paid ? "Frozen — paid" : "Frozen — voided")
+                        .font(SlabFont.mono(size: 12, weight: .semibold))
+                        .tracking(1)
+                    Spacer()
+                    if let txnId = matchingTransactionId() {
+                        NavigationLink(value: LotsRoute.transaction(txnId)) {
+                            Text("View receipt")
+                                .font(SlabFont.sans(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColor.gold)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("view-receipt")
+                    }
+                }
+                .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
+            }
+            .accessibilityIdentifier("lot-frozen-banner")
         }
     }
 
@@ -241,7 +298,20 @@ struct LotDetailView: View {
             Button("Re-open as new offer") { try? offerRepository().reopenDeclined(lot) }
                 .accessibilityIdentifier("reopen-declined")
         case .paid, .voided:
-            EmptyView()   // Plan 3 fills these
+            // Terminal — surface the receipt link in place of an actionable
+            // CTA. `frozenBanner` already mirrors this affordance at the top
+            // of the screen; keeping it in the action bar means the receipt
+            // is always reachable without scrolling once a long slab list
+            // pushes the banner off-screen.
+            if let txnId = matchingTransactionId() {
+                NavigationLink(value: LotsRoute.transaction(txnId)) {
+                    Text("View receipt")
+                        .font(SlabFont.sans(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColor.gold)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("view-receipt-action")
+            }
         }
     }
 
