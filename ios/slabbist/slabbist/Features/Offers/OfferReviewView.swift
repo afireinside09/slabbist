@@ -11,10 +11,13 @@ struct OfferReviewView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
     @Environment(OutboxKicker.self) private var kicker
+    @Environment(\.dismiss) private var dismiss
     @Query private var scans: [Scan]
     @State private var paymentMethod: String = "cash"
     @State private var paymentReference: String = ""
     @State private var error: String?
+    @State private var isCommitting = false
+    @State private var commitError: String?
 
     init(lot: Lot) {
         self.lot = lot
@@ -46,6 +49,16 @@ struct OfferReviewView: View {
         }
         .navigationTitle("Offer review")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: lot.lotOfferState) { _, new in
+            if new == LotOfferState.paid.rawValue && isCommitting {
+                isCommitting = false
+                // The receipt push to TransactionDetailView happens in Plan 3 / Task 12
+                // (via the lot's frozen banner). For now, dismissing this view returns to
+                // the previous nav stack, and LotDetailView's frozen banner is the receipt
+                // entry point.
+                dismiss()
+            }
+        }
     }
 
     private var header: some View {
@@ -118,16 +131,26 @@ struct OfferReviewView: View {
 
     private var actionStack: some View {
         VStack(spacing: Spacing.m) {
-            PrimaryGoldButton(title: "Mark paid") {
-                do {
-                    try offerRepository().recordAcceptance(lot)
-                    // Plan 3 wires this into /transaction-commit. For now,
-                    // accept is the terminal local state.
-                } catch {
-                    self.error = error.localizedDescription
-                }
+            PrimaryGoldButton(
+                title: isCommitting ? "Committing…" : "Mark paid",
+                isEnabled: canMarkPaid && !isCommitting
+            ) {
+                commit()
             }
             .accessibilityIdentifier("mark-paid")
+
+            if let commitError {
+                Text(commitError)
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.negative)
+                    .accessibilityIdentifier("offer-review-commit-error")
+            }
+
+            if isCommitting && LotOfferState(rawValue: lot.lotOfferState) != .paid {
+                Text("Sync pending — your offer is saved. Receipt will appear once we reach the server.")
+                    .font(SlabFont.sans(size: 12)).foregroundStyle(AppColor.muted)
+                    .accessibilityIdentifier("offer-review-sync-pending")
+            }
 
             HStack(spacing: Spacing.m) {
                 Button("Bounce back") {
@@ -146,6 +169,30 @@ struct OfferReviewView: View {
                 .foregroundStyle(AppColor.negative)
                 .accessibilityIdentifier("decline-offer")
             }
+        }
+    }
+
+    private var canMarkPaid: Bool {
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        return state == .accepted || state == .presented
+    }
+
+    private func commit() {
+        commitError = nil
+        let repo = offerRepository()
+        do {
+            // If we're not yet accepted, advance to accepted first.
+            if LotOfferState(rawValue: lot.lotOfferState) != .accepted {
+                try repo.recordAcceptance(lot)
+            }
+            try repo.commit(
+                lot: lot,
+                paymentMethod: paymentMethod,
+                paymentReference: paymentReference.isEmpty ? nil : paymentReference
+            )
+            isCommitting = true
+        } catch {
+            commitError = error.localizedDescription
         }
     }
 
