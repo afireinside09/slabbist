@@ -113,10 +113,18 @@ struct VendorDetailView: View {
         .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
     }
 
+    /// "Last buy" only counts active (non-voided) transactions — `history` is
+    /// sorted newest-first, so `first` can be a void row when the most-recent
+    /// purchase was voided. Lifetime + Buys already filter on `isActive`; this
+    /// brings the date cell into the same convention.
+    private var lastBuyDate: Date? {
+        history.first(where: \.isActive)?.paidAt
+    }
+
     private var aggregateStrip: some View {
         HStack(spacing: Spacing.l) {
             aggregateCell(label: "Lifetime", value: formatCents(history.filter(\.isActive).reduce(0) { $0 + $1.totalBuyCents }))
-            aggregateCell(label: "Last buy", value: history.first.map { relativeDate($0.paidAt) } ?? "—")
+            aggregateCell(label: "Last buy", value: lastBuyDate.map(relativeDate) ?? "—")
             aggregateCell(label: "Buys", value: String(history.filter(\.isActive).count))
         }
         .padding(.top, Spacing.s)

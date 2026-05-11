@@ -177,7 +177,14 @@ Deno.serve(async (req) => {
   });
   if (txnErr) {
     if (txnErr.code === "23505") {
-      // Duplicate; fetch + return the existing for outbox idempotence.
+      // Race: another request landed the transaction first. Reconcile so the
+      // dedup response is consistent — re-run the line INSERT (idempotent on
+      // the (transaction_id, scan_id) primary key — duplicate rows would
+      // 23505 but the upsert ignoreDuplicates flag swallows them) and re-run
+      // the lot UPDATE (convergent — repeated assignment of 'paid' is a no-op).
+      // Without this, an earlier attempt that crashed between the txn INSERT
+      // and the lines INSERT / lot UPDATE would leave divergent state that
+      // never recovered.
       const { data: existing } = await serviceClient
         .from("transactions")
         .select("*")
@@ -186,6 +193,31 @@ Deno.serve(async (req) => {
         .is("voided_at", null)
         .maybeSingle();
       if (existing) {
+        // Idempotent line insert — PK conflicts on duplicate (transaction_id,
+        // scan_id) rows are ignored via upsert ignoreDuplicates.
+        const dedupLines = priced.map((s, idx) => ({
+          transaction_id: existing.id,
+          scan_id: s.id,
+          line_index: idx,
+          buy_price_cents: s.buy_price_cents!,
+          identity_snapshot: buildIdentitySnapshot({
+            scan: s,
+            identity: s.graded_card_identity_id ? (identityMap[s.graded_card_identity_id] ?? null) : null,
+          }),
+        }));
+        await serviceClient
+          .from("transaction_lines")
+          .upsert(dedupLines, { onConflict: "transaction_id,scan_id", ignoreDuplicates: true });
+        // Idempotent lot flip — convergent assignment. Don't CAS here because
+        // a prior in-flight attempt may have already moved the lot to 'paid'.
+        await serviceClient
+          .from("lots")
+          .update({
+            lot_offer_state: "paid",
+            lot_offer_state_updated_at: new Date().toISOString(),
+            status: "converted",
+          })
+          .eq("id", lot.id);
         const { data: existingLines } = await serviceClient
           .from("transaction_lines")
           .select("*")
@@ -210,16 +242,26 @@ Deno.serve(async (req) => {
   const { error: linesErr } = await serviceClient.from("transaction_lines").insert(lines);
   if (linesErr) return json(500, { code: "DB_ERROR", detail: linesErr.message });
 
-  // Flip the lot.
-  const { error: lotUpdErr } = await serviceClient
+  // Flip the lot. CAS on `lot_offer_state = 'accepted'` so we don't trample
+  // a state change that happened between the initial read and this write.
+  // The transaction + lines we already inserted are durable; surfacing 409
+  // here lets the caller (operator UI) notice the actual conflict instead of
+  // silently overwriting whatever state the lot raced into.
+  const { data: updated, error: lotUpdErr } = await serviceClient
     .from("lots")
     .update({
       lot_offer_state: "paid",
       lot_offer_state_updated_at: paidAt,
       status: "converted",
     })
-    .eq("id", lot.id);
+    .eq("id", lot.id)
+    .eq("lot_offer_state", "accepted")
+    .select("id")
+    .maybeSingle();
   if (lotUpdErr) return json(500, { code: "DB_ERROR", detail: lotUpdErr.message });
+  if (!updated) {
+    return json(409, { code: "LOT_STATE_RACED", lot_id: lot.id });
+  }
 
   // Re-read for the response.
   const { data: txn } = await serviceClient.from("transactions").select("*").eq("id", txnId).maybeSingle();

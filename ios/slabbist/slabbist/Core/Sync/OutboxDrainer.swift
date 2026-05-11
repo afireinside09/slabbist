@@ -401,22 +401,50 @@ actor OutboxDrainer: ModelActor {
 
         case .commitTransaction:
             let p = try decode(OutboxPayloads.CommitTransaction.self, payload)
-            let resp = try await repositories.transactions.commit(payload: .init(
-                lot_id: p.lot_id,
-                payment_method: p.payment_method,
-                payment_reference: p.payment_reference,
-                vendor_id: p.vendor_id,
-                vendor_name_override: p.vendor_name_override
-            ))
-            try await TransactionsHydrator.upsert(commitResponse: resp, container: modelContainer)
+            // The Edge Function returns 409 (WRONG_STATE / LOT_STATE_RACED)
+            // when the lot is no longer in `.accepted` by the time the
+            // server tries to flip it. Treat that as a resolved outcome
+            // for this outbox attempt: a future producer (or a manual
+            // operator action) is the authority for what state the lot
+            // should land in. Without this, the FunctionsError 409 falls
+            // through SupabaseError.map → .transport → .transient and the
+            // outbox retries forever. Mirrors the recomputeLotOffer case.
+            do {
+                let resp = try await repositories.transactions.commit(payload: .init(
+                    lot_id: p.lot_id,
+                    payment_method: p.payment_method,
+                    payment_reference: p.payment_reference,
+                    vendor_id: p.vendor_id,
+                    vendor_name_override: p.vendor_name_override
+                ))
+                try await TransactionsHydrator.upsert(commitResponse: resp, container: modelContainer)
+            } catch let error as FunctionsError {
+                if case let .httpError(code, _) = error, code == 409 {
+                    // Conflict drained — local state will reconcile via the
+                    // next patch from another producer.
+                } else {
+                    throw error
+                }
+            }
 
         case .voidTransaction:
             let p = try decode(OutboxPayloads.VoidTransaction.self, payload)
             guard let txnId = UUID(uuidString: p.transaction_id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "VoidTransaction: invalid UUID")
             }
-            let resp = try await repositories.transactions.void(transactionId: txnId, reason: p.reason)
-            try await TransactionsHydrator.upsert(voidResponse: resp, container: modelContainer)
+            // 409 (ALREADY_VOIDED) is convergent — the server already has the
+            // void row. Drain the outbox item; the hydrator will pick the
+            // server's authoritative `voided_at` up on the next sync.
+            do {
+                let resp = try await repositories.transactions.void(transactionId: txnId, reason: p.reason)
+                try await TransactionsHydrator.upsert(voidResponse: resp, container: modelContainer)
+            } catch let error as FunctionsError {
+                if case let .httpError(code, _) = error, code == 409 {
+                    // Already voided server-side; nothing more to do here.
+                } else {
+                    throw error
+                }
+            }
 
         case .certLookupJob, .priceCompJob:
             // Group B kinds are out of scope for v1 — surface as permanent

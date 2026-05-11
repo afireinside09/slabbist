@@ -297,12 +297,13 @@ struct LotDetailView: View {
         case .declined:
             Button("Re-open as new offer") { try? offerRepository().reopenDeclined(lot) }
                 .accessibilityIdentifier("reopen-declined")
-        case .paid, .voided:
+        case .paid:
             // Terminal — surface the receipt link in place of an actionable
             // CTA. `frozenBanner` already mirrors this affordance at the top
             // of the screen; keeping it in the action bar means the receipt
             // is always reachable without scrolling once a long slab list
-            // pushes the banner off-screen.
+            // pushes the banner off-screen. Paid lots intentionally have no
+            // re-open path: an operator must void the transaction first.
             if let txnId = matchingTransactionId() {
                 NavigationLink(value: LotsRoute.transaction(txnId)) {
                     Text("View receipt")
@@ -311,6 +312,28 @@ struct LotDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("view-receipt-action")
+            }
+        case .voided:
+            // Voided lots get both affordances: receipt deep-link for audit
+            // trail, plus a re-open CTA so an operator who voided in error
+            // can take the lot back into pricing. Without the re-open path
+            // a voided lot is a dead-end in the UI.
+            VStack(spacing: Spacing.m) {
+                if let txnId = matchingTransactionId() {
+                    NavigationLink(value: LotsRoute.transaction(txnId)) {
+                        Text("View receipt")
+                            .font(SlabFont.sans(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColor.gold)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("view-receipt-action")
+                }
+                Button("Re-open lot as new offer") {
+                    try? offerRepository().reopenVoided(lot)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppColor.muted)
+                .accessibilityIdentifier("reopen-voided")
             }
         }
     }

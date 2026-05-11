@@ -55,7 +55,8 @@ final class OfferRepository {
              (.accepted, .declined),
              (.accepted, .paid),
              (.paid, .voided),
-             (.declined, .priced):
+             (.declined, .priced),
+             (.voided, .priced):
             return true
         default:
             return false
@@ -238,6 +239,19 @@ final class OfferRepository {
     /// rather than `.drafting` because the math is still on the lot — the
     /// vendor just changed their mind.
     func reopenDeclined(_ lot: Lot) throws {
+        try transition(lot, to: .priced)
+        try context.save()
+        kicker.kick()
+    }
+
+    /// Take a voided lot back into the pricing flow. Pairs with the void
+    /// path so an operator who voided a transaction in error has a way
+    /// out — without this, voided lots are dead-ends in the UI. Lands on
+    /// `.priced` because the buy prices on the underlying scans are
+    /// still set; if the operator wants to start over they can clear them.
+    /// Paid lots stay locked behind `.voided` — there's deliberately no
+    /// `.paid → .priced` shortcut.
+    func reopenVoided(_ lot: Lot) throws {
         try transition(lot, to: .priced)
         try context.save()
         kicker.kick()

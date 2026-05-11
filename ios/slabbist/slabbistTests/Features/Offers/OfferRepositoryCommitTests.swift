@@ -63,6 +63,31 @@ struct OfferRepositoryCommitTests {
         }
     }
 
+    @Test func reopenVoidedTransitionsToPriced() throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+        let kicker = OutboxKicker { /* no-op */ }
+        let lot = Lot(
+            id: UUID(),
+            storeId: UUID(),
+            createdByUserId: UUID(),
+            name: "L",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        lot.lotOfferState = LotOfferState.voided.rawValue
+        context.insert(lot)
+        try context.save()
+        let repo = OfferRepository(
+            context: context,
+            kicker: kicker,
+            currentStoreId: lot.storeId,
+            currentUserId: UUID()
+        )
+        try repo.reopenVoided(lot)
+        #expect(lot.lotOfferState == LotOfferState.priced.rawValue)
+    }
+
     @Test func voidTransactionEnqueuesItem() throws {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)

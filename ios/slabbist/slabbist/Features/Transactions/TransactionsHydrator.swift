@@ -112,7 +112,7 @@ enum TransactionsHydrator {
                 paymentReference: row.payment_reference,
                 paidAt: parseISO(row.paid_at) ?? Date(),
                 paidByUserId: UUID(uuidString: row.paid_by_user_id) ?? UUID(),
-                voidedAt: parseISO(row.voided_at ?? ""),
+                voidedAt: row.voided_at.flatMap(parseISO),
                 voidedByUserId: row.voided_by_user_id.flatMap(UUID.init(uuidString:)),
                 voidReason: row.void_reason,
                 voidOfTransactionId: row.void_of_transaction_id.flatMap(UUID.init(uuidString:)),
@@ -122,14 +122,16 @@ enum TransactionsHydrator {
         }
 
         // Mirror the server's `voided_at` stamp onto the local original row.
-        // The void row's `voidReason` carries the human text — we don't have
-        // it broken out separately here, but consumers reading the original
-        // can look it up via `voidOfTransactionId` on the void row.
+        // Sourced from the void row's `voided_at` (the server stamps the
+        // same timestamp on both the void row and the original) — using
+        // `Date()` here would drift from the server truth by the network
+        // round-trip. Falls back to `Date()` only when the server response
+        // somehow omits the field, which shouldn't happen in practice.
         if let origId = UUID(uuidString: voidResponse.original_id),
            let orig = try? context.fetch(
                FetchDescriptor<StoreTransaction>(predicate: #Predicate { $0.id == origId })
            ).first {
-            orig.voidedAt = Date()
+            orig.voidedAt = voidResponse.void_transaction.voided_at.flatMap(parseISO) ?? Date()
         }
 
         // Flip the lot back to voided so it can be re-opened by the seller.
