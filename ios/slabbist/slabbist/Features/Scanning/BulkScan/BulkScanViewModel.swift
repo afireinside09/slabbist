@@ -240,7 +240,7 @@ final class BulkScanViewModel {
             AppLog.scans.info("comp fetch skipped — no compRepository injected")
             return
         }
-        CompFetchService.fetch(scan: scan, repository: compRepo, context: self.context)
+        CompFetchService.fetch(scan: scan, repository: compRepo, context: self.context, kicker: self.kicker)
     }
 
     /// SwiftData's `#Predicate` macro can't capture enum values (same quirk as

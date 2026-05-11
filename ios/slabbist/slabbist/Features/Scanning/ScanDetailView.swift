@@ -362,7 +362,7 @@ struct ScanDetailView: View {
             baseURL: baseURL,
             authTokenProvider: { try? await AppSupabase.shared.client.auth.session.accessToken }
         )
-        CompFetchService.fetch(scan: scan, repository: repo, context: context)
+        CompFetchService.fetch(scan: scan, repository: repo, context: context, kicker: kicker)
     }
 
     /// True when the scan thinks it's fetching but the originating

@@ -51,15 +51,17 @@ final class CompFetchService {
     static func fetch(
         scan: Scan,
         repository: CompRepository,
-        context: ModelContext
+        context: ModelContext,
+        kicker: OutboxKicker? = nil
     ) {
-        shared.fetch(scan: scan, repository: repository, context: context)
+        shared.fetch(scan: scan, repository: repository, context: context, kicker: kicker)
     }
 
     func fetch(
         scan: Scan,
         repository: CompRepository,
-        context: ModelContext
+        context: ModelContext,
+        kicker: OutboxKicker? = nil
     ) {
         guard let identityId = scan.gradedCardIdentityId,
               let grade = scan.grade else {
@@ -118,6 +120,25 @@ final class CompFetchService {
                     target.compFetchError = nil
                     target.compFetchedAt = Date()
                     try? context.save()
+                }
+                // Comp landed → derive a per-scan buy price from the
+                // reconciled headline + the lot's margin snapshot. Skips when
+                // the caller didn't supply a kicker (legacy call sites that
+                // pre-date the offer flow) or when the scan was overridden
+                // by the user. The kicker is needed to drain the outbox
+                // patch + recompute item that `applyAutoBuyPrice` enqueues.
+                if let kicker,
+                   let target = Self.fetchScan(scanId, in: context),
+                   let lot = Self.fetchLot(target.lotId, in: context) {
+                    let repo = OfferRepository(
+                        context: context,
+                        kicker: kicker,
+                        currentStoreId: target.storeId,
+                        currentUserId: target.userId
+                    )
+                    _ = try? repo.applyAutoBuyPrice(scan: target, lot: lot)
+                    try? context.save()
+                    kicker.kick()
                 }
             } catch {
                 let (state, message) = Self.classify(error)
@@ -319,6 +340,12 @@ final class CompFetchService {
 
     private static func fetchScan(_ id: UUID, in context: ModelContext) -> Scan? {
         var descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
+    private static func fetchLot(_ id: UUID, in context: ModelContext) -> Lot? {
+        var descriptor = FetchDescriptor<Lot>(predicate: #Predicate<Lot> { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }

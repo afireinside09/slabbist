@@ -50,6 +50,18 @@ final class LotsViewModel {
         )
         context.insert(lot)
 
+        // Snapshot the store's default margin onto the new lot so re-opening
+        // it later reproduces the same buy-price math, even if the store's
+        // default has drifted in the meantime. The `InsertLot` outbox payload
+        // doesn't carry this column today — the next `updateLotOffer` patch
+        // (set lot margin, send to offer, etc.) will carry it server-side.
+        let storeId = currentStoreId
+        if let store = try? context.fetch(
+            FetchDescriptor<Store>(predicate: #Predicate { $0.id == storeId })
+        ).first {
+            lot.marginPctSnapshot = store.defaultMarginPct
+        }
+
         let dto = OutboxPayloads.InsertLot(
             id: lot.id.uuidString,
             store_id: lot.storeId.uuidString,
