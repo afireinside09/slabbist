@@ -10,6 +10,7 @@ import OSLog
 enum LotsRoute: Hashable {
     case lot(UUID)
     case scan(UUID)
+    case offerReview(UUID)
 }
 
 struct LotsListView: View {
@@ -245,6 +246,14 @@ struct LotsListView: View {
             } else {
                 missingEntityView(label: "Slab")
             }
+        case .offerReview(let lotId):
+            if let lot = try? context.fetch(
+                FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+            ).first {
+                OfferReviewPlaceholderView(lot: lot)
+            } else {
+                missingEntityView(label: "Lot")
+            }
         }
     }
 
@@ -270,6 +279,7 @@ struct LotsListView: View {
                     .foregroundStyle(AppColor.dim)
             }
             Spacer()
+            statePill(for: lot)
             Image(systemName: "chevron.right")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColor.dim)
@@ -278,6 +288,32 @@ struct LotsListView: View {
         .padding(.vertical, Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// Compact workflow-state badge surfaced on each lot row. Mirrors the
+    /// `LotOfferState` machine but maps to friendlier copy ("Awaiting" for
+    /// `.presented` so the store isn't reminded of jargon mid-shift) and
+    /// colour-codes by where in the funnel the lot is — gold for in-flight,
+    /// positive for paid, negative for voided, muted for terminal-with-no-go.
+    private func statePill(for lot: Lot) -> some View {
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        let label: String
+        let color: Color
+        switch state {
+        case .drafting:  label = "Drafting";  color = AppColor.dim
+        case .priced:    label = "Priced";    color = AppColor.gold
+        case .presented: label = "Awaiting";  color = AppColor.gold
+        case .accepted:  label = "Accepted";  color = AppColor.gold
+        case .declined:  label = "Declined";  color = AppColor.muted
+        case .paid:      label = "Paid";      color = AppColor.positive
+        case .voided:    label = "Voided";    color = AppColor.negative
+        }
+        return Text(label)
+            .font(SlabFont.mono(size: 10, weight: .semibold))
+            .tracking(1)
+            .foregroundStyle(color)
+            .padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xxs)
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(color.opacity(0.4), lineWidth: 1))
     }
 
     private func rowSubtitle(for lot: Lot) -> String {
@@ -326,4 +362,24 @@ struct LotsListView: View {
         f.unitsStyle = .short
         return f
     }()
+}
+
+/// Temporary destination for `LotsRoute.offerReview` while Task 10 builds the
+/// real `OfferReviewView`. Kept inside `LotsListView.swift` rather than its
+/// own file so it's trivial to delete once the real view lands.
+private struct OfferReviewPlaceholderView: View {
+    let lot: Lot
+    var body: some View {
+        SlabbedRoot {
+            VStack {
+                Text("Offer review")
+                    .font(.title)
+                Text("Lot: \(lot.name)").foregroundStyle(AppColor.dim)
+                Text("(coming in Task 10)").foregroundStyle(AppColor.muted)
+            }
+            .padding()
+        }
+        .navigationTitle("Offer review")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }

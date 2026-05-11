@@ -15,6 +15,8 @@ struct LotDetailView: View {
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
     @State private var scanPendingDelete: Scan?
+    @State private var showingVendorPicker = false
+    @State private var showingMarginSheet = false
 
     init(lot: Lot) {
         self.lot = lot
@@ -38,11 +40,14 @@ struct LotDetailView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
                     header
                     aggregateStrip
+                    vendorStrip
+                    marginRow
                     if scans.isEmpty {
                         emptyHint
                     } else {
                         slabsSection
                     }
+                    actionBar
                     Spacer(minLength: Spacing.xxxl)
                 }
                 .padding(.horizontal, Spacing.xxl)
@@ -55,6 +60,59 @@ struct LotDetailView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .sheet(isPresented: $showingVendorPicker) {
+            VendorPicker(
+                storeId: lot.storeId,
+                onPick: { vendor in
+                    try? offerRepository().attachVendor(vendor, to: lot)
+                },
+                onCreate: { id, name, method, value, notes in
+                    try vendorsRepository().upsert(id: id, displayName: name, contactMethod: method, contactValue: value, notes: notes)
+                }
+            )
+        }
+        .sheet(isPresented: $showingMarginSheet) {
+            MarginPickerSheet(
+                currentPct: lot.marginPctSnapshot ?? 0.6,
+                onSelect: { pct in
+                    try? offerRepository().setLotMargin(pct, on: lot)
+                }
+            )
+        }
+    }
+
+    // MARK: - Repository helpers
+
+    /// Builds an `OfferRepository` scoped to this lot's store + the current
+    /// signed-in user. Built lazily on every call rather than cached so
+    /// the SwiftData context and session UUIDs always reflect "now"; the
+    /// type is cheap to construct.
+    private func offerRepository() -> OfferRepository {
+        OfferRepository(
+            context: context,
+            kicker: kicker,
+            currentStoreId: lot.storeId,
+            currentUserId: session.userId ?? UUID()
+        )
+    }
+
+    private func vendorsRepository() -> VendorsRepository {
+        VendorsRepository(context: context, kicker: kicker, currentStoreId: lot.storeId)
+    }
+
+    /// Fallback when the lot has a `vendorId` but no name-snapshot yet —
+    /// happens for lots whose vendor was attached before the snapshot was
+    /// being persisted, or in the race between attach + sync.
+    private func lookupVendorName() -> String? {
+        guard let vid = lot.vendorId else { return nil }
+        return try? context.fetch(
+            FetchDescriptor<Vendor>(predicate: #Predicate { $0.id == vid })
+        ).first?.displayName
+    }
+
+    private var formattedMargin: String {
+        guard let m = lot.marginPctSnapshot else { return "—" }
+        return "\(Int((m * 100).rounded()))% of comp"
     }
 
     private func deleteScan(_ scan: Scan) {
@@ -116,6 +174,75 @@ struct LotDetailView: View {
     private var latestCompLabel: String {
         guard let date = latestComp else { return "Awaiting first lookup" }
         return Self.relative.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// Row that surfaces the lot's attached vendor (or invites attaching one).
+    /// Reads from the snapshot first so a vendor rename after the offer was
+    /// priced doesn't silently rewrite this lot's header copy — falls back to
+    /// a live lookup for lots that were attached before snapshotting landed.
+    private var vendorStrip: some View {
+        SlabCard {
+            HStack {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    KickerLabel("Vendor")
+                    Text(lot.vendorNameSnapshot ?? lookupVendorName() ?? "No vendor attached")
+                        .slabRowTitle()
+                }
+                Spacer()
+                Button(lot.vendorId == nil ? "Attach" : "Change") { showingVendorPicker = true }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppColor.gold)
+                    .accessibilityIdentifier("lot-vendor-attach")
+            }
+            .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
+        }
+    }
+
+    /// Margin display + adjust affordance. The snapshot here is the value
+    /// `OfferRepository.setLotMargin` writes; the store-default seeded onto
+    /// a fresh lot via `snapshotDefaultMargin` shows here too until the user
+    /// adjusts it manually.
+    private var marginRow: some View {
+        SlabCard {
+            HStack {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    KickerLabel("Margin")
+                    Text(formattedMargin).font(SlabFont.mono(size: 14))
+                }
+                Spacer()
+                Button("Adjust") { showingMarginSheet = true }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppColor.gold)
+                    .accessibilityIdentifier("lot-margin-adjust")
+            }
+            .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
+        }
+    }
+
+    /// Bottom action row driven entirely by `LotOfferState`. Each case maps
+    /// to exactly one button (or no button), so the state machine in
+    /// `OfferRepository` stays the single source of truth — this view just
+    /// renders the legal next move.
+    @ViewBuilder
+    private var actionBar: some View {
+        let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        switch state {
+        case .drafting:
+            EmptyView()
+        case .priced:
+            PrimaryGoldButton(title: "Send to offer") {
+                try? offerRepository().sendToOffer(lot)
+            }
+            .accessibilityIdentifier("send-to-offer")
+        case .presented, .accepted:
+            NavigationLink("Resume offer", value: LotsRoute.offerReview(lot.id))
+                .accessibilityIdentifier("resume-offer")
+        case .declined:
+            Button("Re-open as new offer") { try? offerRepository().reopenDeclined(lot) }
+                .accessibilityIdentifier("reopen-declined")
+        case .paid, .voided:
+            EmptyView()   // Plan 3 fills these
+        }
     }
 
     private var slabsSection: some View {
@@ -227,6 +354,11 @@ struct LotDetailView: View {
                             .tracking(0.6)
                             .foregroundStyle(AppColor.gold)
                     }
+                }
+                if let buy = scan.buyPriceCents {
+                    Text("Buy \(formattedCents(buy))")
+                        .font(SlabFont.mono(size: 11, weight: .semibold))
+                        .foregroundStyle(scan.buyPriceOverridden ? AppColor.gold : AppColor.text)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .regular))
