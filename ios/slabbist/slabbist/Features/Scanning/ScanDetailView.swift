@@ -12,6 +12,7 @@ struct ScanDetailView: View {
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
     @State private var showingManualPrice = false
+    @State private var showingBuyPriceSheet = false
 
     init(scan: Scan) {
         self.scan = scan
@@ -50,6 +51,7 @@ struct ScanDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
                     header
+                    buyPriceCard
                     if pptSnapshot != nil || poketraceSnapshot != nil {
                         valueSection
                     } else {
@@ -71,6 +73,11 @@ struct ScanDetailView: View {
         .sheet(isPresented: $showingManualPrice) {
             ManualPriceSheet(initialCents: scan.vendorAskCents) { cents in
                 try setOfferCents(cents)
+            }
+        }
+        .sheet(isPresented: $showingBuyPriceSheet) {
+            BuyPriceSheet(initialCents: scan.buyPriceCents) { cents in
+                try offerRepository().setBuyPrice(cents, scan: scan, overridden: cents != nil)
             }
         }
         // Recovery hatch for two real-world stuck states:
@@ -235,6 +242,86 @@ struct ScanDetailView: View {
             cta: ("Retry comp fetch", retry),
             secondaryCta: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
         )
+    }
+
+    // MARK: - Buy price card
+
+    /// Header card showing the store's current buy price for this slab and an
+    /// edit affordance. Sits above the comp surface so the store's price is
+    /// the first thing the operator sees — comp is the *why* behind it.
+    /// When no buy price has landed yet we still render the card with an em-
+    /// dash placeholder so the surface stays predictable across the four
+    /// fallback states (fetching / no-comp / failed / resolved).
+    private var buyPriceCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            KickerLabel("Buy price")
+            SlabCard {
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(scan.buyPriceCents.map(formattedCents) ?? "—")
+                            .font(SlabFont.serif(size: 32))
+                            .foregroundStyle(AppColor.text)
+                        Spacer()
+                        Text(buyPriceCaption)
+                            .font(SlabFont.mono(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                    }
+                    HStack(spacing: Spacing.m) {
+                        Button("Edit") { showingBuyPriceSheet = true }
+                            .buttonStyle(.plain)
+                            .font(SlabFont.sans(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColor.gold)
+                            .accessibilityIdentifier("buy-price-edit")
+                        if scan.buyPriceOverridden {
+                            Button("Reset to auto") {
+                                try? offerRepository().setBuyPrice(nil, scan: scan, overridden: false)
+                            }
+                            .buttonStyle(.plain)
+                            .font(SlabFont.sans(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColor.muted)
+                            .accessibilityIdentifier("buy-price-reset")
+                        }
+                    }
+                }
+                .padding(.horizontal, Spacing.l)
+                .padding(.vertical, Spacing.md)
+            }
+        }
+    }
+
+    /// Caption under the buy price hero. Three cases:
+    ///   * Overridden → "Override" — the user typed this in.
+    ///   * No price yet → "Awaiting comp" — we have nothing to multiply.
+    ///   * Auto-derived → "Auto · 60% × comp" — surfaces the margin rule the
+    ///     value was derived from so the operator can sanity-check the math.
+    private var buyPriceCaption: String {
+        if scan.buyPriceOverridden { return "Override" }
+        if scan.buyPriceCents == nil { return "Awaiting comp" }
+        let pct = Int(((lookupLot()?.marginPctSnapshot ?? 0.6) * 100).rounded())
+        return "Auto · \(pct)% × comp"
+    }
+
+    /// Builds an `OfferRepository` scoped to this scan's store. Constructed
+    /// fresh on each call so SwiftData context + session UUIDs always reflect
+    /// "now". The type is cheap to construct.
+    private func offerRepository() -> OfferRepository {
+        OfferRepository(
+            context: context,
+            kicker: kicker,
+            currentStoreId: scan.storeId,
+            currentUserId: session.userId ?? UUID()
+        )
+    }
+
+    /// Lookup the lot this scan belongs to so the caption can show the
+    /// snapshotted margin. Returns `nil` (and the caption falls back to 60%)
+    /// for scans whose parent lot can't be fetched — that shouldn't happen
+    /// in practice but we don't want to crash a detail screen over it.
+    private func lookupLot() -> Lot? {
+        let lotId = scan.lotId
+        return try? context.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
     }
 
     /// Standalone card showing the manual price the user set when no PPT

@@ -47,6 +47,16 @@ enum UITestEnvironment {
         /// price flow be tested without driving the cert-lookup +
         /// comp-fetch network pipeline. Implies `seedSampleLot`.
         case seedNoCompScan = "--ui-tests-seed-no-comp-scan"
+
+        /// Pre-seed a "priced" lot: a `Lot` with `marginPctSnapshot` set
+        /// and a single validated scan that already has a reconciled
+        /// headline comp + auto-derived `buyPriceCents`, plus the lot's
+        /// `lotOfferState` flipped to `.priced`. That is the post-comp-
+        /// landing end state that gates the "Send to offer" CTA, so this
+        /// flag is what the offer-pricing flow test wants to start from
+        /// without driving the full cert-lookup + comp-fetch network
+        /// pipeline. Implies `seedSampleLot`.
+        case seedPricedLot = "--ui-tests-seed-priced-lot"
     }
 
     static func isFlagSet(_ flag: Flag) -> Bool {
@@ -79,11 +89,14 @@ enum UITestEnvironment {
         // to the very view trying to render it.
         let context = container.mainContext
         ensureStoreExists(in: context)
-        if isFlagSet(.seedSampleLot) || isFlagSet(.seedNoCompScan) {
+        if isFlagSet(.seedSampleLot) || isFlagSet(.seedNoCompScan) || isFlagSet(.seedPricedLot) {
             seedSampleLotIfMissing(in: context)
         }
         if isFlagSet(.seedNoCompScan) {
             seedNoCompScanIfMissing(in: context)
+        }
+        if isFlagSet(.seedPricedLot) {
+            seedPricedLotIfMissing(in: context)
         }
         session.applyUITestUser(userId: userId)
         // Pre-stamp the hydrator as ready so `LotsListView.prepare()`
@@ -173,10 +186,90 @@ enum UITestEnvironment {
         try? context.save()
     }
 
+    /// Inserts a validated scan that already has a reconciled comp + auto-
+    /// derived buy price, and flips the seeded lot into `.priced`. This is
+    /// the synthetic end state that gates the offer-pricing workflow:
+    /// `marginPctSnapshot` set on the lot, `buyPriceCents` set on the scan,
+    /// `lotOfferState == priced` so `LotDetailView` surfaces "Send to offer".
+    /// Driven by `--ui-tests-seed-priced-lot` so a test can start at the
+    /// pricing screen without going through cert-lookup + comp-fetch.
+    private static func seedPricedLotIfMissing(in context: ModelContext) {
+        let certNumber = samplePricedCert
+        var scanDescriptor = FetchDescriptor<Scan>(
+            predicate: #Predicate<Scan> { $0.certNumber == certNumber }
+        )
+        scanDescriptor.fetchLimit = 1
+        if (try? context.fetch(scanDescriptor).first) != nil { return }
+
+        // Identity row for the slab. The priced flow doesn't depend on the
+        // exact identity values, but rendering needs *something* so the
+        // header doesn't collapse.
+        let identityId = samplePricedIdentityId
+        var identityDescriptor = FetchDescriptor<GradedCardIdentity>(
+            predicate: #Predicate<GradedCardIdentity> { $0.id == identityId }
+        )
+        identityDescriptor.fetchLimit = 1
+        if (try? context.fetch(identityDescriptor).first) == nil {
+            context.insert(GradedCardIdentity(
+                id: identityId,
+                game: "pokemon",
+                language: "en",
+                setName: "Priced Set",
+                cardNumber: "42",
+                cardName: "Priced Card",
+                variant: nil,
+                year: 2024
+            ))
+        }
+
+        // Stamp the lot with a margin snapshot + priced state so the action
+        // bar in LotDetailView renders "Send to offer". The seed lot was
+        // already created by `seedSampleLotIfMissing`; we patch it here.
+        let lotId = sampleLotId
+        var lotDescriptor = FetchDescriptor<Lot>(
+            predicate: #Predicate<Lot> { $0.id == lotId }
+        )
+        lotDescriptor.fetchLimit = 1
+        let now = Date()
+        if let lot = try? context.fetch(lotDescriptor).first {
+            lot.marginPctSnapshot = 0.6
+            lot.lotOfferState = LotOfferState.priced.rawValue
+            lot.lotOfferStateUpdatedAt = now
+            lot.updatedAt = now
+        }
+
+        // The scan: validated, resolved comp, reconciled headline of $100,
+        // auto-derived buy price of $60 (60% of comp). Mirrors what the
+        // post-comp-landing pipeline writes in real usage.
+        let scan = Scan(
+            id: UUID(),
+            storeId: storeId,
+            lotId: sampleLotId,
+            userId: userId,
+            grader: .PSA,
+            certNumber: certNumber,
+            grade: "10",
+            gradedCardIdentityId: identityId,
+            status: .validated,
+            createdAt: now,
+            updatedAt: now
+        )
+        scan.compFetchState = CompFetchState.resolved.rawValue
+        scan.compFetchedAt = now
+        scan.reconciledHeadlinePriceCents = 100_00
+        scan.reconciledSource = "ppt-only"
+        scan.buyPriceCents = 60_00
+        scan.buyPriceOverridden = false
+        context.insert(scan)
+        try? context.save()
+    }
+
     static let sampleLotId = UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!
     static let sampleLotName = "Sample Lot"
     static let sampleNoCompCert = "11223344"
     static let sampleIdentityId = UUID(uuidString: "00000000-0000-0000-0000-00000000000B")!
+    static let samplePricedCert = "55667788"
+    static let samplePricedIdentityId = UUID(uuidString: "00000000-0000-0000-0000-00000000000C")!
 
     private static let log = Logger(subsystem: "com.slabbist.uitests", category: "bootstrap")
 }

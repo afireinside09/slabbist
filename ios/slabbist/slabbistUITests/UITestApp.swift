@@ -14,6 +14,7 @@ enum UITestApp {
     enum Flag: String {
         case seedSampleLot = "--ui-tests-seed-sample-lot"
         case seedNoCompScan = "--ui-tests-seed-no-comp-scan"
+        case seedPricedLot = "--ui-tests-seed-priced-lot"
     }
 
     /// Launch the app under test with `--ui-tests` plus any extra
