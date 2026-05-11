@@ -15,6 +15,8 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
     case archiveVendor
     case certLookupJob
     case priceCompJob
+    case commitTransaction
+    case voidTransaction
 
     /// Higher priority = dispatched first. See design spec: validation
     /// unblocks comp; writes happen in natural order behind them.
@@ -24,6 +26,8 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
         switch self {
         case .deleteScan:         return 50
         case .deleteLot:          return 50
+        case .commitTransaction:  return 45
+        case .voidTransaction:    return 44
         case .certLookupJob:      return 40
         case .priceCompJob:       return 30
         case .insertScan:         return 20

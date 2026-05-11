@@ -284,6 +284,52 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
+    @Test("dispatches commitTransaction and hydrates locally")
+    @MainActor
+    func dispatchesCommitTransaction() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        let payload = OutboxPayloads.CommitTransaction(
+            lot_id: lotId.uuidString,
+            payment_method: "cash",
+            payment_reference: nil,
+            vendor_id: nil,
+            vendor_name_override: nil
+        )
+        let encoded = try JSONEncoder().encode(payload)
+        try await h.drainer._testEnqueue(
+            id: UUID(), kind: .commitTransaction,
+            payload: encoded,
+            createdAt: h.clock.current(), nextAttemptAt: h.clock.current()
+        )
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+        #expect(h.fakeTransactions.commitCalls.count == 1)
+        #expect(h.fakeTransactions.commitCalls[0].lot_id == lotId.uuidString)
+    }
+
+    @Test("dispatches voidTransaction")
+    @MainActor
+    func dispatchesVoidTransaction() async throws {
+        let h = Harness()
+        let txnId = UUID()
+        let payload = OutboxPayloads.VoidTransaction(
+            transaction_id: txnId.uuidString,
+            reason: "ui test"
+        )
+        let encoded = try JSONEncoder().encode(payload)
+        try await h.drainer._testEnqueue(
+            id: UUID(), kind: .voidTransaction,
+            payload: encoded,
+            createdAt: h.clock.current(), nextAttemptAt: h.clock.current()
+        )
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+        #expect(h.fakeTransactions.voidCalls.count == 1)
+        #expect(h.fakeTransactions.voidCalls[0].transactionId == txnId)
+        #expect(h.fakeTransactions.voidCalls[0].reason == "ui test")
+    }
+
     // MARK: - 7.3 error-classifier tests
 
     @Test("409 (uniqueViolation) on insertScan deletes the item — idempotent success")

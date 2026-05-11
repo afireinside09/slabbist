@@ -399,6 +399,25 @@ actor OutboxDrainer: ModelActor {
                 ]
             )
 
+        case .commitTransaction:
+            let p = try decode(OutboxPayloads.CommitTransaction.self, payload)
+            let resp = try await repositories.transactions.commit(payload: .init(
+                lot_id: p.lot_id,
+                payment_method: p.payment_method,
+                payment_reference: p.payment_reference,
+                vendor_id: p.vendor_id,
+                vendor_name_override: p.vendor_name_override
+            ))
+            try await TransactionsHydrator.upsert(commitResponse: resp, container: modelContainer)
+
+        case .voidTransaction:
+            let p = try decode(OutboxPayloads.VoidTransaction.self, payload)
+            guard let txnId = UUID(uuidString: p.transaction_id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "VoidTransaction: invalid UUID")
+            }
+            let resp = try await repositories.transactions.void(transactionId: txnId, reason: p.reason)
+            try await TransactionsHydrator.upsert(voidResponse: resp, container: modelContainer)
+
         case .certLookupJob, .priceCompJob:
             // Group B kinds are out of scope for v1 — surface as permanent
             // failure so the classifier (7.3) routes them to .failed.

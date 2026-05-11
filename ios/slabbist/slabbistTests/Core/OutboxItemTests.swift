@@ -148,6 +148,35 @@ struct OutboxItemTests {
         #expect(decoded.lot_id == "55555555-5555-5555-5555-555555555555")
     }
 
+    @Test("CommitTransaction payload encodes snake_case keys")
+    func commitTransactionPayloadEncoding() throws {
+        let p = OutboxPayloads.CommitTransaction(
+            lot_id: "11111111-1111-1111-1111-111111111111",
+            payment_method: "cash",
+            payment_reference: "check #123",
+            vendor_id: "22222222-2222-2222-2222-222222222222",
+            vendor_name_override: nil
+        )
+        let data = try JSONEncoder().encode(p)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"lot_id\":\"11111111-1111-1111-1111-111111111111\""))
+        #expect(json.contains("\"payment_method\":\"cash\""))
+        #expect(json.contains("\"payment_reference\":\"check #123\""))
+        #expect(json.contains("\"vendor_id\":\"22222222-2222-2222-2222-222222222222\""))
+    }
+
+    @Test("VoidTransaction payload encodes id and reason")
+    func voidTransactionPayloadEncoding() throws {
+        let p = OutboxPayloads.VoidTransaction(
+            transaction_id: "33333333-3333-3333-3333-333333333333",
+            reason: "vendor returned"
+        )
+        let data = try JSONEncoder().encode(p)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        #expect(json.contains("\"transaction_id\":\"33333333-3333-3333-3333-333333333333\""))
+        #expect(json.contains("\"reason\":\"vendor returned\""))
+    }
+
     @Test("UpdateScanBuyPrice payload encodes cents, overridden flag, and updated_at")
     func updateScanBuyPricePayloadEncoding() throws {
         let payload = OutboxPayloads.UpdateScanBuyPrice(

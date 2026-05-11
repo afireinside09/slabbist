@@ -157,5 +157,30 @@ nonisolated extension OutboxPayloads {
         let buy_price_overridden: Bool
         let updated_at: String
     }
+
+    /// Trigger payload for `/transaction-commit`. The Edge Function snapshots
+    /// the lot's scans into a `transactions` row + N `transaction_lines`,
+    /// flips the lot to `paid`, and returns the inserted rows so the iOS
+    /// cache can hydrate immediately without a follow-up SELECT.
+    /// `vendor_id` resolves to the lot's currently-selected vendor;
+    /// `vendor_name_override` lets the caller record a walk-in name without
+    /// a Vendor row.
+    struct CommitTransaction: Codable {
+        let lot_id: String
+        let payment_method: String
+        let payment_reference: String?
+        let vendor_id: String?
+        let vendor_name_override: String?
+    }
+
+    /// Trigger payload for `/transaction-void`. The Edge Function inserts a
+    /// negative-mirroring transaction row, marks the original `voided_at`,
+    /// and flips the lot back to `voided` so it can be re-opened. Carries
+    /// the originating transaction's UUID + a human-readable reason that
+    /// shows up in the audit trail.
+    struct VoidTransaction: Codable {
+        let transaction_id: String
+        let reason: String
+    }
 }
 

@@ -14,6 +14,7 @@ final class Harness {
     let fakeLots = FakeLotRepository()
     let fakeScans = FakeScanRepository()
     let fakeVendors = FakeVendorRepository()
+    let fakeTransactions = FakeTransactionRepository()
     let status = OutboxStatus()
     let clock = TestClock()
     let drainer: OutboxDrainer
@@ -33,7 +34,8 @@ final class Harness {
             Store.self, StoreMember.self, Lot.self,
             Scan.self, Vendor.self, OutboxItem.self,
             GradedCardIdentity.self,
-            GradedMarketSnapshot.self
+            GradedMarketSnapshot.self,
+            StoreTransaction.self, TransactionLine.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         self.container = try! ModelContainer(for: schema, configurations: [config])
@@ -43,7 +45,8 @@ final class Harness {
             lots: fakeLots,
             scans: fakeScans,
             vendors: fakeVendors,
-            gradeEstimates: NullGradeEstimateRepo()
+            gradeEstimates: NullGradeEstimateRepo(),
+            transactions: fakeTransactions
         )
         let statusBox = self.status
         let observer = self.observed
@@ -615,6 +618,99 @@ final class FakeVendorRepository: VendorRepository, @unchecked Sendable {
     }
 }
 
+/// Fake `TransactionRepository`. Records commit + void invocations and
+/// returns canned responses so dispatch tests can verify both the Edge
+/// Function call and the resulting hydration.
+final class FakeTransactionRepository: TransactionRepository, @unchecked Sendable {
+    private let recorder = Recorder()
+    var nextCommitError: Error?
+    var nextVoidError: Error?
+
+    /// Canned response returned from `commit`. Tests can override before
+    /// dispatch to validate hydrator behaviour against a specific shape.
+    /// Defaults are placeholder UUIDs / timestamps so the row inserts
+    /// without conflicting with any test-owned IDs.
+    var commitResponse: TransactionCommitResponse = TransactionCommitResponse(
+        transaction: TransactionCommitResponse.TransactionRow(
+            id: UUID().uuidString,
+            store_id: UUID().uuidString,
+            lot_id: UUID().uuidString,
+            vendor_id: nil,
+            vendor_name_snapshot: "test vendor",
+            total_buy_cents: 0,
+            payment_method: "cash",
+            payment_reference: nil,
+            paid_at: ISO8601DateFormatter().string(from: Date()),
+            paid_by_user_id: UUID().uuidString,
+            voided_at: nil,
+            voided_by_user_id: nil,
+            void_reason: nil,
+            void_of_transaction_id: nil
+        ),
+        lines: [],
+        deduped: nil
+    )
+
+    var voidResponse: TransactionVoidResponse = TransactionVoidResponse(
+        void_transaction: TransactionCommitResponse.TransactionRow(
+            id: UUID().uuidString,
+            store_id: UUID().uuidString,
+            lot_id: UUID().uuidString,
+            vendor_id: nil,
+            vendor_name_snapshot: "test vendor",
+            total_buy_cents: 0,
+            payment_method: "cash",
+            payment_reference: nil,
+            paid_at: ISO8601DateFormatter().string(from: Date()),
+            paid_by_user_id: UUID().uuidString,
+            voided_at: ISO8601DateFormatter().string(from: Date()),
+            voided_by_user_id: UUID().uuidString,
+            void_reason: "test",
+            void_of_transaction_id: UUID().uuidString
+        ),
+        original_id: UUID().uuidString
+    )
+
+    actor Recorder {
+        var commitCalls: [TransactionCommitPayload] = []
+        var voidCalls: [(transactionId: UUID, reason: String)] = []
+        func appendCommit(_ payload: TransactionCommitPayload) { commitCalls.append(payload) }
+        func appendVoid(_ transactionId: UUID, _ reason: String) {
+            voidCalls.append((transactionId: transactionId, reason: reason))
+        }
+    }
+
+    private let _lock = NSLock()
+    private var _commitCalls: [TransactionCommitPayload] = []
+    private var _voidCalls: [(transactionId: UUID, reason: String)] = []
+
+    var commitCalls: [TransactionCommitPayload] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _commitCalls
+    }
+
+    var voidCalls: [(transactionId: UUID, reason: String)] {
+        _lock.lock(); defer { _lock.unlock() }
+        return _voidCalls
+    }
+
+    func commit(payload: TransactionCommitPayload) async throws -> TransactionCommitResponse {
+        if let e = nextCommitError { nextCommitError = nil; throw e }
+        await recorder.appendCommit(payload)
+        _lock.lock(); defer { _lock.unlock() }
+        _commitCalls.append(payload)
+        return commitResponse
+    }
+
+    func void(transactionId: UUID, reason: String) async throws -> TransactionVoidResponse {
+        if let e = nextVoidError { nextVoidError = nil; throw e }
+        await recorder.appendVoid(transactionId, reason)
+        _lock.lock(); defer { _lock.unlock() }
+        _voidCalls.append((transactionId: transactionId, reason: reason))
+        return voidResponse
+    }
+}
+
 // MARK: - Null repositories (unused dependencies)
 
 struct NullStoreRepo: StoreRepository {
@@ -638,6 +734,15 @@ struct NullVendorRepo: VendorRepository {
     func listActive(storeId: UUID, page: Page) async throws -> [VendorDTO] { [] }
     func upsert(_ vendor: VendorDTO) async throws {}
     func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
+}
+
+struct NullTransactionRepo: TransactionRepository {
+    func commit(payload: TransactionCommitPayload) async throws -> TransactionCommitResponse {
+        fatalError("unused")
+    }
+    func void(transactionId: UUID, reason: String) async throws -> TransactionVoidResponse {
+        fatalError("unused")
+    }
 }
 
 struct NullGradeEstimateRepo: GradeEstimateRepository {

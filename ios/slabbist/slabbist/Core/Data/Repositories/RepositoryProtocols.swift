@@ -99,6 +99,70 @@ nonisolated protocol VendorRepository: Sendable {
     func patch(id: UUID, fields: [String: AnyJSON]) async throws
 }
 
+/// Repository surface for the `/transaction-commit` + `/transaction-void`
+/// Edge Functions. Mirrors the `LotRepository.recomputeOffer` pattern —
+/// callers pass a typed payload, get a typed response, and `SupabaseError`
+/// maps transport / Postgrest errors.
+nonisolated protocol TransactionRepository: Sendable {
+    func commit(payload: TransactionCommitPayload) async throws -> TransactionCommitResponse
+    func void(transactionId: UUID, reason: String) async throws -> TransactionVoidResponse
+}
+
+/// Wire shape for `/transaction-commit`. Snake_case so the Edge Function
+/// reads the body without remapping.
+nonisolated struct TransactionCommitPayload: Codable, Sendable {
+    let lot_id: String
+    let payment_method: String
+    let payment_reference: String?
+    let vendor_id: String?
+    let vendor_name_override: String?
+}
+
+/// Successful response from `/transaction-commit`. Carries the inserted
+/// transaction row + per-scan line rows so the iOS hydrator can upsert
+/// without a follow-up SELECT. `deduped == true` indicates the server
+/// hit the unique-active-per-lot guard and returned the existing rows
+/// instead of inserting again — semantics are otherwise identical.
+nonisolated struct TransactionCommitResponse: Codable, Sendable {
+    struct TransactionRow: Codable, Sendable {
+        let id: String
+        let store_id: String
+        let lot_id: String
+        let vendor_id: String?
+        let vendor_name_snapshot: String
+        let total_buy_cents: Int64
+        let payment_method: String
+        let payment_reference: String?
+        let paid_at: String
+        let paid_by_user_id: String
+        let voided_at: String?
+        let voided_by_user_id: String?
+        let void_reason: String?
+        let void_of_transaction_id: String?
+    }
+    struct LineRow: Codable, Sendable {
+        let transaction_id: String
+        let scan_id: String
+        let line_index: Int
+        let buy_price_cents: Int64
+        /// Server returns identity_snapshot as a free-form JSON object. The
+        /// iOS hydrator re-encodes it for SwiftData persistence.
+        let identity_snapshot: AnyJSON?
+    }
+    let transaction: TransactionRow
+    let lines: [LineRow]
+    let deduped: Bool?
+}
+
+/// Successful response from `/transaction-void`. The server inserts a new
+/// "void" transaction row mirroring the original (negative semantics) and
+/// returns it together with the original's id so iOS can mark both ends
+/// in a single hydration pass.
+nonisolated struct TransactionVoidResponse: Codable, Sendable {
+    let void_transaction: TransactionCommitResponse.TransactionRow
+    let original_id: String
+}
+
 nonisolated protocol GradeEstimateRepository: Sendable {
     func listForCurrentUser(page: Page, includeTotalCount: Bool) async throws -> PagedResult<GradeEstimateDTO>
     func find(id: UUID) async throws -> GradeEstimateDTO?
@@ -126,6 +190,7 @@ nonisolated struct AppRepositories: Sendable {
     var scans: any ScanRepository
     var vendors: any VendorRepository
     var gradeEstimates: any GradeEstimateRepository
+    var transactions: any TransactionRepository
 
     static func live(client: SupabaseClient = AppSupabase.shared.client) -> AppRepositories {
         AppRepositories(
@@ -134,7 +199,8 @@ nonisolated struct AppRepositories: Sendable {
             lots: SupabaseLotRepository(client: client),
             scans: SupabaseScanRepository(client: client),
             vendors: SupabaseVendorRepository(client: client),
-            gradeEstimates: SupabaseGradeEstimateRepository(client: client)
+            gradeEstimates: SupabaseGradeEstimateRepository(client: client),
+            transactions: SupabaseTransactionRepository(client: client)
         )
     }
 }
