@@ -55,7 +55,7 @@ struct ScanDetailView: View {
                     } else {
                         fallbackContent
                     }
-                    if scan.offerCents != nil {
+                    if scan.vendorAskCents != nil {
                         manualPriceCard
                     }
                 }
@@ -69,7 +69,7 @@ struct ScanDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(isPresented: $showingManualPrice) {
-            ManualPriceSheet(initialCents: scan.offerCents) { cents in
+            ManualPriceSheet(initialCents: scan.vendorAskCents) { cents in
                 try setOfferCents(cents)
             }
         }
@@ -220,7 +220,7 @@ struct ScanDetailView: View {
             detail: "Either we couldn't find this card on Pokemon Price Tracker, or there's no published price for this tier yet. Set a manual price to count this slab in your lot total.",
             showsProgress: false,
             cta: ("Retry comp fetch", retry),
-            secondaryCta: scan.offerCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
+            secondaryCta: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
         )
     }
 
@@ -233,7 +233,7 @@ struct ScanDetailView: View {
             detail: scan.compFetchError ?? "Unknown error",
             showsProgress: false,
             cta: ("Retry comp fetch", retry),
-            secondaryCta: scan.offerCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
+            secondaryCta: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
         )
     }
 
@@ -247,7 +247,7 @@ struct ScanDetailView: View {
             SlabCard {
                 HStack(alignment: .center, spacing: Spacing.m) {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text(scan.offerCents.map(formattedCents) ?? "—")
+                        Text(scan.vendorAskCents.map(formattedCents) ?? "—")
                             .font(SlabFont.mono(size: 22, weight: .semibold))
                             .foregroundStyle(AppColor.text)
                         Text("Counts toward this lot's total")

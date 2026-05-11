@@ -170,19 +170,19 @@ struct LotsViewModelTests {
         let vm = LotsViewModel(context: context, kicker: Self.noopKicker(), currentUserId: userId, currentStoreId: storeId)
         try vm.setOfferCents(scan: scan, cents: 4_999)
 
-        #expect(scan.offerCents == 4_999)
+        #expect(scan.vendorAskCents == 4_999)
 
         let outbox = try context.fetch(FetchDescriptor<OutboxItem>())
         let offerItems = outbox.filter { $0.kind == .updateScanOffer }
         #expect(offerItems.count == 1)
         let payload = try JSONDecoder().decode(OutboxPayloads.UpdateScanOffer.self, from: offerItems[0].payload)
         #expect(payload.id == scan.id.uuidString)
-        #expect(payload.offer_cents == 4_999)
+        #expect(payload.vendor_ask_cents == 4_999)
 
         // Clearing flips the value back to nil and emits a second item with
-        // an explicit null offer_cents — the worker contract for "remove".
+        // an explicit null vendor_ask_cents — the worker contract for "remove".
         try vm.setOfferCents(scan: scan, cents: nil)
-        #expect(scan.offerCents == nil)
+        #expect(scan.vendorAskCents == nil)
         let allOfferItems = try context.fetch(FetchDescriptor<OutboxItem>())
             .filter { $0.kind == .updateScanOffer }
         #expect(allOfferItems.count == 2)
@@ -190,7 +190,7 @@ struct LotsViewModelTests {
             OutboxPayloads.UpdateScanOffer.self,
             from: allOfferItems.last!.payload
         )
-        #expect(clearPayload.offer_cents == nil)
+        #expect(clearPayload.vendor_ask_cents == nil)
     }
 
     @Test("listOpenLots returns only open lots for the current store, newest first")

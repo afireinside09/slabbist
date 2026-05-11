@@ -38,7 +38,21 @@ final class Scan {
     var ocrRawText: String?
     var ocrConfidence: Double?
     var capturedPhotoURL: String?
-    var offerCents: Int64?
+    /// Manual asking price the vendor set for this slab when Pokemon Price
+    /// Tracker had no comp (or the user wanted to override it). Renamed from
+    /// `offerCents` to disambiguate it from the lot-level offer total: this
+    /// is the "vendor ask" — what the seller wants for the card. Mirrors
+    /// `scans.vendor_ask_cents` server-side.
+    var vendorAskCents: Int64?
+    /// Per-slab buy price the store will pay this vendor for the card. Derived
+    /// from the headline comp times the store's margin rule, unless
+    /// `buyPriceOverridden` is `true` — then the user typed it in directly.
+    /// Mirrors `scans.buy_price_cents` server-side.
+    var buyPriceCents: Int64?
+    /// `true` when the user has manually overridden the derived `buyPriceCents`.
+    /// Drives whether the comp recompute path is allowed to recalculate the
+    /// value: an overridden buy price sticks until the user clears it.
+    var buyPriceOverridden: Bool
     /// Lifecycle of the eBay comp fetch — drives `ScanDetailView`'s state
     /// machine (fetching / resolved / no_data / failed). `nil` means the
     /// fetch has never been attempted (cert-lookup hasn't validated this
@@ -92,7 +106,9 @@ final class Scan {
         self.ocrRawText = ocrRawText
         self.ocrConfidence = ocrConfidence
         self.capturedPhotoURL = capturedPhotoURL
-        self.offerCents = nil
+        self.vendorAskCents = nil
+        self.buyPriceCents = nil
+        self.buyPriceOverridden = false
         self.compFetchState = nil
         self.compFetchError = nil
         self.compFetchedAt = nil

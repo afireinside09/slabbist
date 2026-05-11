@@ -312,13 +312,13 @@ actor OutboxDrainer: ModelActor {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: invalid UUID")
             }
             var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
-            if let cents = p.offer_cents {
+            if let cents = p.vendor_ask_cents {
                 guard let safe = Int(exactly: cents) else {
-                    throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: offer_cents overflows Int")
+                    throw OutboxBridgeError.malformedPayload(reason: "UpdateScanOffer: vendor_ask_cents overflows Int")
                 }
-                fields["offer_cents"] = .integer(safe)
+                fields["vendor_ask_cents"] = .integer(safe)
             } else {
-                fields["offer_cents"] = .null
+                fields["vendor_ask_cents"] = .null
             }
             try await repositories.scans.patch(id: id, fields: fields)
 
@@ -402,7 +402,7 @@ extension ScanDTO {
             ocrRawText: p.ocr_raw_text,
             ocrConfidence: p.ocr_confidence,
             capturedPhotoURL: nil,
-            offerCents: nil,
+            vendorAskCents: nil,
             createdAt: iso.date(from: p.created_at) ?? Date(),
             updatedAt: iso.date(from: p.updated_at) ?? Date()
         )

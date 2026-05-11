@@ -192,7 +192,7 @@ final class Harness {
         let stamp = createdAt ?? clock.current()
         let dto = OutboxPayloads.UpdateScanOffer(
             id: id.uuidString,
-            offer_cents: cents,
+            vendor_ask_cents: cents,
             updated_at: ISO8601DateFormatter().string(from: stamp)
         )
         let payload = try JSONEncoder().encode(dto)

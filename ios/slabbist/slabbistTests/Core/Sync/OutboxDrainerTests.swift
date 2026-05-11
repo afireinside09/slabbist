@@ -87,7 +87,7 @@ struct OutboxDrainerTests {
 
         #expect(h.fakeScans.patchCalls.count == 1)
         #expect(h.fakeScans.patchCalls[0].id == scanId)
-        #expect(h.fakeScans.patchCalls[0].fields["offer_cents"] == .integer(12500))
+        #expect(h.fakeScans.patchCalls[0].fields["vendor_ask_cents"] == .integer(12500))
         let count = await h.outboxCount()
         #expect(count == 0)
     }
@@ -103,7 +103,7 @@ struct OutboxDrainerTests {
 
         #expect(h.fakeScans.patchCalls.count == 1)
         #expect(h.fakeScans.patchCalls[0].id == scanId)
-        #expect(h.fakeScans.patchCalls[0].fields["offer_cents"] == .null)
+        #expect(h.fakeScans.patchCalls[0].fields["vendor_ask_cents"] == .null)
         let count = await h.outboxCount()
         #expect(count == 0)
     }

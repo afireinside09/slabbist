@@ -14,7 +14,7 @@ extension ScanDTO {
             ocrRawText: model.ocrRawText,
             ocrConfidence: model.ocrConfidence,
             capturedPhotoURL: model.capturedPhotoURL,
-            offerCents: model.offerCents,
+            vendorAskCents: model.vendorAskCents,
             createdAt: model.createdAt,
             updatedAt: model.updatedAt
         )
@@ -46,7 +46,7 @@ extension Scan {
         )
 
         self.grade = dto.grade
-        self.offerCents = dto.offerCents
+        self.vendorAskCents = dto.vendorAskCents
     }
 
     func apply(_ dto: ScanDTO) throws {
@@ -66,7 +66,7 @@ extension Scan {
         self.ocrRawText = dto.ocrRawText
         self.ocrConfidence = dto.ocrConfidence
         self.capturedPhotoURL = dto.capturedPhotoURL
-        self.offerCents = dto.offerCents
+        self.vendorAskCents = dto.vendorAskCents
         self.createdAt = dto.createdAt
         self.updatedAt = dto.updatedAt
     }

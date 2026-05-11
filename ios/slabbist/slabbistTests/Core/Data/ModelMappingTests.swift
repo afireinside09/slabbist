@@ -162,7 +162,7 @@ struct ModelMappingTests {
             ocrRawText: "raw text",
             ocrConfidence: 0.93,
             capturedPhotoURL: "https://example.com/x.jpg",
-            offerCents: 5000,
+            vendorAskCents: 5000,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -171,7 +171,7 @@ struct ModelMappingTests {
         #expect(model.grader == .PSA)
         #expect(model.status == .validated)
         #expect(model.grade == "10")
-        #expect(model.offerCents == 5000)
+        #expect(model.vendorAskCents == 5000)
 
         let rebuilt = ScanDTO(model)
         #expect(rebuilt == dto)
@@ -191,7 +191,7 @@ struct ModelMappingTests {
             ocrRawText: nil,
             ocrConfidence: nil,
             capturedPhotoURL: nil,
-            offerCents: nil,
+            vendorAskCents: nil,
             createdAt: Date(),
             updatedAt: Date()
         )

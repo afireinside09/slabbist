@@ -251,7 +251,7 @@ struct LotDetailView: View {
         if let snap = latestSnapshot(for: scan), let cents = snap.headlinePriceCents {
             return (cents, false)
         }
-        if let manual = scan.offerCents {
+        if let manual = scan.vendorAskCents {
             return (manual, true)
         }
         return nil

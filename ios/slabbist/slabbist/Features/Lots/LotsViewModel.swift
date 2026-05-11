@@ -78,18 +78,18 @@ final class LotsViewModel {
         return lot
     }
 
-    /// Persist the user-entered manual price for a scan. Pass `nil` to
+    /// Persist the user-entered vendor asking price for a scan. Pass `nil` to
     /// clear it (revert to whatever Pokemon Price Tracker eventually
     /// returns). Mutates the scan in place and enqueues an
     /// `updateScanOffer` outbox item so the value survives sync.
     func setOfferCents(scan: Scan, cents: Int64?) throws {
         let now = Date()
-        scan.offerCents = cents
+        scan.vendorAskCents = cents
         scan.updatedAt = now
 
         let dto = OutboxPayloads.UpdateScanOffer(
             id: scan.id.uuidString,
-            offer_cents: cents,
+            vendor_ask_cents: cents,
             updated_at: ISO8601DateFormatter.shared.string(from: now)
         )
         let encoded = try JSONEncoder().encode(dto)

@@ -11,11 +11,11 @@ nonisolated struct ScanListItemDTO: Codable, Sendable, Identifiable, Equatable {
     var certNumber: String
     var grade: String?
     var status: String
-    var offerCents: Int64?
+    var vendorAskCents: Int64?
     var createdAt: Date
     var updatedAt: Date
 
-    static let columns = "id,store_id,lot_id,grader,cert_number,grade,status,offer_cents,created_at,updated_at"
+    static let columns = "id,store_id,lot_id,grader,cert_number,grade,status,vendor_ask_cents,created_at,updated_at"
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,7 +25,7 @@ nonisolated struct ScanListItemDTO: Codable, Sendable, Identifiable, Equatable {
         case certNumber = "cert_number"
         case grade
         case status
-        case offerCents = "offer_cents"
+        case vendorAskCents = "vendor_ask_cents"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

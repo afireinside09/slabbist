@@ -108,7 +108,7 @@ struct DTOCodingTests {
             ocrRawText: "raw",
             ocrConfidence: 0.92,
             capturedPhotoURL: "https://example.com/p.jpg",
-            offerCents: 50_00,
+            vendorAskCents: 50_00,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -118,7 +118,7 @@ struct DTOCodingTests {
 
         for key in [
             "store_id", "lot_id", "user_id", "cert_number", "ocr_raw_text",
-            "ocr_confidence", "captured_photo_url", "offer_cents",
+            "ocr_confidence", "captured_photo_url", "vendor_ask_cents",
             "created_at", "updated_at"
         ] {
             #expect(json.contains("\"\(key)\""), "expected snake_case key \(key) in \(json)")

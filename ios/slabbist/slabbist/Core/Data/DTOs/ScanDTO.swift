@@ -13,7 +13,7 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
     var ocrRawText: String?
     var ocrConfidence: Double?
     var capturedPhotoURL: String?
-    var offerCents: Int64?
+    var vendorAskCents: Int64?
     var createdAt: Date
     var updatedAt: Date
 
@@ -29,7 +29,7 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
         case ocrRawText = "ocr_raw_text"
         case ocrConfidence = "ocr_confidence"
         case capturedPhotoURL = "captured_photo_url"
-        case offerCents = "offer_cents"
+        case vendorAskCents = "vendor_ask_cents"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

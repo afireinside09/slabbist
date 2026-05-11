@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Sheet for entering the vendor's own asking price when Pokemon Price
-/// Tracker has no comp. Persists to `Scan.offerCents`. Numeric-only so we
+/// Tracker has no comp. Persists to `Scan.vendorAskCents`. Numeric-only so we
 /// avoid wrestling with locale-aware decimal parsing on the input edge —
 /// "12.34" is normalized to 1234 cents on submit.
 struct ManualPriceSheet: View {
