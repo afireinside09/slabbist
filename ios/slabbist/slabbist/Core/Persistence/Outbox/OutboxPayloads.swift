@@ -114,6 +114,11 @@ nonisolated extension OutboxPayloads {
     /// Patch payload that flips a vendor's `archived_at` from NULL to the
     /// given timestamp. Pickers exclude archived vendors; existing scans /
     /// lots that already reference the row keep working.
+    ///
+    /// Wire shape carries only `archived_at` because the drainer dispatch
+    /// reuses the same timestamp as `updated_at` server-side — the archive
+    /// moment IS the update moment. Do not add a separate `updated_at`
+    /// field here without updating `OutboxDrainer.dispatch`.
     struct ArchiveVendor: Codable {
         let id: String
         let archived_at: String

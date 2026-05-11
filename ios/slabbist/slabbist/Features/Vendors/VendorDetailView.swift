@@ -8,6 +8,7 @@ struct VendorDetailView: View {
     @Environment(OutboxKicker.self) private var kicker
     @State private var viewModel: VendorsViewModel?
     @State private var editing: Bool = false
+    @State private var error: String?
 
     var body: some View {
         SlabbedRoot {
@@ -78,18 +79,34 @@ struct VendorDetailView: View {
 
     private var actionsCard: some View {
         VStack(spacing: Spacing.m) {
+            if let error {
+                Text(error)
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.negative)
+                    .accessibilityIdentifier("vendor-detail-error")
+            }
             PrimaryGoldButton(title: "Edit vendor", systemIcon: "pencil") { editing = true }
                 .accessibilityIdentifier("vendor-detail-edit")
             if vendor.archivedAt == nil {
                 Button("Archive vendor") {
-                    try? viewModel?.archive(vendor)
+                    do {
+                        try viewModel?.archive(vendor)
+                        error = nil
+                    } catch {
+                        self.error = error.localizedDescription
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppColor.negative)
                 .accessibilityIdentifier("vendor-detail-archive")
             } else {
                 Button("Reactivate vendor") {
-                    try? viewModel?.reactivate(vendor)
+                    do {
+                        try viewModel?.reactivate(vendor)
+                        error = nil
+                    } catch {
+                        self.error = error.localizedDescription
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppColor.gold)

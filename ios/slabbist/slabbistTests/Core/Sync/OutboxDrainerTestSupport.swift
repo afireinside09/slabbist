@@ -31,7 +31,7 @@ final class Harness {
         // instance.
         let schema = Schema([
             Store.self, StoreMember.self, Lot.self,
-            Scan.self, OutboxItem.self,
+            Scan.self, Vendor.self, OutboxItem.self,
             GradedCardIdentity.self,
             GradedMarketSnapshot.self
         ])
