@@ -243,6 +243,63 @@ final class OfferRepository {
         kicker.kick()
     }
 
+    // MARK: - Commit & void (Plan 3)
+
+    /// Enqueues `commitTransaction` outbox item. The drainer invokes
+    /// `/transaction-commit`, and `TransactionsHydrator` flips the lot's local
+    /// state to `.paid` once the server confirms. Lot stays in `.accepted`
+    /// until that round-trip completes — we don't optimistically advance the
+    /// state because the server is the source of truth for the
+    /// `transactions` row and we want both sides to flip together.
+    func commit(lot: Lot, paymentMethod: String, paymentReference: String?) throws {
+        let current = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
+        guard Self.canTransition(from: current, to: .paid) else {
+            throw InvalidTransition.notAllowed(from: current, to: .paid)
+        }
+        let payload = OutboxPayloads.CommitTransaction(
+            lot_id: lot.id.uuidString,
+            payment_method: paymentMethod,
+            payment_reference: paymentReference,
+            vendor_id: lot.vendorId?.uuidString,
+            vendor_name_override: nil
+        )
+        let now = Date()
+        let item = OutboxItem(
+            id: UUID(),
+            kind: .commitTransaction,
+            payload: try JSONEncoder().encode(payload),
+            status: .pending,
+            attempts: 0,
+            createdAt: now,
+            nextAttemptAt: now
+        )
+        context.insert(item)
+        try context.save()
+        kicker.kick()
+    }
+
+    /// Enqueues `voidTransaction`. The drainer invokes `/transaction-void`
+    /// and the hydrator records the void row + flips the lot to `.voided`.
+    func voidTransaction(_ txn: StoreTransaction, reason: String) throws {
+        let payload = OutboxPayloads.VoidTransaction(
+            transaction_id: txn.id.uuidString,
+            reason: reason
+        )
+        let now = Date()
+        let item = OutboxItem(
+            id: UUID(),
+            kind: .voidTransaction,
+            payload: try JSONEncoder().encode(payload),
+            status: .pending,
+            attempts: 0,
+            createdAt: now,
+            nextAttemptAt: now
+        )
+        context.insert(item)
+        try context.save()
+        kicker.kick()
+    }
+
     // MARK: - Outbox plumbing
 
     private func enqueueLotPatch(_ lot: Lot) {
