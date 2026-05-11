@@ -250,7 +250,7 @@ struct LotsListView: View {
             if let lot = try? context.fetch(
                 FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
             ).first {
-                OfferReviewPlaceholderView(lot: lot)
+                OfferReviewView(lot: lot)
             } else {
                 missingEntityView(label: "Lot")
             }
@@ -362,24 +362,4 @@ struct LotsListView: View {
         f.unitsStyle = .short
         return f
     }()
-}
-
-/// Temporary destination for `LotsRoute.offerReview` while Task 10 builds the
-/// real `OfferReviewView`. Kept inside `LotsListView.swift` rather than its
-/// own file so it's trivial to delete once the real view lands.
-private struct OfferReviewPlaceholderView: View {
-    let lot: Lot
-    var body: some View {
-        SlabbedRoot {
-            VStack {
-                Text("Offer review")
-                    .font(.title)
-                Text("Lot: \(lot.name)").foregroundStyle(AppColor.dim)
-                Text("(coming in Task 10)").foregroundStyle(AppColor.muted)
-            }
-            .padding()
-        }
-        .navigationTitle("Offer review")
-        .navigationBarTitleDisplayMode(.inline)
-    }
 }
