@@ -55,6 +55,22 @@ struct PrimitiveSmokeTests {
         #expect(host.view != nil)
     }
 
+    @Test("SecondaryButton renders")
+    func secondaryButtonRenders() {
+        let host = UIHostingController(
+            rootView: SecondaryButton(title: "Resume offer", action: {})
+        )
+        #expect(host.view != nil)
+    }
+
+    @Test("SecondaryButton destructive renders")
+    func secondaryButtonDestructiveRenders() {
+        let host = UIHostingController(
+            rootView: SecondaryButton(title: "Decline", role: .destructive, action: {})
+        )
+        #expect(host.view != nil)
+    }
+
     @Test("PillToggle renders")
     @MainActor
     func pillToggleRenders() {
