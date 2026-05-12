@@ -17,7 +17,7 @@ struct LotDetailView: View {
     @State private var scanPendingDelete: Scan?
     @State private var showingVendorPicker = false
     @State private var showingMarginSheet = false
-    @Binding var path: [LotsRoute]
+    @Binding private var path: [LotsRoute]
 
     init(lot: Lot, path: Binding<[LotsRoute]>) {
         self.lot = lot
@@ -291,7 +291,7 @@ struct LotDetailView: View {
             EmptyView()
         case .priced:
             PrimaryGoldButton(title: "Create Offer") {
-                try? offerRepository().sendToOffer(lot)
+                guard (try? offerRepository().sendToOffer(lot)) != nil else { return }
                 path.append(LotsRoute.offerReview(lot.id))
             }
             .accessibilityIdentifier("create-offer")
