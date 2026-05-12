@@ -17,9 +17,11 @@ struct LotDetailView: View {
     @State private var scanPendingDelete: Scan?
     @State private var showingVendorPicker = false
     @State private var showingMarginSheet = false
+    @Binding var path: [LotsRoute]
 
-    init(lot: Lot) {
+    init(lot: Lot, path: Binding<[LotsRoute]>) {
         self.lot = lot
+        self._path = path
         let lotId = lot.id
         _scans = Query(
             filter: #Predicate<Scan> { $0.lotId == lotId },
@@ -73,9 +75,10 @@ struct LotDetailView: View {
             )
         }
         .sheet(isPresented: $showingMarginSheet) {
-            MarginPickerSheet(
+            LotMarginSheet(
                 currentPct: lot.marginPctSnapshot ?? 0.7,
-                onSelect: { pct in
+                storeId: lot.storeId,
+                onSelectLotMargin: { pct in
                     try? offerRepository().setLotMargin(pct, on: lot)
                 }
             )
@@ -287,13 +290,17 @@ struct LotDetailView: View {
         case .drafting:
             EmptyView()
         case .priced:
-            PrimaryGoldButton(title: "Send to offer") {
+            PrimaryGoldButton(title: "Create Offer") {
                 try? offerRepository().sendToOffer(lot)
+                path.append(LotsRoute.offerReview(lot.id))
             }
-            .accessibilityIdentifier("send-to-offer")
+            .accessibilityIdentifier("create-offer")
         case .presented, .accepted:
-            NavigationLink("Resume offer", value: LotsRoute.offerReview(lot.id))
-                .accessibilityIdentifier("resume-offer")
+            NavigationLink(value: LotsRoute.offerReview(lot.id)) {
+                Text("Resume offer")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .accessibilityIdentifier("resume-offer")
         case .declined:
             Button("Re-open as new offer") { try? offerRepository().reopenDeclined(lot) }
                 .accessibilityIdentifier("reopen-declined")

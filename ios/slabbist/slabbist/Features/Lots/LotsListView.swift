@@ -293,7 +293,7 @@ struct LotsListView: View {
             if let lot = try? context.fetch(
                 FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
             ).first {
-                LotDetailView(lot: lot)
+                LotDetailView(lot: lot, path: $path)
             } else {
                 missingEntityView(label: "Lot")
             }
