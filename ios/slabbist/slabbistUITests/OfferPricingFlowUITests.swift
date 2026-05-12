@@ -88,7 +88,7 @@ final class OfferPricingFlowUITests: XCTestCase {
             "Reset-to-auto affordance should appear after overriding the buy price"
         )
 
-        // 6. Pop back to LotDetailView and tap Create Offer.
+        // 7. Pop back to LotDetailView and tap Create Offer.
         let backButton = app.navigationBars.buttons.element(boundBy: 0)
         XCTAssertTrue(backButton.waitForExistence(timeout: 2))
         backButton.tap()
@@ -100,13 +100,13 @@ final class OfferPricingFlowUITests: XCTestCase {
         )
         createOffer.tap()
 
-        // 7. Create Offer auto-navigates — OfferReviewView renders immediately.
+        // 8. Create Offer auto-navigates — OfferReviewView renders immediately.
         XCTAssertTrue(
             app.staticTexts["Offer total"].waitForExistence(timeout: 3),
             "OfferReviewView should render immediately after tapping Create Offer"
         )
 
-        // 8. Bounce back — auto-dismisses to LotDetailView.
+        // 9. Bounce back — auto-dismisses to LotDetailView.
         let bounceBack = app.buttons["bounce-back"]
         XCTAssertTrue(bounceBack.waitForExistence(timeout: 2))
         bounceBack.tap()
@@ -116,11 +116,11 @@ final class OfferPricingFlowUITests: XCTestCase {
             "Bouncing back should auto-dismiss to lot detail with Create Offer CTA"
         )
 
-        // 9. Send again — already lands on OfferReviewView.
+        // 10. Send again — already lands on OfferReviewView.
         app.buttons["create-offer"].tap()
         XCTAssertTrue(app.staticTexts["Offer total"].waitForExistence(timeout: 3))
 
-        // 10. Decline — stays on OfferReviewView; pop back to confirm lot state.
+        // 11. Decline — stays on OfferReviewView; pop back to confirm lot state.
         let decline = app.buttons["decline-offer"]
         XCTAssertTrue(decline.waitForExistence(timeout: 2))
         decline.tap()
