@@ -80,10 +80,12 @@ struct OfferRepositoryTests {
     }
 
     @Test func clearLotMarginSetsSnapshotToNil() throws {
-        let (repo, _, lot, _) = makeContext()
-        // makeContext sets lot.marginPctSnapshot = 0.6
+        let (repo, _, lot, scan) = makeContext()
+        // makeContext sets lot.marginPctSnapshot = 0.6 but inserts no Store,
+        // so resolveMarginPct returns nil → scan.buyPriceCents becomes nil.
         try repo.clearLotMargin(on: lot)
         #expect(lot.marginPctSnapshot == nil)
+        #expect(scan.buyPriceCents == nil)
     }
 
     @Test func clearLotMarginPreservesOverriddenScans() throws {
