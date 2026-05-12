@@ -36,22 +36,15 @@ final class TransactionFlowUITests: XCTestCase {
         )
         app.staticTexts["Sample Lot"].tap()
 
-        // Lot is in .priced — Send to offer is the only legal CTA.
-        let sendToOffer = app.buttons["send-to-offer"]
+        // Lot is in .priced — Create Offer is the only legal CTA.
+        let createOffer = app.buttons["create-offer"]
         XCTAssertTrue(
-            sendToOffer.waitForExistence(timeout: 3),
-            "Send to offer CTA should render on a priced lot"
+            createOffer.waitForExistence(timeout: 3),
+            "Create Offer CTA should render on a priced lot"
         )
-        sendToOffer.tap()
+        createOffer.tap()
 
-        // After send-to-offer the lot is .presented; LotDetailView swaps
-        // the action bar to a `resume-offer` NavigationLink. Navigate in.
-        let resumeOffer = app.buttons["resume-offer"]
-        XCTAssertTrue(
-            resumeOffer.waitForExistence(timeout: 3),
-            "Resume offer link should render once a lot is presented"
-        )
-        resumeOffer.tap()
+        // Create Offer auto-navigates — OfferReviewView renders immediately.
 
         // OfferReviewView. The Mark paid button is enabled because state
         // is .presented.
