@@ -3,11 +3,11 @@ import XCTest
 /// End-to-end coverage of the offer-pricing workflow Plan 2 introduces.
 /// Boots under `--ui-tests-seed-priced-lot` so the harness lands directly
 /// on a lot that already has a validated scan + reconciled comp + auto-
-/// derived buy price — i.e. the state that gates the "Send to offer" CTA
+/// derived buy price — i.e. the state that gates the "Create Offer" CTA
 /// — without driving the cert-lookup + comp-fetch network pipeline.
 ///
 /// The test exercises:
-///   1. Adjust the lot's margin via `MarginPickerSheet` (70% snap).
+///   1. Adjust the lot's margin via `LotMarginSheet` (70% snap).
 ///   2. Open the seeded scan and override its buy price via `BuyPriceSheet`.
 ///   3. Pop back to the lot and tap "Create Offer" — auto-pushes to `OfferReviewView`.
 ///   4. Bounce back — auto-dismisses to `LotDetailView`; confirm CTA reappears.
@@ -81,7 +81,7 @@ final class OfferPricingFlowUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled)
         save.tap()
 
-        // 5. Reset-to-auto button should now render — proves the override
+        // 6. Reset-to-auto button should now render — proves the override
         // landed and the card refreshed.
         XCTAssertTrue(
             app.buttons["buy-price-reset"].waitForExistence(timeout: 3),
