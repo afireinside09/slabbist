@@ -10,7 +10,13 @@ nonisolated struct StoreDTO: Codable, Sendable, Identifiable, Equatable {
     var name: String
     var ownerUserId: UUID
     var createdAt: Date
-    var defaultMarginPct: Double = 0.6
+    var defaultMarginPct: Double = 0.7
+    /// Per-store offer ladder, sorted descending by `minCompCents`. The
+    /// server stores it as a JSONB array; the SDK's JSONDecoder maps it
+    /// directly to `[MarginTier]`. Defaults to the canonical ladder so
+    /// rows decoded from older clients (before the column existed) still
+    /// produce a usable ladder.
+    var marginLadder: [MarginTier] = .defaultMarginLadder
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -18,5 +24,6 @@ nonisolated struct StoreDTO: Codable, Sendable, Identifiable, Equatable {
         case ownerUserId = "owner_user_id"
         case createdAt = "created_at"
         case defaultMarginPct = "default_margin_pct"
+        case marginLadder = "margin_ladder"
     }
 }

@@ -182,5 +182,16 @@ nonisolated extension OutboxPayloads {
         let transaction_id: String
         let reason: String
     }
+
+    /// Patch payload for the per-store margin ladder. Carries a canonical
+    /// JSON-encoded `[MarginTier]` array (snake-cased keys) so the drainer
+    /// can splat it directly into the `margin_ladder` JSONB column without
+    /// knowing the inner shape. `stores` has no `updated_at` column today,
+    /// so we deliberately omit one — add it here if/when the table grows
+    /// the column.
+    struct UpdateStoreMargin: Codable {
+        let id: String
+        let margin_ladder_json: String
+    }
 }
 

@@ -17,6 +17,7 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
     case priceCompJob
     case commitTransaction
     case voidTransaction
+    case updateStoreMargin
 
     /// Higher priority = dispatched first. See design spec: validation
     /// unblocks comp; writes happen in natural order behind them.
@@ -40,6 +41,7 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
         case .updateLotOffer:     return 7
         case .recomputeLotOffer:  return 6
         case .updateLot:          return 5
+        case .updateStoreMargin:  return 5
         }
     }
 }

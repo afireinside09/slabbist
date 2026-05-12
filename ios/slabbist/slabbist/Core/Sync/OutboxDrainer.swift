@@ -446,6 +446,29 @@ actor OutboxDrainer: ModelActor {
                 }
             }
 
+        case .updateStoreMargin:
+            let p = try decode(OutboxPayloads.UpdateStoreMargin.self, payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateStoreMargin: invalid UUID")
+            }
+            // `margin_ladder` is a JSONB column on `stores`; the payload
+            // carries the canonical JSON string the iOS app already
+            // serialized. Decode it into AnyJSON so Postgrest sends the
+            // value as a true JSON array, not a JSON-encoded string.
+            guard let ladderData = p.margin_ladder_json.data(using: .utf8) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateStoreMargin: ladder JSON not UTF-8")
+            }
+            let ladder: AnyJSON
+            do {
+                ladder = try JSONDecoder().decode(AnyJSON.self, from: ladderData)
+            } catch {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateStoreMargin: ladder JSON decode failed: \(error)")
+            }
+            try await repositories.stores.patch(
+                id: id,
+                fields: ["margin_ladder": ladder]
+            )
+
         case .certLookupJob, .priceCompJob:
             // Group B kinds are out of scope for v1 — surface as permanent
             // failure so the classifier (7.3) routes them to .failed.

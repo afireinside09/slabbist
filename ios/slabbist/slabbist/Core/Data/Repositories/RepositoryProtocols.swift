@@ -16,6 +16,12 @@ nonisolated protocol StoreRepository: Sendable {
     func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO]
     func upsert(_ store: StoreDTO) async throws
     @discardableResult func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws
+
+    /// Invokes the `create_my_store` RPC. The server creates both the
+    /// `stores` row and the owner `store_members` row in a single
+    /// transaction. Returns the new store id.
+    func createMyStore(name: String) async throws -> UUID
 }
 
 nonisolated protocol StoreMemberRepository: Sendable {

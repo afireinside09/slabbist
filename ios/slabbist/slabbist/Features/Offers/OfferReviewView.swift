@@ -73,7 +73,7 @@ struct OfferReviewView: View {
             VStack(alignment: .leading, spacing: Spacing.s) {
                 KickerLabel("Offer total")
                 Text(formattedCents(totalBuyCents)).font(SlabFont.serif(size: 40))
-                Text("\(scans.count) lines · \(Int((lot.marginPctSnapshot ?? 0.6) * 100))% margin")
+                Text(marginSubtitle)
                     .font(SlabFont.mono(size: 12)).foregroundStyle(AppColor.dim)
             }
             .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.l)
@@ -170,6 +170,17 @@ struct OfferReviewView: View {
                 .accessibilityIdentifier("decline-offer")
             }
         }
+    }
+
+    /// "{N} lines · X% margin" when the lot has a manual override; "{N}
+    /// lines · ladder-priced" when each scan was priced via the per-store
+    /// margin ladder. Avoids surfacing a single arbitrary percentage when
+    /// the underlying scans were priced at different tiers.
+    private var marginSubtitle: String {
+        if let pct = lot.marginPctSnapshot {
+            return "\(scans.count) lines · \(Int((pct * 100).rounded()))% margin"
+        }
+        return "\(scans.count) lines · ladder-priced"
     }
 
     private var canMarkPaid: Bool {

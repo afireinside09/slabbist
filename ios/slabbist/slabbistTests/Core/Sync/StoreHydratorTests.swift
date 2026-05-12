@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import SwiftData
+import Supabase
 @testable import slabbist
 
 @Suite("StoreHydrator")
@@ -132,4 +133,6 @@ private final class StubStoreRepository: StoreRepository, @unchecked Sendable {
     func upsert(_ store: StoreDTO) async throws {}
     @discardableResult
     func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO { store }
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
+    func createMyStore(name: String) async throws -> UUID { UUID() }
 }

@@ -10,18 +10,27 @@ struct MarginPickerSheet: View {
         self.onSelect = onSelect
     }
 
-    private static let snaps: [Double] = [0.50, 0.55, 0.60, 0.65, 0.70]
+    private static let snaps: [Double] = [0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00]
 
     var body: some View {
         SlabbedRoot {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 KickerLabel("Lot margin")
                 Text("\(Int((pct * 100).rounded()))% of comp").slabTitle()
-                HStack(spacing: Spacing.s) {
+                // 7 snaps don't fit in a single HStack on smaller screens, so
+                // use an adaptive grid that wraps. The accessibility id format
+                // is preserved so existing UI tests targeting "margin-snap-70"
+                // still hit the right button.
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 56), spacing: Spacing.s)],
+                    alignment: .leading,
+                    spacing: Spacing.s
+                ) {
                     ForEach(Self.snaps, id: \.self) { snap in
                         Button("\(Int(snap * 100))%") { pct = snap }
                             .buttonStyle(.plain)
-                            .padding(.horizontal, Spacing.m).padding(.vertical, Spacing.s)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.s)
                             .background(snap == pct ? AppColor.gold.opacity(0.2) : Color.clear)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
@@ -30,7 +39,7 @@ struct MarginPickerSheet: View {
                             .accessibilityIdentifier("margin-snap-\(Int(snap * 100))")
                     }
                 }
-                Slider(value: $pct, in: 0...1, step: 0.01)
+                Slider(value: $pct, in: 0.70...1.00, step: 0.01)
                     .accessibilityIdentifier("margin-slider")
                 Spacer()
                 PrimaryGoldButton(title: "Save margin") {

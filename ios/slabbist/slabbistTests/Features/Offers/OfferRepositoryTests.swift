@@ -132,4 +132,54 @@ struct OfferRepositoryTests {
         // Scan value must not have shifted under the failed write.
         #expect(scan.buyPriceCents == nil)
     }
+
+    @Test func applyAutoBuyPriceUsesLadderWhenLotHasNoOverride() throws {
+        let (repo, context, lot, scan) = makeContext()
+        // Insert a Store with a custom ladder covering the scan's comp.
+        let store = Store(
+            id: lot.storeId,
+            name: "Test",
+            ownerUserId: lot.createdByUserId,
+            createdAt: Date()
+        )
+        store.applyMarginLadder([
+            MarginTier(minCompCents: 50_000, marginPct: 0.85),
+            MarginTier(minCompCents: 10_000, marginPct: 0.75),
+            MarginTier(minCompCents: 0, marginPct: 0.70),
+        ])
+        context.insert(store)
+        try context.save()
+
+        // Clear the manual override so the ladder kicks in.
+        lot.marginPctSnapshot = nil
+        // Comp = $750 → clears the $500 tier → 85%.
+        scan.reconciledHeadlinePriceCents = 75_000
+
+        let result = try repo.applyAutoBuyPrice(scan: scan, lot: lot)
+        #expect(result == Int64(0.85 * 75_000))
+    }
+
+    @Test func applyAutoBuyPriceFallsBackToStoreDefaultWhenLadderMisses() throws {
+        let (repo, context, lot, scan) = makeContext()
+        let store = Store(
+            id: lot.storeId,
+            name: "Test",
+            ownerUserId: lot.createdByUserId,
+            createdAt: Date(),
+            defaultMarginPct: 0.72
+        )
+        // Ladder has no zero-floor tier, so a low comp misses every rung.
+        store.applyMarginLadder([
+            MarginTier(minCompCents: 100_000, marginPct: 0.90)
+        ])
+        context.insert(store)
+        try context.save()
+
+        lot.marginPctSnapshot = nil
+        scan.reconciledHeadlinePriceCents = 5_000
+
+        let result = try repo.applyAutoBuyPrice(scan: scan, lot: lot)
+        // 0.72 × $50.00 = $36.00 (3600 cents) using half-up rounding.
+        #expect(result == 3_600)
+    }
 }

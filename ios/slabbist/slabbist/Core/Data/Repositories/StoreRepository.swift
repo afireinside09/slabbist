@@ -37,4 +37,25 @@ nonisolated struct SupabaseStoreRepository: StoreRepository, Sendable {
     func upsert(_ store: StoreDTO) async throws {
         try await base.upsert(store)
     }
+
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {
+        try await base.patch(id: id, fields: fields)
+    }
+
+    func createMyStore(name: String) async throws -> UUID {
+        do {
+            let response = try await base.client.rpc(
+                "create_my_store",
+                params: CreateMyStoreParams(p_name: name)
+            ).execute()
+            let raw = try JSONCoders.decoder.decode(UUID.self, from: response.data)
+            return raw
+        } catch {
+            throw SupabaseError.map(error)
+        }
+    }
+
+    private struct CreateMyStoreParams: Encodable, Sendable {
+        let p_name: String
+    }
 }

@@ -74,7 +74,7 @@ struct LotDetailView: View {
         }
         .sheet(isPresented: $showingMarginSheet) {
             MarginPickerSheet(
-                currentPct: lot.marginPctSnapshot ?? 0.6,
+                currentPct: lot.marginPctSnapshot ?? 0.7,
                 onSelect: { pct in
                     try? offerRepository().setLotMargin(pct, on: lot)
                 }
@@ -112,7 +112,7 @@ struct LotDetailView: View {
     }
 
     private var formattedMargin: String {
-        guard let m = lot.marginPctSnapshot else { return "—" }
+        guard let m = lot.marginPctSnapshot else { return "Auto (ladder)" }
         return "\(Int((m * 100).rounded()))% of comp"
     }
 

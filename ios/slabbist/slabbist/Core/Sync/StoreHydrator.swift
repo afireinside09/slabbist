@@ -72,6 +72,16 @@ final class StoreHydrator {
         state = .idle
     }
 
+    /// Creates a store via the `create_my_store` RPC and re-runs
+    /// hydration so the new row lands in SwiftData. Used by the
+    /// in-app onboarding flow when the server-side signup trigger
+    /// didn't seed a store (e.g. accounts predating the bootstrap).
+    func createStore(name: String, userId: UUID) async throws {
+        _ = try await repository.createMyStore(name: name)
+        reset()
+        await hydrateIfNeeded(userId: userId)
+    }
+
     /// XCUITest seam: stamp the hydrator as already complete for a
     /// synthetic user so `LotsListView.prepare()` can skip the network
     /// call entirely. Production code never invokes this; it is gated by

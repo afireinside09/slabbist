@@ -719,6 +719,8 @@ struct NullStoreRepo: StoreRepository {
     func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO] { [] }
     func upsert(_ store: StoreDTO) async throws {}
     func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO { store }
+    func patch(id: UUID, fields: [String: AnyJSON]) async throws {}
+    func createMyStore(name: String) async throws -> UUID { UUID() }
 }
 
 struct NullStoreMemberRepo: StoreMemberRepository {

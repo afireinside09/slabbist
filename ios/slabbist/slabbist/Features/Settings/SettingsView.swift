@@ -46,18 +46,33 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             KickerLabel("Tools")
             SlabCard {
-                NavigationLink {
-                    VendorsListView()
-                } label: {
-                    settingsRow(
-                        icon: "person.2",
-                        title: "Vendors",
-                        detail: nil,
-                        showsChevron: true
-                    )
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        VendorsListView()
+                    } label: {
+                        settingsRow(
+                            icon: "person.2",
+                            title: "Vendors",
+                            detail: nil,
+                            showsChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings-vendors-row")
+                    SlabCardDivider()
+                    NavigationLink {
+                        MarginLadderView()
+                    } label: {
+                        settingsRow(
+                            icon: "chart.bar",
+                            title: "Margin ladder",
+                            detail: nil,
+                            showsChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings-margin-ladder-row")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("settings-vendors-row")
             }
         }
     }

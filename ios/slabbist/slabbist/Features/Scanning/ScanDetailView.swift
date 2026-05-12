@@ -303,13 +303,26 @@ struct ScanDetailView: View {
     /// Caption under the buy price hero. Three cases:
     ///   * Overridden → "Override" — the user typed this in.
     ///   * No price yet → "Awaiting comp" — we have nothing to multiply.
-    ///   * Auto-derived → "Auto · 60% × comp" — surfaces the margin rule the
+    ///   * Auto-derived → "Auto · X% × comp" — surfaces the margin rule the
     ///     value was derived from so the operator can sanity-check the math.
+    ///
+    /// The displayed percentage comes from the lot's manual override when
+    /// set; otherwise it's derived from the actual buy/comp ratio so a
+    /// ladder-priced slab shows the tier that fired (e.g. an $1,200 PSA 10
+    /// at the 90% tier reads "Auto · 90% × comp" without the view having
+    /// to re-walk the ladder).
     private var buyPriceCaption: String {
         if scan.buyPriceOverridden { return "Override" }
         if scan.buyPriceCents == nil { return "Awaiting comp" }
-        let pct = Int(((lookupLot()?.marginPctSnapshot ?? 0.6) * 100).rounded())
-        return "Auto · \(pct)% × comp"
+        if let pct = lookupLot()?.marginPctSnapshot {
+            return "Auto · \(Int((pct * 100).rounded()))% × comp"
+        }
+        if let buy = scan.buyPriceCents,
+           let comp = scan.reconciledHeadlinePriceCents, comp > 0 {
+            let pct = Int((Double(buy) / Double(comp) * 100).rounded())
+            return "Auto · \(pct)% × comp"
+        }
+        return "Auto · ladder × comp"
     }
 
     /// Builds an `OfferRepository` scoped to this scan's store. Constructed

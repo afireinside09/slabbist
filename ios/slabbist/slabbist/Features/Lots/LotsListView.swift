@@ -22,6 +22,7 @@ struct LotsListView: View {
     @Environment(OutboxKicker.self) private var kicker
 
     @State private var showingNewLot = false
+    @State private var showingCreateStore = false
     @State private var lots: [Lot] = []
     @State private var path: [LotsRoute] = []
     @State private var viewModel: LotsViewModel?
@@ -85,6 +86,11 @@ struct LotsListView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingCreateStore) {
+                CreateStoreSheet { name in
+                    try await createStore(name: name)
+                }
+            }
             .navigationDestination(for: LotsRoute.self) { route in
                 routeDestination(route)
             }
@@ -101,13 +107,33 @@ struct LotsListView: View {
 
     private var setupStatusCard: some View {
         SlabCard {
-            VStack(alignment: .leading, spacing: Spacing.s) {
-                Text(hydrationStatusTitle)
-                    .font(SlabFont.sans(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColor.text)
-                Text(hydrationStatusDetail)
-                    .font(SlabFont.sans(size: 12))
-                    .foregroundStyle(AppColor.dim)
+            VStack(alignment: .leading, spacing: Spacing.m) {
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    Text(hydrationStatusTitle)
+                        .font(SlabFont.sans(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColor.text)
+                    Text(hydrationStatusDetail)
+                        .font(SlabFont.sans(size: 12))
+                        .foregroundStyle(AppColor.dim)
+                }
+                if needsStoreSetup {
+                    PrimaryGoldButton(
+                        title: "Create store",
+                        systemIcon: "storefront",
+                        trailingChevron: true
+                    ) {
+                        showingCreateStore = true
+                    }
+                    .accessibilityIdentifier("create-store-cta")
+                } else if isHydrationFailed {
+                    PrimaryGoldButton(
+                        title: "Try again",
+                        systemIcon: "arrow.clockwise"
+                    ) {
+                        Task { await retryHydration() }
+                    }
+                    .accessibilityIdentifier("retry-hydration-button")
+                }
             }
             .padding(.horizontal, Spacing.l)
             .padding(.vertical, Spacing.md)
@@ -115,9 +141,24 @@ struct LotsListView: View {
         }
     }
 
+    /// Hydration finished cleanly but no Store row landed locally. Either
+    /// the user signed up before the `handle_new_user` trigger existed or
+    /// the trigger failed — surfacing a "Create store" CTA lets them
+    /// self-serve out of the broken state.
+    private var needsStoreSetup: Bool {
+        if case .ready = hydrator.state { return viewModel == nil }
+        return false
+    }
+
+    private var isHydrationFailed: Bool {
+        if case .failed = hydrator.state { return true }
+        return false
+    }
+
     private var hydrationStatusTitle: String {
         switch hydrator.state {
         case .failed: return "Couldn't reach your store"
+        case .ready: return needsStoreSetup ? "Set up your store" : "Setting up your store…"
         default: return "Setting up your store…"
         }
     }
@@ -125,6 +166,8 @@ struct LotsListView: View {
     private var hydrationStatusDetail: String {
         switch hydrator.state {
         case .failed(let message): return message
+        case .ready where needsStoreSetup:
+            return "Lots, scans, and offers live under your store. Create one to get started."
         default: return "Pulling your account from the server. One moment."
         }
     }
@@ -417,6 +460,21 @@ struct LotsListView: View {
             return
         }
         await hydrator.hydrateIfNeeded(userId: userId)
+        viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session)
+        refresh()
+    }
+
+    private func retryHydration() async {
+        guard let userId = session.userId else { return }
+        hydrator.reset()
+        await hydrator.hydrateIfNeeded(userId: userId)
+        viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session)
+        refresh()
+    }
+
+    private func createStore(name: String) async throws {
+        guard let userId = session.userId else { return }
+        try await hydrator.createStore(name: name, userId: userId)
         viewModel = LotsViewModel.resolve(context: context, kicker: kicker, session: session)
         refresh()
     }

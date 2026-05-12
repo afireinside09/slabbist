@@ -147,13 +147,23 @@ final class OfferRepository {
     /// Compute and apply the auto-derived buy price for a scan whose comp
     /// just landed. Skips overridden scans (their value sticks until the
     /// user explicitly clears the override). Returns the computed value
-    /// (or `nil` if either input is missing).
+    /// (or `nil` if the inputs can't produce a number).
+    ///
+    /// Margin selection follows this precedence:
+    ///   1. `lot.marginPctSnapshot` — a manual per-lot override set via
+    ///      `MarginPickerSheet`. Applies uniformly to every scan in the lot.
+    ///   2. The store's `marginLadder` — per-scan tier lookup based on the
+    ///      scan's reconciled comp value. This is the default-on-create
+    ///      path for new lots.
+    ///   3. `store.defaultMarginPct` — fallback when the ladder is empty
+    ///      or has no tier covering the comp value.
     @discardableResult
     func applyAutoBuyPrice(scan: Scan, lot: Lot) throws -> Int64? {
         guard !scan.buyPriceOverridden else { return scan.buyPriceCents }
+        let pct = resolveMarginPct(scan: scan, lot: lot)
         let auto = OfferPricingService.defaultBuyPrice(
             reconciledCents: scan.reconciledHeadlinePriceCents,
-            marginPct: lot.marginPctSnapshot
+            marginPct: pct
         )
         scan.buyPriceCents = auto
         scan.updatedAt = Date()
@@ -163,6 +173,29 @@ final class OfferRepository {
         try reconcileDraftingOrPriced(lot)
         try recompute(lot: lot.id)
         return auto
+    }
+
+    /// Picks the margin pct applied to a single scan: manual lot override
+    /// first, then the store's ladder, then the store's default. Surfaced
+    /// here (rather than inlined into `applyAutoBuyPrice`) so the `Scan`
+    /// detail caption can reproduce the same lookup without re-running
+    /// the math against `buyPriceCents`.
+    func resolveMarginPct(scan: Scan, lot: Lot) -> Double? {
+        if let snapshot = lot.marginPctSnapshot { return snapshot }
+        guard let comp = scan.reconciledHeadlinePriceCents else { return nil }
+        let store = try? fetchStore(lot.storeId)
+        if let ladderPct = store?.marginLadder.margin(forCompCents: comp) {
+            return ladderPct
+        }
+        return store?.defaultMarginPct
+    }
+
+    private func fetchStore(_ storeId: UUID) throws -> Store? {
+        var descriptor = FetchDescriptor<Store>(
+            predicate: #Predicate<Store> { $0.id == storeId }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     /// Update the lot's margin (e.g. from a slider in OfferReviewView) and
