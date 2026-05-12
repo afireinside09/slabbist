@@ -152,23 +152,23 @@ struct OfferReviewView: View {
                     .accessibilityIdentifier("offer-review-sync-pending")
             }
 
-            HStack(spacing: Spacing.m) {
-                Button("Bounce back") {
-                    do { try offerRepository().bounceBack(lot) }
-                    catch { self.error = error.localizedDescription }
+            Button("Bounce back") {
+                do {
+                    try offerRepository().bounceBack(lot)
+                    dismiss()
+                } catch {
+                    self.error = error.localizedDescription
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(AppColor.muted)
-                .accessibilityIdentifier("bounce-back")
-                Spacer()
-                Button("Decline") {
-                    do { try offerRepository().decline(lot) }
-                    catch { self.error = error.localizedDescription }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(AppColor.negative)
-                .accessibilityIdentifier("decline-offer")
             }
+            .buttonStyle(SecondaryButtonStyle())
+            .accessibilityIdentifier("bounce-back")
+
+            Button("Decline") {
+                do { try offerRepository().decline(lot) }
+                catch { self.error = error.localizedDescription }
+            }
+            .buttonStyle(SecondaryButtonStyle(role: .destructive))
+            .accessibilityIdentifier("decline-offer")
         }
     }
 
