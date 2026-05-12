@@ -95,6 +95,32 @@ struct OfferRepositoryTests {
         #expect(lot.marginPctSnapshot == nil)
     }
 
+    @Test func clearLotMarginRepricesViaStoreDefaultMarginPct() throws {
+        let (repo, context, lot, scan) = makeContext()
+        // Insert a store whose ladder has no tier covering the scan's comp
+        // (1 000 cents) — only a high-threshold rung — so resolveMarginPct
+        // falls through to defaultMarginPct = 0.8.
+        let store = Store(
+            id: lot.storeId,
+            name: "Test",
+            ownerUserId: lot.createdByUserId,
+            createdAt: Date(),
+            defaultMarginPct: 0.8
+        )
+        store.applyMarginLadder([
+            MarginTier(minCompCents: 100_000, marginPct: 0.90)
+        ])
+        context.insert(store)
+        try context.save()
+
+        // lot.marginPctSnapshot = 0.6 (set by makeContext); comp = 1 000 cents.
+        try repo.clearLotMargin(on: lot)
+
+        // 1 000 × 0.8 = 800
+        #expect(scan.buyPriceCents == 800)
+        #expect(lot.marginPctSnapshot == nil)
+    }
+
     @Test func bounceBackReturnsPresentedToPriced() throws {
         let (repo, _, lot, _) = makeContext()
         lot.lotOfferState = LotOfferState.presented.rawValue
