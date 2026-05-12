@@ -119,7 +119,7 @@ struct LotMarginSheet: View {
                     .foregroundStyle(AppColor.negative)
                     .accessibilityIdentifier("margin-ladder-error")
             }
-            PrimaryGoldButton(title: "Save ladder", isEnabled: hasLadderChanges) {
+            PrimaryGoldButton(title: "Save ladder", isEnabled: !tiers.isEmpty && hasLadderChanges) {
                 saveLadder()
             }
             .accessibilityIdentifier("margin-ladder-save")
