@@ -224,6 +224,32 @@ final class OfferRepository {
         kicker.kick()
     }
 
+    /// Revert a lot to ladder pricing. Sets `marginPctSnapshot = nil` and
+    /// re-derives buy prices for every non-overridden scan using
+    /// `resolveMarginPct`, which now falls through to the store ladder
+    /// (then `store.defaultMarginPct`) since the snapshot is cleared.
+    func clearLotMargin(on lot: Lot) throws {
+        lot.marginPctSnapshot = nil
+        lot.updatedAt = Date()
+        enqueueLotPatch(lot)
+
+        let lotId = lot.id
+        let descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.lotId == lotId })
+        let scans = try context.fetch(descriptor)
+        for scan in scans where !scan.buyPriceOverridden {
+            let auto = OfferPricingService.defaultBuyPrice(
+                reconciledCents: scan.reconciledHeadlinePriceCents,
+                marginPct: resolveMarginPct(scan: scan, lot: lot)
+            )
+            scan.buyPriceCents = auto
+            scan.updatedAt = Date()
+            enqueueScanBuyPricePatch(scan)
+        }
+        try recompute(lot: lot.id)
+        try context.save()
+        kicker.kick()
+    }
+
     /// Attach a vendor (or detach when `vendor == nil`). Snapshots the
     /// display name onto the lot so a later rename of the vendor doesn't
     /// retroactively change this lot's offer header.

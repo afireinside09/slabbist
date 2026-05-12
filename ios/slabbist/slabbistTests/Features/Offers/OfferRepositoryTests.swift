@@ -79,6 +79,22 @@ struct OfferRepositoryTests {
         #expect(scan.buyPriceCents == 999)
     }
 
+    @Test func clearLotMarginSetsSnapshotToNil() throws {
+        let (repo, _, lot, _) = makeContext()
+        // makeContext sets lot.marginPctSnapshot = 0.6
+        try repo.clearLotMargin(on: lot)
+        #expect(lot.marginPctSnapshot == nil)
+    }
+
+    @Test func clearLotMarginPreservesOverriddenScans() throws {
+        let (repo, _, lot, scan) = makeContext()
+        scan.buyPriceCents = 999
+        scan.buyPriceOverridden = true
+        try repo.clearLotMargin(on: lot)
+        #expect(scan.buyPriceCents == 999)
+        #expect(lot.marginPctSnapshot == nil)
+    }
+
     @Test func bounceBackReturnsPresentedToPriced() throws {
         let (repo, _, lot, _) = makeContext()
         lot.lotOfferState = LotOfferState.presented.rawValue
