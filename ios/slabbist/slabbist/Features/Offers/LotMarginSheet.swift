@@ -11,6 +11,7 @@ struct LotMarginSheet: View {
     let currentPct: Double
     let storeId: UUID
     let onSelectLotMargin: (Double) -> Void
+    let onSelectLadder: () -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(OutboxKicker.self) private var kicker
@@ -20,14 +21,25 @@ struct LotMarginSheet: View {
     @State private var tiers: [Row] = []
     @State private var initialTiers: [MarginTier] = []
     @State private var ladderError: String?
+    @State private var mode: MarginMode
 
     private static let snaps: [Double] = [0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00]
 
-    init(currentPct: Double, storeId: UUID, onSelectLotMargin: @escaping (Double) -> Void) {
+    enum MarginMode { case fixed, ladder }
+
+    init(
+        currentPct: Double,
+        usesLadder: Bool,
+        storeId: UUID,
+        onSelectLotMargin: @escaping (Double) -> Void,
+        onSelectLadder: @escaping () -> Void
+    ) {
         self.currentPct = currentPct
         self.storeId = storeId
         self.onSelectLotMargin = onSelectLotMargin
+        self.onSelectLadder = onSelectLadder
         _pct = State(initialValue: currentPct)
+        _mode = State(initialValue: usesLadder ? .ladder : .fixed)
     }
 
     var body: some View {
@@ -50,32 +62,49 @@ struct LotMarginSheet: View {
     private var lotSection: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             KickerLabel("Lot margin override")
-            Text("\(Int((pct * 100).rounded()))% of comp").slabTitle()
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 56), spacing: Spacing.s)],
-                alignment: .leading,
-                spacing: Spacing.s
-            ) {
-                ForEach(Self.snaps, id: \.self) { snap in
-                    Button("\(Int(snap * 100))%") { pct = snap }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.s)
-                        .background(snap == pct ? AppColor.gold.opacity(0.2) : Color.clear)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(AppColor.gold, lineWidth: snap == pct ? 1.5 : 0.5)
-                        )
-                        .accessibilityIdentifier("margin-snap-\(Int(snap * 100))")
+            Picker("Margin type", selection: $mode) {
+                Text("Fixed %").tag(MarginMode.fixed)
+                Text("Store ladder").tag(MarginMode.ladder)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("margin-mode-picker")
+            if mode == .fixed {
+                Text("\(Int((pct * 100).rounded()))% of comp").slabTitle()
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 56), spacing: Spacing.s)],
+                    alignment: .leading,
+                    spacing: Spacing.s
+                ) {
+                    ForEach(Self.snaps, id: \.self) { snap in
+                        Button("\(Int(snap * 100))%") { pct = snap }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.s)
+                            .background(snap == pct ? AppColor.gold.opacity(0.2) : Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppColor.gold, lineWidth: snap == pct ? 1.5 : 0.5)
+                            )
+                            .accessibilityIdentifier("margin-snap-\(Int(snap * 100))")
+                    }
                 }
+                Slider(value: $pct, in: 0.70...1.00, step: 0.01)
+                    .accessibilityIdentifier("margin-slider")
+                PrimaryGoldButton(title: "Save lot margin") {
+                    onSelectLotMargin(pct)
+                    dismiss()
+                }
+                .accessibilityIdentifier("margin-save")
+            } else {
+                Text("Slabs priced per the store ladder below.")
+                    .font(SlabFont.sans(size: 13))
+                    .foregroundStyle(AppColor.muted)
+                PrimaryGoldButton(title: "Apply ladder") {
+                    onSelectLadder()
+                    dismiss()
+                }
+                .accessibilityIdentifier("margin-apply-ladder")
             }
-            Slider(value: $pct, in: 0.70...1.00, step: 0.01)
-                .accessibilityIdentifier("margin-slider")
-            PrimaryGoldButton(title: "Save lot margin") {
-                onSelectLotMargin(pct)
-                dismiss()
-            }
-            .accessibilityIdentifier("margin-save")
         }
     }
 
