@@ -77,9 +77,13 @@ struct LotDetailView: View {
         .sheet(isPresented: $showingMarginSheet) {
             LotMarginSheet(
                 currentPct: lot.marginPctSnapshot ?? 0.7,
+                usesLadder: lot.marginPctSnapshot == nil,
                 storeId: lot.storeId,
                 onSelectLotMargin: { pct in
                     try? offerRepository().setLotMargin(pct, on: lot)
+                },
+                onSelectLadder: {
+                    try? offerRepository().clearLotMargin(on: lot)
                 }
             )
         }
