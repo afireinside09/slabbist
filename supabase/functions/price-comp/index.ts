@@ -268,10 +268,45 @@ function buildPPTData(
       resolvedLanguage,
       creditsConsumed,
     },
-    freshTCGPlayerId: resolvedTCGPlayerId,
+    freshTCGPlayerId: resolvedTCGPlayerId || null,
     pptFailureCode: null,
     pptAttemptLog: null,
   };
+}
+
+async function persistPoketraceMarket(
+  supabase: SupabaseClient,
+  identityId: string,
+  gradingService: GradingService,
+  grade: string,
+  block: PoketraceBlock,
+): Promise<void> {
+  await upsertMarketLadder(supabase, {
+    identityId,
+    gradingService,
+    grade,
+    source: "poketrace",
+    headlinePriceCents: block.avg_cents,
+    ladderCents: { loose: null, psa_7: null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null, bgs_10: null, cgc_10: null, sgc_10: null },
+    priceHistory: block.price_history,
+    pptTCGPlayerId: "",
+    pptUrl: "",
+    poketrace: {
+      avgCents:        block.avg_cents,
+      lowCents:        block.low_cents,
+      highCents:       block.high_cents,
+      avg1dCents:      block.avg_1d_cents,
+      avg7dCents:      block.avg_7d_cents,
+      avg30dCents:     block.avg_30d_cents,
+      median3dCents:   block.median_3d_cents,
+      median7dCents:   block.median_7d_cents,
+      median30dCents:  block.median_30d_cents,
+      trend:           block.trend,
+      confidence:      block.confidence,
+      saleCount:       block.sale_count,
+      tierPricesCents: block.tier_prices_cents,
+    },
+  });
 }
 
 export async function handle(req: Request, deps: HandleDeps): Promise<Response> {
@@ -383,32 +418,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
         );
         if (poketraceBlock) {
           try {
-            await upsertMarketLadder(supabase, {
-              identityId: body.graded_card_identity_id,
-              gradingService: body.grading_service,
-              grade: body.grade,
-              source: "poketrace",
-              headlinePriceCents: poketraceBlock.avg_cents,
-              ladderCents: { loose: null, psa_7: null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null, bgs_10: null, cgc_10: null, sgc_10: null },
-              priceHistory: poketraceBlock.price_history,
-              pptTCGPlayerId: "",
-              pptUrl: "",
-              poketrace: {
-                avgCents:       poketraceBlock.avg_cents,
-                lowCents:       poketraceBlock.low_cents,
-                highCents:      poketraceBlock.high_cents,
-                avg1dCents:     poketraceBlock.avg_1d_cents,
-                avg7dCents:     poketraceBlock.avg_7d_cents,
-                avg30dCents:    poketraceBlock.avg_30d_cents,
-                median3dCents:  poketraceBlock.median_3d_cents,
-                median7dCents:  poketraceBlock.median_7d_cents,
-                median30dCents: poketraceBlock.median_30d_cents,
-                trend:          poketraceBlock.trend,
-                confidence:     poketraceBlock.confidence,
-                saleCount:      poketraceBlock.sale_count,
-                tierPricesCents: poketraceBlock.tier_prices_cents,
-              },
-            });
+            await persistPoketraceMarket(supabase, body.graded_card_identity_id, body.grading_service, body.grade, poketraceBlock);
           } catch (e) {
             console.error("poketrace.cache_hit_persist_failed", { message: (e as Error).message });
           }
@@ -477,32 +487,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
   // 5. Phase 3 — persist Poketrace, assemble response
   if (poketraceBlock) {
     try {
-      await upsertMarketLadder(supabase, {
-        identityId: body.graded_card_identity_id,
-        gradingService: body.grading_service,
-        grade: body.grade,
-        source: "poketrace",
-        headlinePriceCents: poketraceBlock.avg_cents,
-        ladderCents: { loose: null, psa_7: null, psa_8: null, psa_9: null, psa_9_5: null, psa_10: null, bgs_10: null, cgc_10: null, sgc_10: null },
-        priceHistory: poketraceBlock.price_history,
-        pptTCGPlayerId: "",
-        pptUrl: "",
-        poketrace: {
-          avgCents:       poketraceBlock.avg_cents,
-          lowCents:       poketraceBlock.low_cents,
-          highCents:      poketraceBlock.high_cents,
-          avg1dCents:     poketraceBlock.avg_1d_cents,
-          avg7dCents:     poketraceBlock.avg_7d_cents,
-          avg30dCents:    poketraceBlock.avg_30d_cents,
-          median3dCents:  poketraceBlock.median_3d_cents,
-          median7dCents:  poketraceBlock.median_7d_cents,
-          median30dCents: poketraceBlock.median_30d_cents,
-          trend:          poketraceBlock.trend,
-          confidence:     poketraceBlock.confidence,
-          saleCount:      poketraceBlock.sale_count,
-          tierPricesCents: poketraceBlock.tier_prices_cents,
-        },
-      });
+      await persistPoketraceMarket(supabase, body.graded_card_identity_id, body.grading_service, body.grade, poketraceBlock);
     } catch (e) {
       console.error("poketrace.persist.market_failed", { message: (e as Error).message });
     }
