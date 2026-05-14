@@ -16,6 +16,34 @@ import { fetchPoketracePrices } from "./poketrace/prices.ts";
 import { fetchPoketraceHistory } from "./poketrace/history.ts";
 import { poketraceTierKey } from "./lib/poketrace-tier-key.ts";
 
+// ─── Phase-split types ───────────────────────────────────────────────────────
+
+interface PPTData {
+  ladderCents: LadderPrices;
+  headlineCents: number | null;
+  priceHistory: PriceHistoryPoint[];
+  resolvedTCGPlayerId: string;
+  url: string;
+  cacheHit: boolean;
+  isStaleFallback: boolean;
+  resolverTier: string | null;
+  resolvedLanguage: "english" | "japanese";
+  creditsConsumed: number | undefined;
+}
+
+interface Phase1Result {
+  pptData: PPTData | null;
+  freshTCGPlayerId: string | null;
+  pptFailureCode: string | null;
+  pptAttemptLog: string[] | null;
+}
+
+// Thrown by resolvePPTIdentity when the failure is hard (e.g. AUTH_INVALID)
+// and the request must short-circuit before Phase 2.
+class Phase1ShortCircuit extends Error {
+  constructor(public readonly response: Response) { super("short-circuit"); }
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status, headers: { "content-type": "application/json" },
