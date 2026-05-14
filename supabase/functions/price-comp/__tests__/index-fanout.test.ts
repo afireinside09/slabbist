@@ -558,3 +558,210 @@ Deno.test("v2 envelope: poketrace api key not configured → branch quietly skip
   // No Poketrace HTTP calls should have been made
   assertEquals(poketraceCallCount, 0, "zero Poketrace HTTP calls when apiKey is null");
 });
+
+Deno.test("PPT cold resolver fails, Poketrace cached UUID → 200 poketrace-only", async () => {
+  _resetPauseForTests();
+  // Identity: no ppt_tcgplayer_id (never resolved), but poketrace_card_id already cached.
+  const identity = {
+    ...IDENTITY,
+    ppt_tcgplayer_id: null,
+    ppt_url: null,
+    poketrace_card_id: POKETRACE_CARD_ID,
+    poketrace_card_id_resolved_at: "2026-05-01T00:00:00Z",
+  };
+  const supabase = makeSupabase({ identity: { ...identity } });
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    // PPT search returns empty — resolver fails
+    if (url.includes("pokemonpricetracker.com")) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    // Poketrace skips cross-walk (UUID already cached); card detail and history succeed
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_CARD_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const deps: HandleDeps = {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), deps));
+  assertEquals(resp.status, 200);
+  const body = await resp.json();
+
+  assertEquals(body.reconciled.source, "poketrace-only");
+  assertEquals(body.reconciled.headline_price_cents, 19500);
+  assert(body.poketrace !== null, "poketrace block must be present");
+  assertEquals(body.poketrace.avg_cents, 19500);
+  // PPT fields absent
+  assertEquals(body.headline_price_cents, null, "no PPT headline when PPT failed");
+  assertEquals(body.psa_10_price_cents, null);
+});
+
+Deno.test("first cold scan: PPT resolves new ID, Poketrace cross-walks same request → 200 avg", async () => {
+  _resetPauseForTests();
+  // Brand new card — neither ID cached on identity.
+  const identity = {
+    ...IDENTITY,
+    ppt_tcgplayer_id: null,
+    ppt_url: null,
+    poketrace_card_id: null,
+    poketrace_card_id_resolved_at: null,
+  };
+  const supabase = makeSupabase({ identity: { ...identity } });
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    // PPT cold: T1 search returns a match; full fetchCard follows
+    if (url.includes("pokemonpricetracker.com") && url.includes("search=")) {
+      return Promise.resolve(new Response(
+        JSON.stringify([{ tcgPlayerId: "243172", name: "Charizard", cardNumber: "4/102", setName: "Base Set" }]),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ));
+    }
+    if (url.includes("pokemonpricetracker.com") && url.includes("tcgPlayerId=243172")) {
+      return Promise.resolve(new Response(JSON.stringify([PPT_CARD_BODY]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    // Poketrace cross-walk: uses freshly resolved 243172
+    if (url.includes("api.poketrace.com") && url.includes("tcgplayer_ids=243172")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: POKETRACE_CARD_ID }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_CARD_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const deps: HandleDeps = {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), deps));
+  assertEquals(resp.status, 200);
+  const body = await resp.json();
+
+  assertEquals(body.reconciled.source, "avg");
+  assert(body.poketrace !== null, "Poketrace must succeed on first cold scan using freshly resolved ID");
+  assertEquals(body.poketrace.avg_cents, 19500);
+  assertEquals(body.headline_price_cents, 18500, "PPT psa_10 headline");
+  // Average: (18500 + 19500) / 2 = 19000
+  assertEquals(body.reconciled.headline_price_cents, 19000);
+});
+
+Deno.test("PPT and Poketrace both fail → 404 PRODUCT_NOT_RESOLVED", async () => {
+  _resetPauseForTests();
+  const identity = {
+    ...IDENTITY,
+    ppt_tcgplayer_id: null,
+    ppt_url: null,
+    poketrace_card_id: null,
+    poketrace_card_id_resolved_at: null,
+  };
+  const supabase = makeSupabase({ identity: { ...identity } });
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    // PPT resolver: all tiers return empty
+    if (url.includes("pokemonpricetracker.com")) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    // Poketrace cross-walk: no card found
+    if (url.includes("api.poketrace.com")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.now(),
+  }));
+  assertEquals(resp.status, 404);
+  const body = await resp.json();
+  assertEquals(body.code, "PRODUCT_NOT_RESOLVED");
+});
+
+Deno.test("PPT 5xx with stale cache, Poketrace succeeds → stale PPT + fresh Poketrace in response", async () => {
+  _resetPauseForTests();
+  const STALE_PPT_ROW = {
+    identity_id: IDENTITY.id,
+    grading_service: "PSA",
+    grade: "10",
+    source: "pokemonpricetracker",
+    headline_price: 180.0,
+    psa_10_price: 180.0,
+    loose_price: null,
+    psa_7_price: null, psa_8_price: null, psa_9_price: null, psa_9_5_price: null,
+    bgs_10_price: null, cgc_10_price: null, sgc_10_price: null,
+    ppt_tcgplayer_id: "243172",
+    ppt_url: "https://www.pokemonpricetracker.com/card/charizard",
+    price_history: [],
+    updated_at: new Date(Date.now() - 2 * 86400_000).toISOString(), // stale: 2d old
+  };
+  const supabase = makeSupabase({ identity: { ...IDENTITY }, market: STALE_PPT_ROW });
+
+  const stubFetch: typeof fetch = (input) => {
+    const url = typeof input === "string" ? input : String((input as Request).url ?? input);
+    // PPT upstream is down
+    if (url.includes("pokemonpricetracker.com")) {
+      return Promise.resolve(new Response("upstream down", { status: 503 }));
+    }
+    // Poketrace succeeds normally
+    if (url.includes("api.poketrace.com") && url.includes("tcgplayer_ids=")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: POKETRACE_CARD_ID }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_HISTORY_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("api.poketrace.com") && url.includes("/cards/")) {
+      return Promise.resolve(new Response(JSON.stringify(POKETRACE_CARD_BODY), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response("not stubbed: " + url, { status: 599 }));
+  };
+
+  const resp = await withStubFetch(stubFetch, () => handle(makeRequest(), {
+    supabase,
+    pptBaseUrl: "https://www.pokemonpricetracker.com",
+    pptToken: "ppt-token",
+    ttlSeconds: 86400,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "pt-key",
+    now: () => Date.parse("2026-05-08T12:00:00Z"),
+  }));
+
+  assertEquals(resp.status, 200);
+  const body = await resp.json();
+  assertEquals(body.is_stale_fallback, true, "PPT stale flag must be set");
+  assertEquals(body.headline_price_cents, 18000, "stale PPT headline = $180");
+  assert(body.poketrace !== null, "Poketrace must succeed despite PPT being down");
+  assertEquals(body.poketrace.avg_cents, 19500);
+  // Reconciled: avg of stale PPT (18000¢) + fresh Poketrace (19500¢) = 18750¢
+  assertEquals(body.reconciled.source, "avg");
+  assertEquals(body.reconciled.headline_price_cents, 18750);
+});
