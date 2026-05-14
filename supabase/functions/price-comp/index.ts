@@ -100,6 +100,180 @@ export interface HandleDeps {
   now: () => number;
 }
 
+async function resolvePPTIdentity(
+  identity: Record<string, unknown>,
+  body: PriceCompRequest,
+  deps: HandleDeps,
+  cached: Awaited<ReturnType<typeof readMarketLadder>>,
+): Promise<Phase1Result> {
+  const supabase = deps.supabase as SupabaseClient;
+  const clientOpts = { token: deps.pptToken, baseUrl: deps.pptBaseUrl, now: deps.now };
+  const tcgPlayerId = identity.ppt_tcgplayer_id as string | null;
+
+  // ── Warm path ──────────────────────────────────────────────────────────────
+  if (tcgPlayerId) {
+    let result = await fetchCard(clientOpts, { tcgPlayerId, language: "english" });
+
+    if (result.status === 401 || result.status === 403) {
+      console.error("ppt.auth_invalid", { phase: "warm" });
+      throw new Phase1ShortCircuit(json(502, { code: "AUTH_INVALID" }));
+    }
+
+    if (result.status === 429 || result.status >= 500) {
+      console.error("ppt.upstream_5xx", { marker: String(result.status) });
+      if (!cached) {
+        return { pptData: null, freshTCGPlayerId: tcgPlayerId, pptFailureCode: "UPSTREAM_UNAVAILABLE", pptAttemptLog: null };
+      }
+      return {
+        pptData: {
+          ladderCents: cached.ladderCents,
+          headlineCents: cached.headlinePriceCents,
+          priceHistory: cached.priceHistory,
+          resolvedTCGPlayerId: cached.pptTCGPlayerId ?? tcgPlayerId,
+          url: cached.pptUrl ?? (identity.ppt_url as string) ?? "",
+          cacheHit: true,
+          isStaleFallback: true,
+          resolverTier: null,
+          resolvedLanguage: "english",
+          creditsConsumed: undefined,
+        },
+        freshTCGPlayerId: tcgPlayerId,
+        pptFailureCode: null,
+        pptAttemptLog: null,
+      };
+    }
+
+    let resolvedLanguage: "english" | "japanese" = "english";
+
+    if (result.status === 200 && !result.card) {
+      // English returned no card — try Japanese.
+      const jpResult = await fetchCard(clientOpts, { tcgPlayerId, language: "japanese" });
+      if (jpResult.status === 429 || jpResult.status >= 500) {
+        console.error("ppt.upstream_5xx", { marker: String(jpResult.status), phase: "jp-retry" });
+        if (!cached) {
+          return { pptData: null, freshTCGPlayerId: tcgPlayerId, pptFailureCode: "UPSTREAM_UNAVAILABLE", pptAttemptLog: null };
+        }
+        return {
+          pptData: {
+            ladderCents: cached.ladderCents,
+            headlineCents: cached.headlinePriceCents,
+            priceHistory: cached.priceHistory,
+            resolvedTCGPlayerId: cached.pptTCGPlayerId ?? tcgPlayerId,
+            url: cached.pptUrl ?? (identity.ppt_url as string) ?? "",
+            cacheHit: true,
+            isStaleFallback: true,
+            resolverTier: null,
+            resolvedLanguage: "english",
+            creditsConsumed: undefined,
+          },
+          freshTCGPlayerId: tcgPlayerId,
+          pptFailureCode: null,
+          pptAttemptLog: null,
+        };
+      }
+      if (jpResult.status === 200 && jpResult.card) {
+        result = jpResult;
+        resolvedLanguage = "japanese";
+      } else {
+        try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+        return { pptData: null, freshTCGPlayerId: null, pptFailureCode: "NO_MARKET_DATA", pptAttemptLog: null };
+      }
+    } else if (!result.card) {
+      try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
+      return { pptData: null, freshTCGPlayerId: null, pptFailureCode: "NO_MARKET_DATA", pptAttemptLog: null };
+    }
+
+    const card = result.card!;
+    const resolvedTCGPlayerId = String(card.tcgPlayerId ?? tcgPlayerId);
+    return buildPPTData(card, resolvedTCGPlayerId, resolvedLanguage, null, result.creditsConsumed, identity, body);
+  }
+
+  // ── Cold path ──────────────────────────────────────────────────────────────
+  const resolved = await resolveCard(
+    { client: clientOpts, supabase },
+    {
+      card_name: identity.card_name as string,
+      card_number: (identity.card_number as string | null) ?? null,
+      set_name: identity.set_name as string,
+      year: (identity.year as number | null) ?? null,
+    },
+  );
+  console.log("ppt.match.resolve", {
+    identity_id: body.graded_card_identity_id,
+    attempts: resolved.attemptLog,
+    tier: resolved.tierMatched,
+  });
+  if (!resolved.card) {
+    return { pptData: null, freshTCGPlayerId: null, pptFailureCode: "PRODUCT_NOT_RESOLVED", pptAttemptLog: resolved.attemptLog };
+  }
+
+  const card = resolved.card;
+  const resolvedTCGPlayerId = String(card.tcgPlayerId ?? "");
+  const url = (identity.ppt_url as string | null) ?? productUrl(card);
+
+  // Persist new ID immediately — Poketrace needs it in Phase 2.
+  if (resolvedTCGPlayerId) {
+    try {
+      await persistIdentityPPTId(supabase, body.graded_card_identity_id, resolvedTCGPlayerId, url);
+      console.log("ppt.match.first_resolved", { identity_id: body.graded_card_identity_id, tcgPlayerId: resolvedTCGPlayerId });
+    } catch (e) {
+      console.error("ppt.persist.identity_failed", { message: (e as Error).message });
+    }
+  }
+
+  return buildPPTData(card, resolvedTCGPlayerId, resolved.resolvedLanguage ?? "english", resolved.tierMatched, undefined, identity, body);
+}
+
+function buildPPTData(
+  card: PPTCard,
+  resolvedTCGPlayerId: string,
+  resolvedLanguage: "english" | "japanese",
+  resolverTier: string | null,
+  creditsConsumed: number | undefined,
+  identity: Record<string, unknown>,
+  body: PriceCompRequest,
+): Phase1Result {
+  const ladder = extractLadder(card);
+  const requestedTierKey = gradeKeyFor(body.grading_service, body.grade);
+  const history = parsePriceHistory(priceHistoryForTier(card, requestedTierKey ?? "psa_10"));
+  const url = (identity.ppt_url as string | null) ?? productUrl(card);
+
+  if (!ladderHasAnyPrice(ladder)) {
+    console.log("ppt.product.no_prices", { tcgPlayerId: resolvedTCGPlayerId });
+    return { pptData: null, freshTCGPlayerId: resolvedTCGPlayerId, pptFailureCode: "NO_MARKET_DATA", pptAttemptLog: null };
+  }
+
+  const headlineCents = pickTier(card, body.grading_service, body.grade);
+
+  console.log("price-comp.ppt.resolved", {
+    identity_id: body.graded_card_identity_id,
+    tcgPlayerId: resolvedTCGPlayerId,
+    resolved_language: resolvedLanguage,
+    resolver_tier: resolverTier,
+    headline_present: headlineCents !== null,
+    history_points: history.length,
+    credits_consumed: creditsConsumed ?? null,
+  });
+
+  return {
+    pptData: {
+      ladderCents: ladder,
+      headlineCents,
+      priceHistory: history,
+      resolvedTCGPlayerId,
+      url,
+      cacheHit: false,
+      isStaleFallback: false,
+      resolverTier,
+      resolvedLanguage,
+      creditsConsumed,
+    },
+    freshTCGPlayerId: resolvedTCGPlayerId,
+    pptFailureCode: null,
+    pptAttemptLog: null,
+  };
+}
+
 export async function handle(req: Request, deps: HandleDeps): Promise<Response> {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
