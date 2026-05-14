@@ -423,173 +423,58 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     return json(200, v2);
   }
 
-  // 3. Live fetch
-  //   Warm path  (tcgPlayerId cached on identity): single fetchCard.
-  //   Cold path  (no tcgPlayerId yet): multi-tier resolver runs cheap
-  //     searchCards() candidates, scores them, then fetchCards the
-  //     winner. See ppt/match.ts.
-  const clientOpts = { token: deps.pptToken, baseUrl: deps.pptBaseUrl, now: deps.now };
-  const tcgPlayerId = identity.ppt_tcgplayer_id as string | null;
-
-  let card: PPTCard;
-  let creditsConsumed: number | undefined;
-  let resolverTier: string | null = null;
-  let resolvedLanguage: "english" | "japanese" = "english";
-
-  let warmPathLanguage: "english" | "japanese" | undefined;
-  if (tcgPlayerId) {
-    let result = await fetchCard(clientOpts, { tcgPlayerId, language: "english" });
-    if (result.status === 401 || result.status === 403) {
-      console.error("ppt.auth_invalid", { phase: "tcgPlayerId" });
-      return json(502, { code: "AUTH_INVALID" });
-    }
-    if (result.status === 429 || result.status >= 500) {
-      return await staleOrUpstreamDown(cached, body, `${result.status}`);
-    }
-    if (result.status === 200 && !result.card) {
-      // English returned no card — try japanese before clearing the cached id.
-      const jpResult = await fetchCard(clientOpts, { tcgPlayerId, language: "japanese" });
-      if (jpResult.status === 429 || jpResult.status >= 500) {
-        return await staleOrUpstreamDown(cached, body, `${jpResult.status}`);
-      }
-      if (jpResult.status === 200 && jpResult.card) {
-        result = jpResult;
-        warmPathLanguage = "japanese";
-      } else {
-        // Both languages null — cached id refers to a deleted/missing card.
-        try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
-        return json(404, { code: "NO_MARKET_DATA" });
-      }
-    } else {
-      warmPathLanguage = "english";
-    }
-    if (!result.card) {
-      // Non-200 status from english fetch that wasn't 429/5xx (e.g. 404).
-      try { await clearIdentityPPTId(supabase, body.graded_card_identity_id); } catch { /* swallow */ }
-      return json(404, { code: "NO_MARKET_DATA" });
-    }
-    card = result.card;
-    creditsConsumed = result.creditsConsumed;
-    resolvedLanguage = warmPathLanguage ?? "english";
-  } else {
-    const resolved = await resolveCard(
-      { client: clientOpts, supabase },
-      {
-        card_name: identity.card_name,
-        card_number: identity.card_number ?? null,
-        set_name: identity.set_name,
-        year: identity.year ?? null,
-      },
-    );
-    console.log("ppt.match.resolve", {
-      identity_id: body.graded_card_identity_id,
-      attempts: resolved.attemptLog,
-      tier: resolved.tierMatched,
-    });
-    if (!resolved.card) {
-      // Surface attemptLog in 404 body — cheap (~1KB) and worth its
-      // weight: lets the iOS / smoke harness diagnose tier misses
-      // without round-tripping through edge logs. We only emit this on
-      // failure paths, so it's never on the happy-path payload.
-      return json(404, { code: "PRODUCT_NOT_RESOLVED", attempt_log: resolved.attemptLog });
-    }
-    card = resolved.card;
-    resolverTier = resolved.tierMatched;
-    resolvedLanguage = resolved.resolvedLanguage ?? "english";
-  }
-  const ladder = extractLadder(card);
-  // Sparkline tracks the requested tier's history (e.g., the PSA 10 series
-  // when the user scanned a PSA 10). Falls back to PSA 10 history when the
-  // requested grader is unsupported (TAG, sub-PSA-7) so the card still
-  // shows a meaningful trend line. Empty / missing → empty array.
-  const requestedTierKey = gradeKeyFor(body.grading_service, body.grade);
-  const historyTierKey = requestedTierKey ?? "psa_10";
-  const history = parsePriceHistory(priceHistoryForTier(card, historyTierKey));
-  if (!ladderHasAnyPrice(ladder)) {
-    console.log("ppt.product.no_prices", { tcgPlayerId: card.tcgPlayerId });
-    return json(404, { code: "NO_MARKET_DATA" });
-  }
-  const headlineCents = pickTier(card, body.grading_service, body.grade);
-  const resolvedTCGPlayerId = String(card.tcgPlayerId ?? tcgPlayerId ?? "");
-  const url = identity.ppt_url ?? productUrl(card);
-
-  // First-time match — persist tcgPlayerId on identity
-  if (!tcgPlayerId && resolvedTCGPlayerId) {
-    try {
-      await persistIdentityPPTId(supabase, body.graded_card_identity_id, resolvedTCGPlayerId, url);
-      console.log("ppt.match.first_resolved", { identity_id: body.graded_card_identity_id, tcgPlayerId: resolvedTCGPlayerId });
-    } catch (e) {
-      console.error("ppt.persist.identity_failed", { message: (e as Error).message });
-    }
-  }
-
+  // 3. Phase 1 — PPT identity resolution (all PPT HTTP happens here)
+  let phase1: Phase1Result;
   try {
-    await upsertMarketLadder(supabase, {
-      identityId: body.graded_card_identity_id,
-      gradingService: body.grading_service,
-      grade: body.grade,
-      source: "pokemonpricetracker",
-      headlinePriceCents: headlineCents,
-      ladderCents: ladder,
-      priceHistory: history,
-      pptTCGPlayerId: resolvedTCGPlayerId,
-      pptUrl: url,
-    });
+    phase1 = await resolvePPTIdentity(identity, body, deps, cached);
   } catch (e) {
-    console.error("ppt.persist.market_failed", { message: (e as Error).message });
+    if (e instanceof Phase1ShortCircuit) return e.response;
+    throw e;
   }
 
-  console.log("price-comp.live", {
-    identity_id: body.graded_card_identity_id,
-    tcgPlayerId: resolvedTCGPlayerId,
-    cache_state: state,
-    matched: tcgPlayerId ? "cached_id" : (resolverTier ? `resolved_${resolverTier}` : "searched"),
-    resolved_language: resolvedLanguage,
-    headline_present: headlineCents !== null,
-    history_points: history.length,
-    credits_consumed: creditsConsumed ?? null,
-  });
-
-  const pptResponse = buildResponse({
-    ladderCents: ladder,
-    headlineCents,
-    service: body.grading_service,
-    grade: body.grade,
-    priceHistory: history,
-    tcgPlayerId: resolvedTCGPlayerId,
-    pptUrl: url,
-    cacheHit: false,
-    isStaleFallback: false,
-  });
-
-  // V1 LIMITATION (intentional for shipping speed): the Poketrace branch
-  // runs sequentially AFTER the PPT happy path completes. This means PPT
-  // failures (404 NO_MARKET_DATA, AUTH_INVALID, etc.) short-circuit the
-  // request before Poketrace gets a chance, so the spec's
-  // 'poketrace-only' reconciliation source path is unreachable in v1.
-  // Refactoring index.ts to fan out PPT into a helper and run both
-  // providers via Promise.allSettled is tracked as a follow-up — see
-  // spec section "V1 limitations".
+  // 4. Phase 2 — parallel fan-out: PPT persistence + Poketrace HTTP
   //
-  // The Poketrace call has its own 8s per-fetch timeout in client.ts.
-  let poketraceBlock: PoketraceBlock | null = null;
-  try {
-    poketraceBlock = await fetchPoketraceBranch(
-      deps,
-      {
-        id: identity.id,
-        ppt_tcgplayer_id: identity.ppt_tcgplayer_id ?? null,
-        poketrace_card_id: identity.poketrace_card_id ?? null,
-        poketrace_card_id_resolved_at: identity.poketrace_card_id_resolved_at ?? null,
-      },
-      body.grading_service,
-      body.grade,
-    );
-  } catch (e) {
-    console.error("poketrace.branch_failed", { message: (e as Error).message });
+  // freshTCGPlayerId: the ID that Phase 1 just resolved and persisted
+  // (cold path) or confirmed still valid (warm path). Falls back to whatever
+  // was on the identity at request time if Phase 1 failed. Poketrace's own
+  // resolvePoketraceCardId uses it for the cross-walk when
+  // poketrace_card_id is not yet cached — enabling first-scan Poketrace hits.
+  const freshTCGPlayerId =
+    phase1.freshTCGPlayerId ?? (identity.ppt_tcgplayer_id as string | null) ?? null;
+
+  const [pptPersistResult, poketraceResult] = await Promise.allSettled([
+    phase1.pptData && !phase1.pptData.cacheHit
+      ? upsertMarketLadder(supabase, {
+          identityId: body.graded_card_identity_id,
+          gradingService: body.grading_service,
+          grade: body.grade,
+          source: "pokemonpricetracker",
+          headlinePriceCents: phase1.pptData.headlineCents,
+          ladderCents: phase1.pptData.ladderCents,
+          priceHistory: phase1.pptData.priceHistory,
+          pptTCGPlayerId: phase1.pptData.resolvedTCGPlayerId,
+          pptUrl: phase1.pptData.url,
+        })
+      : Promise.resolve(),
+    fetchPoketraceBranch(deps, {
+      id: identity.id as string,
+      ppt_tcgplayer_id: freshTCGPlayerId,
+      poketrace_card_id: (identity.poketrace_card_id as string | null) ?? null,
+      poketrace_card_id_resolved_at: (identity.poketrace_card_id_resolved_at as string | null) ?? null,
+    }, body.grading_service, body.grade),
+  ]);
+
+  if (pptPersistResult.status === "rejected") {
+    console.error("ppt.persist.market_failed", { message: String(pptPersistResult.reason) });
   }
 
-  // Persist Poketrace row (fire-and-log; persistence failure does not fail the request)
+  const poketraceBlock =
+    poketraceResult.status === "fulfilled" ? poketraceResult.value : null;
+  if (poketraceResult.status === "rejected") {
+    console.error("poketrace.branch_failed", { message: String(poketraceResult.reason) });
+  }
+
+  // 5. Phase 3 — persist Poketrace, assemble response
   if (poketraceBlock) {
     try {
       await upsertMarketLadder(supabase, {
@@ -623,41 +508,48 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     }
   }
 
+  // Both providers have no data — surface the most informative failure code.
+  if (!phase1.pptData && !poketraceBlock) {
+    return json(404, {
+      code: phase1.pptFailureCode ?? "PRODUCT_NOT_RESOLVED",
+      ...(phase1.pptAttemptLog ? { attempt_log: phase1.pptAttemptLog } : {}),
+    });
+  }
+
+  // Build PPT response shell. When pptData is null (Poketrace-only path),
+  // all PPT ladder fields are null and reconciled carries the headline.
+  const pptResponse: PriceCompResponse = phase1.pptData
+    ? buildResponse({
+        ladderCents: phase1.pptData.ladderCents,
+        headlineCents: phase1.pptData.headlineCents,
+        service: body.grading_service,
+        grade: body.grade,
+        priceHistory: phase1.pptData.priceHistory,
+        tcgPlayerId: phase1.pptData.resolvedTCGPlayerId,
+        pptUrl: phase1.pptData.url,
+        cacheHit: phase1.pptData.cacheHit,
+        isStaleFallback: phase1.pptData.isStaleFallback,
+      })
+    : {
+        headline_price_cents: null,
+        grading_service: body.grading_service,
+        grade: body.grade,
+        loose_price_cents: null, psa_7_price_cents: null, psa_8_price_cents: null,
+        psa_9_price_cents: null, psa_9_5_price_cents: null, psa_10_price_cents: null,
+        bgs_10_price_cents: null, cgc_10_price_cents: null, sgc_10_price_cents: null,
+        price_history: poketraceBlock?.price_history ?? [],
+        ppt_tcgplayer_id: "",
+        ppt_url: "",
+        fetched_at: new Date().toISOString(),
+        cache_hit: false,
+        is_stale_fallback: false,
+      };
+
   const reconciledBlock = reconcile(pptResponse.headline_price_cents, poketraceBlock);
-
-  const v2: PriceCompResponseV2 = {
-    ...pptResponse,
-    poketrace: poketraceBlock,
-    reconciled: reconciledBlock,
-  };
+  const v2: PriceCompResponseV2 = { ...pptResponse, poketrace: poketraceBlock, reconciled: reconciledBlock };
   return json(200, v2);
 }
 
-async function staleOrUpstreamDown(
-  cached: Awaited<ReturnType<typeof readMarketLadder>>,
-  body: PriceCompRequest,
-  marker: string,
-): Promise<Response> {
-  console.error("ppt.upstream_5xx", { marker });
-  if (!cached) return json(503, { code: "UPSTREAM_UNAVAILABLE" });
-  const pptResponse = buildResponse({
-    ladderCents: cached.ladderCents,
-    headlineCents: cached.headlinePriceCents,
-    service: body.grading_service,
-    grade: body.grade,
-    priceHistory: cached.priceHistory,
-    tcgPlayerId: cached.pptTCGPlayerId ?? "",
-    pptUrl: cached.pptUrl ?? "",
-    cacheHit: true,
-    isStaleFallback: true,
-  });
-  const v2: PriceCompResponseV2 = {
-    ...pptResponse,
-    poketrace: null,
-    reconciled: { headline_price_cents: cached.headlinePriceCents, source: "ppt-only" },
-  };
-  return json(200, v2);
-}
 
 async function fetchPoketraceBranch(
   deps: HandleDeps,

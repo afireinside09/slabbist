@@ -722,7 +722,7 @@ Deno.test("PPT 5xx with stale cache, Poketrace succeeds → stale PPT + fresh Po
     ppt_tcgplayer_id: "243172",
     ppt_url: "https://www.pokemonpricetracker.com/card/charizard",
     price_history: [],
-    updated_at: new Date(Date.now() - 2 * 86400_000).toISOString(), // stale: 2d old
+    updated_at: "2026-05-06T12:00:00Z", // stale: 2d before deps.now() (2026-05-08T12:00:00Z)
   };
   const supabase = makeSupabase({ identity: { ...IDENTITY }, market: STALE_PPT_ROW });
 
