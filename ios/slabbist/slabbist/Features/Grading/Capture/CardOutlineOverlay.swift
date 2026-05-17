@@ -13,18 +13,18 @@ struct CardOutlineOverlay: View {
                 height: cardSize.height
             )
             ZStack {
-                Color.black.opacity(0.45)
+                AppColor.ink.opacity(0.45)
                     .mask {
                         Rectangle()
                             .overlay(
-                                RoundedRectangle(cornerRadius: 14)
+                                RoundedRectangle(cornerRadius: Radius.m)
                                     .frame(width: rect.width, height: rect.height)
                                     .blendMode(.destinationOut)
                             )
                             .compositingGroup()
                     }
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(aligned ? AppColor.gold : Color.white.opacity(0.6), lineWidth: 2)
+                RoundedRectangle(cornerRadius: Radius.m)
+                    .stroke(aligned ? AppColor.gold : AppColor.muted, lineWidth: 2)
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
             }

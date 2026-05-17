@@ -1,13 +1,20 @@
 import SwiftUI
 import UIKit
 import AVFoundation
+import os
 
 struct GradingCaptureView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var session = CameraSession()
     @State private var stillCapture: StillImageCapture?
     @State private var qualityMessage: String?
     @State private var showConsent: Bool = !UserDefaults.standard.bool(forKey: "preGradeConsentAccepted_v1")
     @State private var includeOtherGraders: Bool = false
+    /// Holds the in-flight analysis/retry Task so Cancel can `.cancel()`
+    /// it. Without this, a user tapping Cancel mid-analysis would
+    /// dismiss the sheet but the background Task would keep running and
+    /// possibly call `onComplete` on a dismissed view (P0.2).
+    @State private var analysisTask: Task<Void, Never>?
 
     let viewModel: GradingCaptureViewModel
     let onComplete: (UUID) -> Void
@@ -15,10 +22,22 @@ struct GradingCaptureView: View {
     private let detector = CardRectangleDetector()
     private let gate = CaptureQualityGate()
 
+    /// True when the analysis overlay is the foreground UI. The camera
+    /// session is paused while this is true to stop AV preview frames
+    /// streaming behind the 86%-opaque scrim for no reason (P0.1).
+    private var overlayPhase: Bool {
+        switch viewModel.phase {
+        case .uploading, .analyzing, .failed: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         ZStack {
             cameraContent
+                .accessibilityHidden(overlayPhase)
             CardOutlineOverlay(aligned: qualityMessage == nil)
+                .accessibilityHidden(overlayPhase)
             VStack {
                 Spacer()
                 QualityChip(message: qualityMessage)
@@ -26,15 +45,67 @@ struct GradingCaptureView: View {
                 captureButton
                     .padding(.bottom, Spacing.xxxl)
             }
+            .accessibilityHidden(overlayPhase)
+        }
+        .overlay {
+            AnalysisOverlay(
+                phase: viewModel.phase,
+                error: viewModel.lastError,
+                onRetry: { startAnalysisTask { try await viewModel.retry() } },
+                onCancel: {
+                    analysisTask?.cancel()
+                    analysisTask = nil
+                    dismiss()
+                }
+            )
         }
         .task {
             await session.requestAuthorization()
             guard session.authorization == .authorized else { return }
             try? session.configure()
-            stillCapture = StillImageCapture(session: session)
+            // E1: attach the photo output while the session is configured
+            // but not yet running. Mutating the session config via
+            // begin/commitConfiguration on a running session pauses the
+            // preview for ~200ms — and a capture tap during that pause
+            // historically hung the continuation because AVFoundation
+            // dropped the request without invoking the delegate. Building
+            // the still-capture and attaching here keeps the capture
+            // button correctly disabled (`captureEnabled` is false while
+            // `stillCapture == nil`) until the attach has committed.
+            let capture = StillImageCapture(session: session)
+            do {
+                try capture.attachIfNeeded()
+                stillCapture = capture
+            } catch {
+                AppLog.camera.error("GradingCaptureView: still-image attach failed: \(String(describing: error), privacy: .public)")
+                // P2.7: surface the failure to the user via the existing
+                // QualityChip channel. Without this the capture button
+                // would stay greyed out with no explanation — North Star
+                // violation. The string mirrors how other capture-side
+                // gates (blur, resolution) phrase themselves: short,
+                // actionable, no jargon.
+                qualityMessage = "Camera unavailable. Close and try again."
+            }
             session.start()
         }
-        .onDisappear { session.stop() }
+        .onChange(of: overlayPhase) { _, isOverlay in
+            // Pause the AV session while the overlay is up; restart
+            // when the user returns to capture phase (e.g. they Cancel
+            // and the host pops them back, or they retry through to
+            // .done which dismisses). The existing onDisappear handles
+            // the sheet-leaving case — this only manages the in-sheet
+            // overlay window. (P0.1)
+            if isOverlay {
+                session.stop()
+            } else if session.authorization == .authorized {
+                session.start()
+            }
+        }
+        .onDisappear {
+            analysisTask?.cancel()
+            analysisTask = nil
+            session.stop()
+        }
         .sheet(isPresented: $showConsent) {
             FirstRunConsentView {
                 UserDefaults.standard.set(true, forKey: "preGradeConsentAccepted_v1")
@@ -46,6 +117,21 @@ struct GradingCaptureView: View {
             if case let .done(id) = phase {
                 onComplete(id)
             }
+        }
+    }
+
+    /// Starts an analysis-related Task and stores its handle so Cancel
+    /// can interrupt it. Cancellation of any previous task happens
+    /// before the new one starts, so a fast double-tap on "Try again"
+    /// doesn't fan out parallel uploads.
+    private func startAnalysisTask(_ work: @escaping () async throws -> Void) {
+        analysisTask?.cancel()
+        analysisTask = Task {
+            // `runAnalysis` / `retry` already write to viewModel.phase
+            // (.failed) and viewModel.lastError on throw, so we just
+            // swallow here. CancellationError is the expected path on
+            // explicit Cancel — also swallow it.
+            try? await work()
         }
     }
 
@@ -65,7 +151,7 @@ struct GradingCaptureView: View {
     private var permissionRequired: some View {
         VStack(spacing: Spacing.l) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 36, weight: .regular))
+                .font(SlabFont.sans(size: 36, weight: .regular))
                 .foregroundStyle(AppColor.dim)
             VStack(spacing: Spacing.s) {
                 Text("Camera access needed")
@@ -150,7 +236,15 @@ struct GradingCaptureView: View {
                 viewModel.recordFront(image: image, centering: centering)
             case .back:
                 viewModel.recordBack(image: image, centering: centering)
-                try await viewModel.runAnalysis(includeOtherGraders: includeOtherGraders)
+                // Route through the cancellable Task handle so a Cancel
+                // tap during the initial analyze can interrupt the
+                // upload too (not just retries). `runAnalysis` writes
+                // viewModel.lastError on throw — no need for a view
+                // mirror. (P0.2 + P1.7)
+                let includeFlag = includeOtherGraders
+                startAnalysisTask {
+                    try await viewModel.runAnalysis(includeOtherGraders: includeFlag)
+                }
             default:
                 break
             }

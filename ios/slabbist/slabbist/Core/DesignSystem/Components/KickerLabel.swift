@@ -10,6 +10,7 @@ struct KickerLabel: View {
     var body: some View {
         Text(text)
             .slabKicker()
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

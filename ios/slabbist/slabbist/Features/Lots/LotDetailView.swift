@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import OSLog
+import Supabase
+import Auth
 
 /// Read-only detail screen for a lot: header, aggregate eBay-comp totals,
 /// and the per-scan list with each slab's PSA validation status and latest
@@ -17,6 +19,10 @@ struct LotDetailView: View {
     @State private var scanPendingDelete: Scan?
     @State private var showingVendorPicker = false
     @State private var showingMarginSheet = false
+    /// Scan whose `ManualPriceSheet` is presented from the inline
+    /// `SetPricePill` on a slab row. `.sheet(item:)` so taps land on a
+    /// stable target even if the row re-orders between tap and present.
+    @State private var manualPriceTarget: Scan?
     @Binding private var path: [LotsRoute]
 
     init(lot: Lot, path: Binding<[LotsRoute]>) {
@@ -30,7 +36,20 @@ struct LotDetailView: View {
         // Snapshots aren't filtered server-side — there's no FK from snapshot
         // to scan. We join in memory by (identityId, gradingService, grade).
         // Sorted newest-first so `latestSnapshot(for:)` picks the freshest.
-        _snapshots = Query(sort: [SortDescriptor(\GradedMarketSnapshot.fetchedAt, order: .reverse)])
+        //
+        // Bounded to the last 30 days so a long-running store doesn't load
+        // every snapshot it ever recorded on every LotDetailView appear —
+        // pre-fix this was O(allSnapshots × scansInLot) per render. The
+        // window matches the existing "comp data is recoverable from a
+        // cheap re-fetch" policy documented in ModelContainer.swift's
+        // recovery comment: scans whose latest snapshot is >30 days old
+        // are stale enough that the auto-recovery hatch in C2 will
+        // re-fetch them when the user opens the lot or scan detail.
+        let snapshotCutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        _snapshots = Query(
+            filter: #Predicate<GradedMarketSnapshot> { $0.fetchedAt >= snapshotCutoff },
+            sort: [SortDescriptor(\GradedMarketSnapshot.fetchedAt, order: .reverse)]
+        )
         // Identities are unbounded but small (one row per unique slab the
         // user has ever scanned). Joined in-memory by `gradedCardIdentityId`.
         _identities = Query()
@@ -60,7 +79,7 @@ struct LotDetailView: View {
         }
         .navigationTitle(lot.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(AppColor.ink, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(isPresented: $showingVendorPicker) {
@@ -87,6 +106,62 @@ struct LotDetailView: View {
                 }
             )
         }
+        .sheet(item: $manualPriceTarget) { scan in
+            ManualPriceSheet(initialCents: scan.vendorAskCents) { cents in
+                try setVendorAskCents(cents, on: scan)
+            }
+        }
+        .task(id: lot.id) {
+            recoverLegacyFetchingRows()
+        }
+    }
+
+    /// P1.5 — On first appear of a lot whose scans pre-date the C2
+    /// migration, every `.fetching` row with `compFetchStartedAt == nil`
+    /// would otherwise read as stale and surface a negative-tinted
+    /// Retry pill simultaneously (alarm fatigue, not recovery).
+    ///
+    /// Instead, walk those rows once and re-fire `CompFetchService.fetch`
+    /// for each — the service de-dupes by `(identityId, service, grade)`
+    /// so duplicates collapse to one in-flight call per slab tier. Any
+    /// row whose comp doesn't come back (e.g. genuine outage) will
+    /// stamp `compFetchStartedAt = Date()` on entry; if the new fetch
+    /// also stalls past 90s the row reverts to surfacing a Retry pill —
+    /// at that point the operator should see *one* pill, not a wall.
+    ///
+    /// Mirrors the `autoTriggerCompFetchIfNeeded` recovery hatch the
+    /// scan-detail screen already uses.
+    private func recoverLegacyFetchingRows() {
+        let legacy = scans.filter { scan in
+            scan.compFetchState == CompFetchState.fetching.rawValue &&
+            scan.compFetchStartedAt == nil &&
+            scan.gradedCardIdentityId != nil &&
+            scan.grade != nil
+        }
+        guard !legacy.isEmpty else { return }
+        let repo = CompRepository.live()
+        for scan in legacy {
+            CompFetchService.fetch(scan: scan, repository: repo, context: context, kicker: kicker)
+        }
+    }
+
+    /// Persist a per-scan manual price from the inline `SetPricePill`'s
+    /// sheet. Routes through `LotsViewModel.setOfferCents` so the same
+    /// outbox patch + invariants the detail screen uses also drive the
+    /// row-level affordance. Throws `LotsViewModel.ResolveError` when no
+    /// store has synced yet so `ManualPriceSheet` can render the error
+    /// inline instead of swallowing the tap (P0.2).
+    private func setVendorAskCents(_ cents: Int64?, on scan: Scan) throws {
+        let viewModel = try LotsViewModel.requireResolve(context: context, kicker: kicker, session: session)
+        try viewModel.setOfferCents(scan: scan, cents: cents)
+    }
+
+    /// Re-fire the comp fetch for a scan whose persisted state is stuck
+    /// on `.fetching` because the originating task died with the app.
+    /// Shares `CompFetchService`'s in-flight de-dup with every other
+    /// comp fetch in the process.
+    private func retryCompFetch(scan: Scan) {
+        CompFetchService.fetch(scan: scan, repository: CompRepository.live(), context: context, kicker: kicker)
     }
 
     // MARK: - Repository helpers
@@ -199,7 +274,7 @@ struct LotDetailView: View {
                 Spacer()
                 Button(lot.vendorId == nil ? "Attach" : "Change") { showingVendorPicker = true }
                     .buttonStyle(.plain)
-                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.gold)
+                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.text)
                     .accessibilityIdentifier("lot-vendor-attach")
                     .disabled(lotIsFrozen)
             }
@@ -221,7 +296,7 @@ struct LotDetailView: View {
                 Spacer()
                 Button("Adjust") { showingMarginSheet = true }
                     .buttonStyle(.plain)
-                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.gold)
+                    .foregroundStyle(lotIsFrozen ? AppColor.dim : AppColor.text)
                     .accessibilityIdentifier("lot-margin-adjust")
                     .disabled(lotIsFrozen)
             }
@@ -262,7 +337,7 @@ struct LotDetailView: View {
         if state == .paid || state == .voided {
             SlabCard {
                 HStack {
-                    Image(systemName: "lock.fill").foregroundStyle(AppColor.gold)
+                    Image(systemName: "lock.fill").foregroundStyle(AppColor.text)
                     Text(state == .paid ? "Frozen — paid" : "Frozen — voided")
                         .font(SlabFont.mono(size: 12, weight: .semibold))
                         .tracking(1)
@@ -319,7 +394,7 @@ struct LotDetailView: View {
                 NavigationLink(value: LotsRoute.transaction(txnId)) {
                     Text("View receipt")
                         .font(SlabFont.sans(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColor.gold)
+                        .foregroundStyle(AppColor.text)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("view-receipt-action")
@@ -334,7 +409,7 @@ struct LotDetailView: View {
                     NavigationLink(value: LotsRoute.transaction(txnId)) {
                         Text("View receipt")
                             .font(SlabFont.sans(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColor.gold)
+                            .foregroundStyle(AppColor.text)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("view-receipt-action")
@@ -367,7 +442,7 @@ struct LotDetailView: View {
                                 .accessibilityIdentifier("scan-row-\(scan.certNumber)")
                                 .contextMenu {
                                     Button("Delete slab", systemImage: "trash", role: .destructive) {
-                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                        withAnimation(.easeOut(duration: 0.25)) {
                                             scanPendingDelete = scan
                                         }
                                     }
@@ -397,13 +472,13 @@ struct LotDetailView: View {
     }
 
     private func dismissDeleteConfirmation() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             scanPendingDelete = nil
         }
     }
 
     private func confirmDelete(_ scan: Scan) {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             scanPendingDelete = nil
         }
         deleteScan(scan)
@@ -412,13 +487,13 @@ struct LotDetailView: View {
     private func rowMenu(for scan: Scan) -> some View {
         Menu {
             Button("Delete slab", systemImage: "trash", role: .destructive) {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                withAnimation(.easeOut(duration: 0.25)) {
                     scanPendingDelete = scan
                 }
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
+                .font(SlabFont.sans(size: 14, weight: .semibold))
                 .foregroundStyle(AppColor.dim)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -430,7 +505,6 @@ struct LotDetailView: View {
 
     private func slabRow(for scan: Scan) -> some View {
         let identity = identity(for: scan)
-        let trailing = trailingValue(for: scan)
         return HStack(alignment: .center, spacing: Spacing.m) {
             Circle()
                 .fill(statusColor(for: scan))
@@ -448,24 +522,14 @@ struct LotDetailView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                if let trailing {
-                    Text(formattedCents(trailing.cents))
-                        .font(SlabFont.mono(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColor.text)
-                    if trailing.isManual {
-                        Text("Manual")
-                            .font(SlabFont.mono(size: 9, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(AppColor.gold)
-                    }
-                }
+                trailingValueView(for: scan)
                 if let buy = scan.buyPriceCents {
                     Text("Buy \(formattedCents(buy))")
                         .font(SlabFont.mono(size: 11, weight: .semibold))
                         .foregroundStyle(scan.buyPriceOverridden ? AppColor.gold : AppColor.text)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(SlabFont.sans(size: 12))
                     .foregroundStyle(AppColor.dim)
             }
         }
@@ -473,24 +537,66 @@ struct LotDetailView: View {
         .padding(.vertical, Spacing.m)
     }
 
-    /// Resolves the price shown on the trailing edge of a slab row.
-    /// Mirrors the comp-card hero by reading `scan.reconciledHeadlinePriceCents`
-    /// — the server-reconciled value that respects the PPT/Poketrace
-    /// reconciliation rule (e.g. "poketrace-preferred" when sale count is
-    /// high enough). Falls back to a per-source snapshot for legacy scans
-    /// persisted before reconciliation was plumbed, and finally to the
-    /// user's manual price.
-    private func trailingValue(for scan: Scan) -> (cents: Int64, isManual: Bool)? {
-        if let cents = scan.reconciledHeadlinePriceCents {
-            return (cents, false)
+    /// Trailing-edge price/state cell on a slab row. Drives the inline
+    /// "Set price" pill (F3) and the stale comp-fetch Retry pill (C2)
+    /// alongside the existing reconciled / no-state cases. The "Manual"
+    /// gold tag from the pre-F3 design is gone — the pencil glyph inside
+    /// `SetPricePill`'s hasManual variant carries the same meaning and
+    /// removing the gold honors the one-gold-per-screen rule.
+    ///
+    /// `.hasSnapshot` renders identically to `.hasReconciled` — the user
+    /// can't tell them apart, but they're separate cases so legacy-snapshot
+    /// rows (validated before reconciliation was plumbed) follow a
+    /// grep-able + tested path through the state machine.
+    @ViewBuilder
+    private func trailingValueView(for scan: Scan) -> some View {
+        switch resolveState(for: scan) {
+        case .hasReconciled(let cents), .hasSnapshot(let cents):
+            Text(formattedCents(cents))
+                .font(SlabFont.mono(size: 13, weight: .semibold))
+                .foregroundStyle(AppColor.text)
+        case .hasManual(let cents):
+            SetPricePill(priceCents: cents) { manualPriceTarget = scan }
+                .accessibilityLabel("Manual price \(formattedCents(cents)). Tap to edit.")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("edit-price-pill-\(scan.certNumber)")
+        case .hasManualWithReconciled(let manualCents, _):
+            // P1.3: the user typed a manual price and a comp later
+            // landed. Lot total uses the reconciled value
+            // (`aggregateCents` on the state); the row keeps showing
+            // the manual pill so the operator can see their input
+            // wasn't silently shadowed.
+            SetPricePill(priceCents: manualCents) { manualPriceTarget = scan }
+                .accessibilityLabel("Manual price \(formattedCents(manualCents)). Tap to edit.")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("edit-price-pill-\(scan.certNumber)")
+        case .needsPrice:
+            SetPricePill(priceCents: nil) { manualPriceTarget = scan }
+                .accessibilityLabel("Set manual price for \(scan.grader.rawValue) \(scan.certNumber)")
+                .accessibilityHint("Opens the price entry sheet")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("set-price-pill-\(scan.certNumber)")
+        case .staleFetching:
+            Button {
+                retryCompFetch(scan: scan)
+            } label: {
+                RetryPill()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Retry comp fetch for \(scan.grader.rawValue) \(scan.certNumber)")
+            .accessibilityHint("Tries the comp fetch again")
+            .accessibilityIdentifier("comp-retry-\(scan.certNumber)")
+        case .fetching, .failed, .idle:
+            EmptyView()
         }
-        if let snap = latestSnapshot(for: scan), let cents = snap.headlinePriceCents {
-            return (cents, false)
-        }
-        if let manual = scan.vendorAskCents {
-            return (manual, true)
-        }
-        return nil
+    }
+
+    /// Single resolver shared by the row body, the aggregate strip, and
+    /// the legacy first-launch auto-retry path. Threads the latest
+    /// snapshot in so `.hasSnapshot` can pick up legacy rows whose comp
+    /// fetch persisted before `reconciledHeadlinePriceCents` was plumbed.
+    private func resolveState(for scan: Scan) -> ScanRowTrailingState {
+        ScanRowTrailingState.resolve(for: scan, snapshot: latestSnapshot(for: scan))
     }
 
     /// Lookup helper — joins a scan to its `GradedCardIdentity` row by
@@ -537,14 +643,24 @@ struct LotDetailView: View {
         })
     }
 
+    /// Per-scan resolved states for the lot's aggregate strip. Computed
+    /// once and reused by `aggregateValueCents` and `aggregateValueDetail`
+    /// so the resolver runs N times per body invocation, not 2N+ — and so
+    /// the header reads the **same** state the row body renders (P0.1:
+    /// pre-fix the two consumers used different resolvers and could drift).
+    private var resolvedRowStates: [ScanRowTrailingState] {
+        scans.map { resolveState(for: $0) }
+    }
+
     private var aggregateValueCents: Int64 {
-        scans.compactMap { trailingValue(for: $0)?.cents }.reduce(0, +)
+        resolvedRowStates.compactMap(\.aggregateCents).reduce(0, +)
     }
 
     private var aggregateValueDetail: String {
-        let pricedCount = scans.compactMap { trailingValue(for: $0) }.count
+        let states = resolvedRowStates
+        let pricedCount = states.compactMap(\.aggregateCents).count
         if pricedCount == 0 { return "No comps yet" }
-        let manualCount = scans.compactMap { trailingValue(for: $0) }.filter(\.isManual).count
+        let manualCount = states.filter(\.isManualContribution).count
         let suffix = pricedCount == 1 ? "slab" : "slabs"
         if manualCount > 0 {
             return "across \(pricedCount) \(suffix) · \(manualCount) manual"
@@ -559,7 +675,7 @@ struct LotDetailView: View {
     private func statusColor(for scan: Scan) -> Color {
         switch scan.status {
         case .validated:          return AppColor.positive
-        case .pendingValidation:  return AppColor.gold
+        case .pendingValidation:  return AppColor.muted
         case .validationFailed:   return AppColor.negative
         case .manualEntry:        return AppColor.muted
         }

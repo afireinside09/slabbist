@@ -60,10 +60,15 @@ final class Harness {
                     await MainActor.run {
                         statusBox.update(
                             pendingCount: update.pendingCount,
+                            failedCount: update.failedCount,
                             isDraining: update.isDraining
                         )
                         if let isPaused = update.isPaused {
-                            statusBox.setPaused(isPaused, reason: update.lastError)
+                            statusBox.setPaused(
+                                isPaused,
+                                reason: update.lastError,
+                                authState: update.authState
+                            )
                         }
                     }
                 }
@@ -378,6 +383,10 @@ final class Harness {
 final class FakeScanRepository: ScanRepository, @unchecked Sendable {
     private let recorder = Recorder()
     var nextError: Error?
+    /// Optional gating hook fired at the start of `insert`. Used by the
+    /// A4 mid-drain coalesce test to pause inside dispatch so the test
+    /// can enqueue and kick mid-flight without sleep-based fragility.
+    var beforeInsert: (@Sendable (UUID) async -> Void)?
 
     actor Recorder {
         var insertedIds: [UUID] = []
@@ -431,6 +440,11 @@ final class FakeScanRepository: ScanRepository, @unchecked Sendable {
     func find(id: UUID) async throws -> ScanDTO? { nil }
 
     func insert(_ scan: ScanDTO) async throws {
+        // Honor the test-side gating hook before any error check so the
+        // A4 mid-drain test can pause INSIDE dispatch.
+        if let hook = beforeInsert {
+            await hook(scan.id)
+        }
         if let e = nextError { nextError = nil; throw e }
         await recorder.appendInserted(scan.id)
         _lock.lock(); defer { _lock.unlock() }

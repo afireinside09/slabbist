@@ -2,7 +2,11 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import Vision
-import OSLog
+// `import os` is required for `OSAllocatedUnfairLock` used by
+// `BulkScanController.crossThread`. The project enables
+// `MemberImportVisibility`, so even though `os` is transitively pulled
+// in by other modules we keep it explicit here.
+import os
 import Supabase
 import Auth
 
@@ -39,37 +43,135 @@ final class BulkScanController {
     /// this frame (or the most recent detection has decayed).
     var detectedSlabRect: CGRect?
 
-    /// AVCaptureVideoPreviewLayer reference set by `CameraPreview`'s
-    /// `onPreviewLayer` callback. Lives on the controller (a class) rather
-    /// than as `@State` on the view so the sample-queue closure can read
-    /// it lazily — the layer mounts after the first SwiftUI render pass,
-    /// so capturing it `[weak]` from the view's `configureCamera()` would
-    /// snapshot a nil before the layer was assigned.
-    @ObservationIgnored
-    nonisolated(unsafe) var previewLayer: AVCaptureVideoPreviewLayer?
+    /// Cross-thread fields shared between MainActor writes and sample-queue
+    /// reads. Held inside a single `OSAllocatedUnfairLock` so the
+    /// non-Sendable `previewLayer` (UIKit) can be assigned from MainActor
+    /// and read from the sample queue without `nonisolated(unsafe)` or a
+    /// MainActor hop, and so the `ocrPaused` test-and-set in
+    /// `presentReview` is atomic. `lastRectAt`, `lastTextSeenAt`, and
+    /// `lastFrameLogAt` are eventually-consistent freshness timers —
+    /// torn reads across the lock boundary are harmless (worst case: one
+    /// extra debounce window). Mirrors `CameraSession.callbackStorage`.
+    /// `uncheckedState` keeps the lock `Sendable` despite the
+    /// `AVCaptureVideoPreviewLayer?` inside.
+    nonisolated struct CrossThreadState {
+        var previewLayer: AVCaptureVideoPreviewLayer?
+        var lastRectAt: Date = .distantPast
+        var ocrPaused: Bool = false
+        var lastTextSeenAt: Date = .distantPast
+        var lastFrameLogAt: Date = .distantPast
+        /// Timestamp of the most recent scenePhase backgrounding. `nil`
+        /// means the user has not yet left the scan view — first-time
+        /// entry does NOT show the resume gate. Set on `.background` /
+        /// `.inactive`, cleared only when the user taps to resume.
+        var lastBackgroundedAt: Date?
+        /// `true` while the resume gate is visible. The sample-queue OCR
+        /// path consults this through `shouldSkipOCR()` so recognizer
+        /// frames are dropped while the gate is up — auto-resume is
+        /// forbidden by spec (the phone could be pocket-pointed).
+        var ocrSuspendedForResume: Bool = false
 
-    /// Most recent successful detection time. Used to fade the rect when no
-    /// hit has come in for ~400ms so the brackets don't snap to stale coords.
+        init() {}
+    }
     @ObservationIgnored
-    nonisolated(unsafe) var lastRectAt: Date = .distantPast
+    nonisolated let crossThread = OSAllocatedUnfairLock<CrossThreadState>(uncheckedState: CrossThreadState())
 
-    /// Cross-thread flag mirroring `pendingReview != nil`. The sample queue
-    /// reads this synchronously to skip OCR while a review is up; the main
-    /// actor flips it whenever it sets `pendingReview`.
-    @ObservationIgnored
-    nonisolated(unsafe) var ocrPaused: Bool = false
-
-    func presentReview(_ candidate: CertCandidate) {
+    /// Show the review card for a stable cert candidate. Returns `true`
+    /// when this caller won the review window — false means another caller
+    /// already presented for this window and this call was a no-op. The
+    /// test-and-set on `ocrPaused` is atomic with the assignment so
+    /// multiple concurrent stable hits (e.g. queued sample-queue hops)
+    /// can't all flip `pendingReview` and the recognizer reset, which
+    /// would double-record the same cert.
+    @discardableResult
+    func presentReview(_ candidate: CertCandidate) -> Bool {
+        let won = crossThread.withLock { state -> Bool in
+            guard !state.ocrPaused else { return false }
+            state.ocrPaused = true
+            return true
+        }
+        guard won else { return false }
         pendingReview = candidate
-        ocrPaused = true
         // Reset the recognizer's stable window so it doesn't immediately
         // re-fire the same candidate when OCR resumes.
         recognizer.reset()
+        return true
     }
 
     func dismissReview() {
         pendingReview = nil
-        ocrPaused = false
+        crossThread.withLock { $0.ocrPaused = false }
+    }
+
+    /// `true` while the resume-gate scrim is visible. Observable so the
+    /// view can bind directly; the same boolean is mirrored into
+    /// `crossThread.ocrSuspendedForResume` so the sample-queue OCR path
+    /// can read it under the lock without a MainActor hop.
+    var resumeGateActive: Bool = false
+
+    /// Arm the gate after a `.background → .active` transition. The gate
+    /// suppresses OCR until the user taps to resume; auto-resume is
+    /// explicitly forbidden by spec (the phone could be pocket-pointed
+    /// in the user's pocket). Also resets the recognizer so stale
+    /// stable-frame windows can't fire across the background.
+    func armResumeGate() {
+        crossThread.withLock { $0.ocrSuspendedForResume = true }
+        recognizer.reset()
+        resumeGateActive = true
+    }
+
+    /// Dismiss the gate. The only path back to live OCR after a
+    /// background — scenePhase changes never clear `ocrSuspendedForResume`.
+    ///
+    /// **Ordering matters.** Flip the observable `resumeGateActive` to
+    /// `false` *before* releasing the lock-protected suppression flag.
+    /// SwiftUI removes the scrim on the next render after the observable
+    /// flip; if we cleared the suppression first, the sample queue could
+    /// dispatch an OCR frame while the user still sees the "paused"
+    /// scrim — a North-Star violation ("a confirmation flash through a
+    /// paused scrim").
+    func dismissResumeGate() {
+        resumeGateActive = false
+        crossThread.withLock {
+            $0.ocrSuspendedForResume = false
+            $0.lastBackgroundedAt = nil
+        }
+    }
+
+    /// Record a backgrounding timestamp AND drop any stale review card.
+    /// A `pendingReview` from N minutes ago is no longer actionable for a
+    /// returning user; force-confirming it would record an offer against
+    /// a card the user can't even see anymore. Wiping it here also
+    /// releases `ocrPaused` (via the same path `dismissReview` uses), so
+    /// once the gate is dismissed live scanning resumes cleanly instead
+    /// of staying paused behind an invisible review modal.
+    ///
+    /// Only invoked from the `.background` scenePhase branch (not
+    /// `.inactive`) — a Notification Center pulldown doesn't count as
+    /// "user left the app", so it shouldn't arm the gate or drop the
+    /// review card.
+    func recordBackgrounded() {
+        crossThread.withLock { $0.lastBackgroundedAt = Date() }
+        // `dismissReview` no-ops when `pendingReview` is already nil,
+        // so calling it unconditionally is safe and keeps the
+        // `ocrPaused = false` reset in one place.
+        dismissReview()
+    }
+
+    /// `true` when the most recent scenePhase visited `.background` or
+    /// `.inactive` since the last gate dismissal. MainActor-only — the
+    /// scenePhase handler reads this synchronously.
+    var wasBackgrounded: Bool {
+        crossThread.withLock { $0.lastBackgroundedAt != nil }
+    }
+
+    /// Single source of truth for "should the sample-queue OCR path
+    /// drop this frame". Reads both pause flags under one lock so the
+    /// pair is consistent — without this, the OCR loop could race
+    /// `ocrPaused` clearing while the resume gate is up and process
+    /// a frame anyway. Called nonisolated from the sample queue.
+    nonisolated func shouldSkipOCR() -> Bool {
+        crossThread.withLock { $0.ocrPaused || $0.ocrSuspendedForResume }
     }
 
     /// `resolved` and `failed` are dwell-states — once we enter them we
@@ -77,12 +179,6 @@ final class BulkScanController {
     /// new OCR frame can flip us back to `reading`.
     @ObservationIgnored
     private var statusLockUntil: Date = .distantPast
-
-    /// Last time a frame produced any text observations. After ~600ms of
-    /// nothing we drop back to `.idle` so the user sees "Position slab in
-    /// frame" again instead of a stale "Reading…".
-    @ObservationIgnored
-    nonisolated(unsafe) var lastTextSeenAt: Date = .distantPast
 
     /// One reusable Vision request for the entire scan session. Allocating
     /// a new `VNRecognizeTextRequest` on every frame at ~30 FPS dominates
@@ -106,13 +202,6 @@ final class BulkScanController {
         return request
     }()
 
-    /// Debounce for the per-frame OCR diagnostic log. Without this every frame
-    /// at ~30 FPS would spam Console.app; we instead emit one summary line per
-    /// second showing observation count + peak confidence so a tester can
-    /// confirm the pipeline is alive without recording a trace.
-    @ObservationIgnored
-    nonisolated(unsafe) var lastFrameLogAt: Date = .distantPast
-
     /// Update status with respect to the dwell-lock on resolved/failed.
     /// Reading-state transitions (`reading` ⇄ `idle`) are blocked while a
     /// dwell-locked status is active so the user sees the outcome.
@@ -130,12 +219,22 @@ struct BulkScanView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
     @Environment(OutboxKicker.self) private var kicker
+    @Environment(Reachability.self) private var reachability
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var cameraSession = CameraSession()
     @State private var controller = BulkScanController()
     @State private var lastCaptureFlash = false
+    /// Owns the in-flight flash reset hop. Each call to `triggerFlash`
+    /// cancels the prior task before spawning a new one so rapid captures
+    /// can't race the reset back to `false` over the next `true`.
+    @State private var flashTask: Task<Void, Never>?
     @State private var showingManualEntry = false
+    /// Scan whose `ManualPriceSheet` is currently being presented from the
+    /// inline `SetPricePill` on a queue row. `.sheet(item:)` drives
+    /// presentation so multiple rapid taps land on a stable target.
+    @State private var manualPriceTarget: Scan?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if targetEnvironment(simulator)
     @State private var simulatorFixtureIndex = 0
     #endif
@@ -146,10 +245,10 @@ struct BulkScanView: View {
                 cameraArea
                     .ignoresSafeArea(edges: [.top, .horizontal])
                     .overlay(alignment: .center) {
-                        Color.white
+                        AppColor.text
                             .opacity(lastCaptureFlash ? 0.35 : 0)
                             .allowsHitTesting(false)
-                            .animation(.easeOut(duration: 0.18), value: lastCaptureFlash)
+                            .animation(.easeOut(duration: 0.25), value: lastCaptureFlash)
                     }
                     .overlay {
                         SlabFinderOverlay(
@@ -170,7 +269,20 @@ struct BulkScanView: View {
                     if let viewModel = controller.viewModel {
                         VStack(alignment: .leading, spacing: Spacing.s) {
                             summaryHeader(for: viewModel)
-                            ScanQueueView(scans: viewModel.recentScans)
+                            ScanQueueView(
+                                scans: viewModel.recentScans,
+                                onRetry: { scan in viewModel.retryValidation(scan: scan) },
+                                onRetryCompFetch: { scan in retryCompFetch(scan: scan) },
+                                onPresentManualPrice: { scan in
+                                    // P2.8 — the captured-review modal
+                                    // and the manual-price sheet would
+                                    // otherwise race for presentation
+                                    // priority. Defer the sheet until
+                                    // the review is resolved.
+                                    guard controller.pendingReview == nil else { return }
+                                    manualPriceTarget = scan
+                                }
+                            )
                         }
                         .padding(.horizontal, Spacing.xxl)
                         .padding(.vertical, Spacing.m)
@@ -193,8 +305,18 @@ struct BulkScanView: View {
                 .padding(.horizontal, Spacing.xxl)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
+
+            // Resume gate is the topmost overlay so it covers the camera
+            // AND any in-flight review card after a background → active
+            // transition. The user has to tap to dismiss; OCR is held
+            // suspended until then per spec ("phone might be in pocket").
+            if controller.resumeGateActive {
+                ResumeScanGate(onResume: { controller.dismissResumeGate() })
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: controller.pendingReview)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: controller.pendingReview)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: controller.resumeGateActive)
         .background(AppColor.ink)
         .navigationDestination(for: Scan.self) { scan in
             ScanDetailView(scan: scan)
@@ -224,8 +346,14 @@ struct BulkScanView: View {
                 triggerFlash()
             }
         }
+        .sheet(item: $manualPriceTarget) { scan in
+            ManualPriceSheet(initialCents: scan.vendorAskCents) { cents in
+                try setVendorAskCents(cents, on: scan)
+            }
+        }
         .onAppear {
             bootstrapViewModel()
+            recoverLegacyFetchingRows()
             #if !targetEnvironment(simulator)
             Task { await configureCamera() }
             #endif
@@ -236,15 +364,38 @@ struct BulkScanView: View {
         .onChange(of: scenePhase) { _, newPhase in
             // Pause the capture stream when the app is backgrounded or
             // inactive — keeps the camera LED off and stops burning
-            // battery on the OCR pipeline while the user is away.
+            // battery on the OCR pipeline while the user is away. On
+            // return to `.active`, if the user *was* backgrounded, arm
+            // the resume gate — auto-resume is forbidden by spec so
+            // OCR stays suspended until the user taps to confirm.
+            //
+            // **Why gate only on `.background`?** Notification Center
+            // pulldown and Control Center swipes flip to `.inactive`
+            // for ~1 second without ever leaving the app — gating on
+            // `.inactive` would re-arm the resume scrim after every
+            // shade pulldown. Real "user left the app" is `.background`.
+            // `.inactive` only stops the camera (battery hygiene).
             switch newPhase {
             case .active:
+                let wasBackgrounded = controller.wasBackgrounded
                 if cameraSession.authorization == .authorized,
                    cameraSession.isConfigured,
                    !cameraSession.isRunning {
                     cameraSession.start()
                 }
-            case .inactive, .background:
+                // Only arm the gate when the camera will actually start —
+                // if permission was revoked while backgrounded, the
+                // `.denied` branch of `cameraArea` paints instead and
+                // a tap-to-resume gate is meaningless.
+                if wasBackgrounded,
+                   cameraSession.authorization == .authorized,
+                   cameraSession.isConfigured {
+                    controller.armResumeGate()
+                }
+            case .background:
+                controller.recordBackgrounded()
+                cameraSession.stop()
+            case .inactive:
                 cameraSession.stop()
             @unknown default:
                 break
@@ -262,10 +413,9 @@ struct BulkScanView: View {
             CameraPreview(
                 session: cameraSession.captureSession,
                 onPreviewLayer: { [controller] layer in
-                    // Stash the preview layer on the controller so the
-                    // rect-detection helper (running on the sample queue)
-                    // can convert Vision normalized rects → screen-space.
-                    controller.previewLayer = layer
+                    // Sample-queue rect detection reads this to convert
+                    // Vision normalized rects → screen-space.
+                    controller.crossThread.withLock { $0.previewLayer = layer }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -330,7 +480,6 @@ struct BulkScanView: View {
                 .padding(.horizontal, Spacing.l)
                 .padding(.vertical, Spacing.md)
                 .background(AppColor.gold, in: Capsule())
-                .shadow(color: AppColor.gold.opacity(0.25), radius: 12, y: 6)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("simulate-scan")
@@ -387,13 +536,15 @@ struct BulkScanView: View {
         }
         let comp = CompRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
         let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
+        let reach = self.reachability
         let viewModel = BulkScanViewModel(
             context: context,
             kicker: kicker,
             lot: lot,
             currentUserId: userId,
             compRepository: comp,
-            certLookupRepository: cert
+            certLookupRepository: cert,
+            reachabilityStatus: { reach.status }
         )
         viewModel.onLookupEvent = { [weak controller] event in
             guard let controller else { return }
@@ -442,13 +593,12 @@ struct BulkScanView: View {
                     controller: controller
                 )
 
-                // Skip OCR while a review card is up — accepting more reads
-                // would race the user's confirm/edit decision and risk
-                // double-recording. The flag is flipped on MainActor whenever
-                // `pendingReview` changes; reading it from this queue is
-                // racy but eventually consistent (worst case: one extra
-                // frame's OCR runs).
-                if controller.ocrPaused { return }
+                // Skip OCR while a review card is up OR the resume gate
+                // is armed after a background → foreground hop. Both
+                // flags are pair-read under one lock inside
+                // `shouldSkipOCR()` so the OCR loop can't race a partial
+                // pause-state visible across the two flags.
+                if controller.shouldSkipOCR() { return }
 
                 let request = controller.textRequest
                 do {
@@ -471,14 +621,15 @@ struct BulkScanView: View {
                     // No text this frame. If we've gone ~600ms without any
                     // text observation at all, drop the pill back to idle so
                     // the user knows to reposition.
-                    if nowFrame.timeIntervalSince(controller.lastTextSeenAt) > 0.6 {
+                    let lastTextSeenAt = controller.crossThread.withLock { $0.lastTextSeenAt }
+                    if nowFrame.timeIntervalSince(lastTextSeenAt) > 0.6 {
                         Task { @MainActor [weak controller] in
                             controller?.setStatus(.idle)
                         }
                     }
                     return
                 }
-                controller.lastTextSeenAt = nowFrame
+                controller.crossThread.withLock { $0.lastTextSeenAt = nowFrame }
                 Task { @MainActor [weak controller] in
                     controller?.setStatus(.reading)
                 }
@@ -495,8 +646,14 @@ struct BulkScanView: View {
                 // Console.app without a trace recording. `AppLog.ocr` is a
                 // MainActor-isolated static, so hop to MainActor for the
                 // log call — at ~1Hz the Task allocation is negligible.
-                if nowFrame.timeIntervalSince(controller.lastFrameLogAt) >= 1.0 {
-                    controller.lastFrameLogAt = nowFrame
+                let shouldLog = controller.crossThread.withLock { state -> Bool in
+                    if nowFrame.timeIntervalSince(state.lastFrameLogAt) >= 1.0 {
+                        state.lastFrameLogAt = nowFrame
+                        return true
+                    }
+                    return false
+                }
+                if shouldLog {
                     let preview = String(joinedText.prefix(120)).replacingOccurrences(of: "\n", with: " | ")
                     let obsCount = texts.count
                     let confSnapshot = maxConfidence
@@ -518,9 +675,12 @@ struct BulkScanView: View {
                         textCandidates: capturedTexts,
                         visionConfidence: capturedConfidence
                     ) else { return }
+                    // `presentReview` test-and-sets `ocrPaused` internally;
+                    // a `false` return means another concurrent stable hit
+                    // already opened the review window for this cert.
+                    guard controller.presentReview(cert) else { return }
                     AppLog.ocr.info("stable hit: \(cert.grader.rawValue, privacy: .public) \(cert.certNumber, privacy: .public) — presenting review")
                     triggerFlash()
-                    controller.presentReview(cert)
                 }
             }
             cameraSession.start()
@@ -541,6 +701,48 @@ struct BulkScanView: View {
 
     private func handleReviewCancel() {
         controller.dismissReview()
+    }
+
+    /// Persist a per-scan manual price from the inline `SetPricePill`'s
+    /// sheet. Routes through `LotsViewModel.setOfferCents` so the outbox
+    /// patch + offline-first invariants match the path the detail screen
+    /// uses — F3 introduces a new entry point but no new write surface.
+    /// Throws `LotsViewModel.ResolveError` when no store has synced yet
+    /// so `ManualPriceSheet` can render the error inline instead of
+    /// swallowing the tap (P0.2).
+    private func setVendorAskCents(_ cents: Int64?, on scan: Scan) throws {
+        let viewModel = try LotsViewModel.requireResolve(context: context, kicker: kicker, session: session)
+        try viewModel.setOfferCents(scan: scan, cents: cents)
+    }
+
+    /// Re-fire the comp fetch for a scan whose persisted state is stuck
+    /// on `.fetching` because the originating task died with the app.
+    /// Builds a fresh `CompRepository` so the call shares the singleton's
+    /// in-flight de-dup keyset with every other comp fetch in the process.
+    private func retryCompFetch(scan: Scan) {
+        CompFetchService.fetch(scan: scan, repository: CompRepository.live(), context: context, kicker: kicker)
+    }
+
+    /// P1.5 — first-paint recovery for `compFetchStartedAt == nil` rows
+    /// in the queue. Mirrors the same hatch in `LotDetailView` so users
+    /// upgrading mid-session don't see a wall of negative Retry pills
+    /// the moment they reopen the scan tab. `CompFetchService.fetch`
+    /// de-dupes by `(identityId, service, grade)` so even repeated
+    /// invocations across the bulk-scan VM's `recentScans` collapse to
+    /// one upstream call per slab tier.
+    private func recoverLegacyFetchingRows() {
+        guard let viewModel = controller.viewModel else { return }
+        let legacy = viewModel.recentScans.filter { scan in
+            scan.compFetchState == CompFetchState.fetching.rawValue &&
+            scan.compFetchStartedAt == nil &&
+            scan.gradedCardIdentityId != nil &&
+            scan.grade != nil
+        }
+        guard !legacy.isEmpty else { return }
+        let repo = CompRepository.live()
+        for scan in legacy {
+            CompFetchService.fetch(scan: scan, repository: repo, context: context, kicker: kicker)
+        }
     }
 
     /// Run `VNDetectRectanglesRequest` on the same VNImageRequestHandler the
@@ -569,7 +771,8 @@ struct BulkScanView: View {
             // No detection this frame. If we've been without one for ~400ms
             // clear the published rect so the brackets fade.
             let now = Date()
-            if now.timeIntervalSince(controller.lastRectAt) > 0.4 {
+            let lastRectAt = controller.crossThread.withLock { $0.lastRectAt }
+            if now.timeIntervalSince(lastRectAt) > 0.4 {
                 Task { @MainActor [weak controller] in
                     controller?.detectedSlabRect = nil
                 }
@@ -577,7 +780,7 @@ struct BulkScanView: View {
             return
         }
 
-        controller.lastRectAt = Date()
+        controller.crossThread.withLock { $0.lastRectAt = Date() }
 
         // Vision: normalized 0–1, origin bottom-left, in the rotated portrait
         // frame (because we passed `.right` orientation). Convert to
@@ -590,24 +793,29 @@ struct BulkScanView: View {
             height: bb.height
         )
 
-        // Read the non-Sendable AVCaptureVideoPreviewLayer off the
-        // controller inside the MainActor hop so it's never captured by
-        // this @Sendable closure (Swift 6 errors on non-Sendable captures).
+        // Hop to MainActor to touch the non-Sendable preview layer. Compute
+        // the screen-space rect inside the lock so only the Sendable CGRect
+        // crosses the `withLock` boundary — CALayer itself is not Sendable
+        // on iOS.
         Task { @MainActor [weak controller] in
-            guard let controller, let previewLayer = controller.previewLayer else { return }
-            let screenRect = previewLayer.layerRectConverted(fromMetadataOutputRect: metadataRect)
+            guard let controller else { return }
+            let screenRect: CGRect? = controller.crossThread.withLock { state in
+                state.previewLayer?.layerRectConverted(fromMetadataOutputRect: metadataRect)
+            }
+            guard let screenRect else { return }
             controller.detectedSlabRect = screenRect
         }
     }
 
-    /// Pulse the capture flash overlay. The animation on the overlay
-    /// handles the fade; we drive it edge-to-edge with `lastCaptureFlash`
-    /// and rely on `.animation(_:value:)` so overlapping triggers don't
-    /// race a manual `Task.sleep`.
+    /// Pulse the capture flash overlay. Cancels the prior sleeper before
+    /// spawning a new one so rapid captures don't race a stale `false`
+    /// reset over the new `true`.
     private func triggerFlash() {
+        flashTask?.cancel()
         lastCaptureFlash = true
-        Task { @MainActor in
+        flashTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(140))
+            guard !Task.isCancelled else { return }
             lastCaptureFlash = false
         }
     }

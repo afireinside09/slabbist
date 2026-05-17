@@ -28,7 +28,7 @@ struct GradeHistoryRow: View {
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 if estimate.isStarred {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 11))
+                        .font(SlabFont.sans(size: 11))
                         .foregroundStyle(AppColor.gold)
                         .accessibilityLabel("Starred")
                 }

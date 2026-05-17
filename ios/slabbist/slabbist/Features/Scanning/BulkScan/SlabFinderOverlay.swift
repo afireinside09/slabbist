@@ -20,19 +20,20 @@ struct SlabFinderOverlay: View {
     let detectedRect: CGRect?
 
     @State private var pulse: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
             let rect = detectedRect.flatMap { clamp($0, in: proxy.size) }
                 ?? defaultReticleRect(in: proxy.size)
             CornerBrackets(rect: rect, color: color, lineWidth: lineWidth, length: bracketLength(for: rect))
-                .scaleEffect(detectedRect == nil && tone == .neutral ? pulse : 1.0, anchor: .center)
-                .animation(detectedRect == nil && tone == .neutral
+                .scaleEffect(detectedRect == nil && tone == .neutral && !reduceMotion ? pulse : 1.0, anchor: .center)
+                .animation(detectedRect == nil && tone == .neutral && !reduceMotion
                            ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
-                           : .easeOut(duration: 0.18),
+                           : .easeOut(duration: 0.25),
                            value: pulse)
-                .animation(.spring(response: 0.28, dampingFraction: 0.82), value: rect)
-                .animation(.easeOut(duration: 0.18), value: tone)
+                .animation(.easeOut(duration: 0.25), value: rect)
+                .animation(.easeOut(duration: 0.25), value: tone)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -62,7 +63,7 @@ struct SlabFinderOverlay: View {
 
     private var color: Color {
         switch tone {
-        case .neutral: return Color.white.opacity(0.55)
+        case .neutral: return AppColor.muted
         case .active:  return AppColor.gold
         case .success: return AppColor.positive
         case .error:   return AppColor.negative
@@ -160,8 +161,7 @@ struct ScannerStatusPill: View {
         .padding(.vertical, Spacing.s)
         .background(Capsule().fill(AppColor.ink.opacity(0.78)))
         .overlay(Capsule().stroke(borderColor, lineWidth: 1))
-        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-        .animation(.easeOut(duration: 0.2), value: status)
+        .animation(.easeOut(duration: 0.25), value: status)
     }
 
     @ViewBuilder
@@ -169,7 +169,7 @@ struct ScannerStatusPill: View {
         switch status.tone {
         case .neutral:
             Image(systemName: "viewfinder")
-                .foregroundStyle(Color.white.opacity(0.7))
+                .foregroundStyle(AppColor.text.opacity(0.7))
         case .active:
             ProgressView()
                 .progressViewStyle(.circular)
@@ -186,7 +186,7 @@ struct ScannerStatusPill: View {
 
     private var textColor: Color {
         switch status.tone {
-        case .neutral: return Color.white.opacity(0.85)
+        case .neutral: return AppColor.text.opacity(0.85)
         case .active:  return AppColor.text
         case .success: return AppColor.positive
         case .error:   return AppColor.negative
@@ -195,7 +195,7 @@ struct ScannerStatusPill: View {
 
     private var borderColor: Color {
         switch status.tone {
-        case .neutral: return Color.white.opacity(0.18)
+        case .neutral: return AppColor.text.opacity(0.18)
         case .active:  return AppColor.gold.opacity(0.45)
         case .success: return AppColor.positive.opacity(0.55)
         case .error:   return AppColor.negative.opacity(0.55)

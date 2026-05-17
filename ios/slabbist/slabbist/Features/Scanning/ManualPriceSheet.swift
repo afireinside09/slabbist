@@ -121,26 +121,10 @@ struct ManualPriceSheet: View {
         input.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func parseCents(_ raw: String) -> Int64? {
-        // Strip currency symbols + thousands separators users sometimes paste.
-        // Accept both "." and "," as the decimal mark — most US users type
-        // ".", but pasted values from spreadsheets sometimes carry ",".
-        let cleaned = raw
-            .replacingOccurrences(of: "$", with: "")
-            .replacingOccurrences(of: ",", with: ".")
-            .replacingOccurrences(of: " ", with: "")
-        guard !cleaned.isEmpty, let dollars = Double(cleaned), dollars >= 0 else {
-            return nil
-        }
-        // Round-half-up to the nearest cent so 12.345 → 1235, not 1234.
-        let cents = Int64((dollars * 100).rounded())
-        return cents
-    }
-
     private func submit() {
         let raw = trimmed
         guard !raw.isEmpty else { return }
-        guard let cents = parseCents(raw) else {
+        guard let cents = Currency.parseUSDToCents(raw) else {
             error = "Enter a price in dollars (e.g. 49.99)."
             return
         }

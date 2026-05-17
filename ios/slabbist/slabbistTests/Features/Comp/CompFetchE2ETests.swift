@@ -502,4 +502,92 @@ struct CompFetchE2ETests {
         let snapshots = try h.context.fetch(FetchDescriptor<GradedMarketSnapshot>())
         #expect(snapshots.count == 1)
     }
+
+    // MARK: - 12. D4 — sibling-scan price isolation
+
+    /// D4: refreshing ScanA's comp must NOT silently move ScanB's hero
+    /// number. `reconciledHeadlinePriceCents` is the per-scan mirror of
+    /// the server-computed headline; broadcasting it across every scan
+    /// with the same `(identityId, grader, grade)` makes the user see a
+    /// price flip with no surface explanation — the offending refresh
+    /// happened on a different row.
+    ///
+    /// Locks in the existing scoping: persistSnapshots writes the
+    /// headline mirror only to `scanId`. Siblings keep their old
+    /// reconciled value (or `nil`) until they trigger their own fetch.
+    @Test("D4: refresh on one scan does not mutate sibling's reconciledHeadlinePriceCents")
+    func refreshDoesNotBroadcastReconciledHeadline() async throws {
+        let h = try Self.makeHarness()
+        MockURLProtocol.requestHandler = { _ in
+            (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+        }
+
+        // Two scans of the same slab — same identity, same grader, same grade.
+        let scanA = Self.insertValidatedScan(in: h.context, certNumber: "AAA")
+        let scanB = Self.insertValidatedScan(in: h.context, certNumber: "BBB")
+
+        // Seed ScanB with a prior reconciled value the user has been
+        // looking at. If a refresh on ScanA broadcasts, this value gets
+        // silently overwritten without the user's ScanB ever fetching.
+        scanB.reconciledHeadlinePriceCents = 12_300
+        try h.context.save()
+
+        // Bind ids to locals so `#Predicate` can capture them cleanly.
+        let aId = scanA.id
+        let bId = scanB.id
+
+        // Trigger a fetch on ScanA only.
+        CompFetchService.fetch(scan: scanA, repository: h.repository, context: h.context)
+        let stateA = await Self.waitForCompFetch(scanId: aId, in: h.context)
+        #expect(stateA == CompFetchState.resolved.rawValue)
+
+        // ScanA picks up the server's headline (18500 from the fixture).
+        let fetchedA = try h.context.fetch(
+            FetchDescriptor<Scan>(predicate: #Predicate { $0.id == aId })
+        ).first
+        #expect(fetchedA?.reconciledHeadlinePriceCents == 18500)
+
+        // ScanB's mirror stayed put — siblings are not silently rewritten.
+        let fetchedB = try h.context.fetch(
+            FetchDescriptor<Scan>(predicate: #Predicate { $0.id == bId })
+        ).first
+        #expect(fetchedB?.reconciledHeadlinePriceCents == 12_300)
+    }
+
+    /// D4 follow-on: after the first refresh, ScanB can still trigger its
+    /// own fetch and pick up the fresh number. This proves the sibling
+    /// isolation isn't a freshness-bypass — it's just a "no silent
+    /// broadcast." User-initiated retry on ScanB always works.
+    @Test("D4: sibling can still fetch its own comp and update its reconciled value")
+    func siblingCanFetchAfterPeerRefresh() async throws {
+        let h = try Self.makeHarness()
+        MockURLProtocol.requestHandler = { _ in
+            (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+        }
+
+        let scanA = Self.insertValidatedScan(in: h.context, certNumber: "AAA")
+        let scanB = Self.insertValidatedScan(in: h.context, certNumber: "BBB")
+        scanB.reconciledHeadlinePriceCents = 12_300
+        try h.context.save()
+        let aId = scanA.id
+        let bId = scanB.id
+
+        // First refresh: ScanA only. Then wait for the in-flight task to
+        // clear so ScanB's fetch isn't absorbed into ScanA's.
+        CompFetchService.fetch(scan: scanA, repository: h.repository, context: h.context)
+        _ = await Self.waitForCompFetch(scanId: aId, in: h.context)
+
+        // Second refresh: ScanB now. Must end up with the same fresh
+        // headline as ScanA — whether through a cache hit or a fresh
+        // network round-trip, both outcomes satisfy "user-initiated
+        // retry surfaces the current number."
+        CompFetchService.fetch(scan: scanB, repository: h.repository, context: h.context)
+        let stateB = await Self.waitForCompFetch(scanId: bId, in: h.context)
+        #expect(stateB == CompFetchState.resolved.rawValue)
+
+        let fetchedB = try h.context.fetch(
+            FetchDescriptor<Scan>(predicate: #Predicate { $0.id == bId })
+        ).first
+        #expect(fetchedB?.reconciledHeadlinePriceCents == 18500)
+    }
 }

@@ -61,9 +61,20 @@ final class Scan {
     /// User-visible reason when `compFetchState == "failed"`. Cleared on
     /// every successful fetch.
     var compFetchError: String?
-    /// Timestamp of the last fetch attempt. Used both for retry throttling
-    /// and to display "Last checked …" on the failure UI.
+    /// Timestamp of the last fetch attempt that produced a real answer
+    /// (success, `noData`, or `failed`). Used to display "Last checked …"
+    /// on the failure UI; **not** updated when a fetch starts so the UI
+    /// doesn't lie about freshness while a request is still in flight.
+    /// See `compFetchStartedAt` for the in-flight stamp.
     var compFetchedAt: Date?
+    /// Timestamp of the most recent `CompFetchService.fetch` invocation.
+    /// Separate from `compFetchedAt` so the user-visible "last refreshed"
+    /// caption can't be set by a fetch that's still spinning. Anchors the
+    /// stale-fetching detection (a `.fetching` state older than ~90s likely
+    /// means the originating task was killed with the app and the UI is
+    /// stuck on a ghost spinner — surface a Retry pill). Optional + no
+    /// default so SwiftData lightweight migration leaves existing rows nil.
+    var compFetchStartedAt: Date?
     /// Source of truth for the comp-card hero number. Computed server-side
     /// (average of PPT + Poketrace when both succeed; single-source value
     /// otherwise). Mirrored locally so list views render without re-decoding
@@ -75,6 +86,29 @@ final class Scan {
     /// → SwiftData lightweight migration leaves existing rows nil and the
     /// CompCardView falls back to inferring from snapshot presence.
     var reconciledSource: String?
+    /// Why the most recent `cert-lookup` attempt didn't yield a validated
+    /// identity. One of: `"not_found"` (PSA has no record of the cert),
+    /// `"not_pokemon"` (cert resolved to a non-Pokemon product), or
+    /// `"transient"` (network / rate-limit / upstream 5xx — retry is the
+    /// remedy). `nil` means lookup hasn't completed yet, or it succeeded.
+    /// Optional with no init default keeps SwiftData lightweight migration
+    /// happy for users on a prior schema.
+    var validationFailureReason: String?
+    /// Short human string captured at failure time — surfaced on the detail
+    /// screen so the operator can see *what* PSA / the network said.
+    /// e.g. "Offline — will retry when connected", or the raw
+    /// `error.localizedDescription`. Cleared on retry kickoff.
+    var validationFailureMessage: String?
+    /// Timestamp of the last `cert-lookup` attempt. Drives the
+    /// "Last attempt …" caption on the detail screen and the 10s "stale"
+    /// gate that flips the queue row from "validating" into the retry pill.
+    var validationLastAttemptAt: Date?
+    /// Count of attempts the user has made to validate this scan. Increments
+    /// on every transient failure (including the first one). Drives the
+    /// "Retry (3)" copy after >=2 attempts and the "check your connection"
+    /// detail-screen hint after >=3. Default 0 so SwiftData lightweight
+    /// migration backfills existing rows.
+    var validationAttemptCount: Int = 0
     var createdAt: Date
     var updatedAt: Date
 
@@ -112,6 +146,7 @@ final class Scan {
         self.compFetchState = nil
         self.compFetchError = nil
         self.compFetchedAt = nil
+        self.compFetchStartedAt = nil
         self.reconciledHeadlinePriceCents = nil
         self.reconciledSource = nil
         self.createdAt = createdAt

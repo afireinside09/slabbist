@@ -16,18 +16,13 @@ struct PillToggle<Value: Hashable>: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(options, id: \.value) { option in
+                let isSelected = option.value == selection
                 Button {
                     selection = option.value
                 } label: {
-                    Text(option.label)
-                        .font(SlabFont.sans(size: 12, weight: .semibold))
-                        .tracking(-0.1)
-                        .foregroundStyle(foreground(for: option.value))
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, Spacing.s)
-                        .background(background(for: option.value))
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+                    segmentLabel(option.label, selected: isSelected)
                 }
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
         .padding(4)
@@ -39,16 +34,26 @@ struct PillToggle<Value: Hashable>: View {
         )
     }
 
-    private func foreground(for value: Value) -> Color {
-        let selected = selection == value
+    @ViewBuilder
+    private func segmentLabel(_ label: String, selected: Bool) -> some View {
+        Text(label)
+            .font(SlabFont.sans(size: 12, weight: .semibold))
+            .tracking(-0.1)
+            .foregroundStyle(foreground(selected: selected))
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.s)
+            .background(background(selected: selected))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+    }
+
+    private func foreground(selected: Bool) -> Color {
         switch style {
         case .accent:  return selected ? AppColor.ink  : AppColor.text
         case .neutral: return selected ? AppColor.text : AppColor.dim
         }
     }
 
-    private func background(for value: Value) -> Color {
-        let selected = selection == value
+    private func background(selected: Bool) -> Color {
         switch style {
         case .accent:  return selected ? AppColor.gold  : .clear
         case .neutral: return selected ? AppColor.elev2 : .clear

@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-enum AppLog {
+nonisolated enum AppLog {
     static let subsystem = "com.slabbist"
 
     static let app       = Logger(subsystem: subsystem, category: "app")

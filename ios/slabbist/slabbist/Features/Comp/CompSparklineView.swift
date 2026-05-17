@@ -52,11 +52,11 @@ struct CompSparklineView: View {
     }
     return CompSparklineView(points: points)
         .padding()
-        .background(Color.black)
+        .background(AppColor.ink)
 }
 
 #Preview("Sparkline — empty") {
     CompSparklineView(points: [])
         .padding()
-        .background(Color.black)
+        .background(AppColor.ink)
 }

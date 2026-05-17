@@ -284,6 +284,276 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
+    // MARK: - D2: hydrate recomputeLotOffer response onto local Lot
+
+    /// D2: the dispatch case used to `_ =` the response and discard it.
+    /// Server-derived `offered_total_cents` + `lot_offer_state` never
+    /// landed on the local cache. This test seeds a Lot, drains a
+    /// recomputeLotOffer with a canned response that flips both fields,
+    /// and asserts the mainContext row mirrors the server numbers.
+    ///
+    /// FAILS pre-D2 because nothing applies the response back onto the Lot.
+    @Test("D2: recomputeLotOffer response writes offered_total_cents + lot_offer_state onto local Lot")
+    @MainActor
+    func recomputeLotOfferAppliesResponseToLocalLot() async throws {
+        let h = Harness()
+        let lotId = UUID()
+
+        // Seed a Lot row on mainContext (where @Query-subscribed views
+        // live). Starts in `.drafting` with no offered total.
+        let main = h.container.mainContext
+        let lot = Lot(
+            id: lotId,
+            storeId: UUID(),
+            createdByUserId: UUID(),
+            name: "D2 Test Lot",
+            lotOfferState: .drafting,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        main.insert(lot)
+        try main.save()
+
+        // Server canned response: 50,000 cents priced.
+        h.fakeLots.recomputeResponse = LotOfferRecomputeResponse(
+            lot_id: lotId.uuidString,
+            offered_total_cents: 50_000,
+            lot_offer_state: LotOfferState.priced.rawValue
+        )
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // The hydrator ran against the same store — fetch from mainContext
+        // and assert both fields landed.
+        let fetched = try main.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
+        #expect(fetched?.offeredTotalCents == 50_000)
+        #expect(fetched?.lotOfferState == LotOfferState.priced.rawValue)
+        #expect(fetched?.lotOfferStateUpdatedAt != nil)
+
+        // And the outbox row drained.
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    /// D2 edge case: the lot was deleted locally between enqueue and
+    /// dispatch (user discarded the lot while offline). The server
+    /// recompute still ran successfully; we just have nothing to mirror
+    /// back. The dispatch must NOT crash and the outbox row must still
+    /// drain.
+    @Test("D2: recomputeLotOffer drains cleanly when local Lot is missing")
+    @MainActor
+    func recomputeLotOfferSkipsMissingLot() async throws {
+        let h = Harness()
+        let lotId = UUID()
+
+        // Do NOT seed a Lot — simulate a mid-dispatch local delete.
+        h.fakeLots.recomputeResponse = LotOfferRecomputeResponse(
+            lot_id: lotId.uuidString,
+            offered_total_cents: 12_300,
+            lot_offer_state: LotOfferState.priced.rawValue
+        )
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // The outbox item drained — the server side succeeded, the missing
+        // local Lot is a soft skip.
+        #expect(h.fakeLots.recomputeCalls == [lotId])
+        let count = await h.outboxCount()
+        #expect(count == 0)
+
+        // And no Lot got conjured into existence.
+        let main = h.container.mainContext
+        let all = try main.fetch(FetchDescriptor<Lot>())
+        #expect(all.isEmpty)
+    }
+
+    /// D2: when the server returns a state the iOS enum doesn't recognize
+    /// (forward-compat scenario), we still persist `offered_total_cents`
+    /// (a pure number) but leave `lotOfferState` untouched rather than
+    /// writing garbage that `LotOfferState(rawValue:)` would fall back to
+    /// `.drafting` on every read.
+    @Test("D2: recomputeLotOffer persists offered_total_cents even when lot_offer_state is unknown")
+    @MainActor
+    func recomputeLotOfferUnknownStatePersistsTotal() async throws {
+        let h = Harness()
+        let lotId = UUID()
+
+        let main = h.container.mainContext
+        let lot = Lot(
+            id: lotId,
+            storeId: UUID(),
+            createdByUserId: UUID(),
+            name: "Forward-compat Lot",
+            lotOfferState: .priced,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        main.insert(lot)
+        try main.save()
+
+        h.fakeLots.recomputeResponse = LotOfferRecomputeResponse(
+            lot_id: lotId.uuidString,
+            offered_total_cents: 99_000,
+            lot_offer_state: "shipped_to_grader" // not in LotOfferState
+        )
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        let fetched = try main.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
+        #expect(fetched?.offeredTotalCents == 99_000)
+        // State stays where we put it.
+        #expect(fetched?.lotOfferState == LotOfferState.priced.rawValue)
+    }
+
+    /// P2.2: pin the hydrator's malformed-UUID guard. The drainer's
+    /// dispatch case also throws on a bad `lot_id` upstream, but the
+    /// hydrator's own throw is the safety net if the response shape ever
+    /// changes server-side. Staging a bad `lot_id` in the canned response
+    /// (after the drainer has already validated its own payload) exercises
+    /// the hydrator-side branch directly: it must throw
+    /// `OutboxBridgeError.malformedPayload`, the drainer's classifier must
+    /// route the outbox row to `.failed` with the hydrator's reason in
+    /// `lastError`, and no Lot must be inserted/mutated.
+    @Test("D2 (P2.2): hydrator malformed lot_id routes outbox row to .failed")
+    @MainActor
+    func recomputeLotOfferMalformedResponseLotIdMarksFailed() async throws {
+        let h = Harness()
+        let lotId = UUID()
+
+        // The outbox payload is well-formed (drainer's own UUID guard
+        // passes), but the canned response carries garbage so the
+        // hydrator's guard fires.
+        h.fakeLots.recomputeResponse = LotOfferRecomputeResponse(
+            lot_id: "not-a-uuid",
+            offered_total_cents: 12_345,
+            lot_offer_state: LotOfferState.priced.rawValue
+        )
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // The repo was called (proof we reached dispatch).
+        #expect(h.fakeLots.recomputeCalls == [lotId])
+
+        // The outbox row is now `.failed` carrying the hydrator's message.
+        let snap = try await h.firstOutboxItem()
+        #expect(snap.status == .failed)
+        #expect(snap.lastError?.contains("LotOfferRecomputeHydrator") == true)
+        #expect(snap.lastError?.contains("lot_id") == true)
+
+        // No Lot was conjured.
+        let main = h.container.mainContext
+        let all = try main.fetch(FetchDescriptor<Lot>())
+        #expect(all.isEmpty)
+    }
+
+    /// P2.3 (option a): the drainer's 409 catch is the production safety
+    /// net against terminal-state regression — when the lot is `.paid`
+    /// locally and the server returns 409 from `/lot-offer-recompute`,
+    /// the hydrator must NOT run and the local terminal state must be
+    /// preserved. Locks the inferred safety net into a real assertion so
+    /// a future refactor of the 409 catch can't silently break it.
+    @Test("D2 (P2.3): terminal-state 409 preserves local Lot state and drains outbox")
+    @MainActor
+    func recomputeLotOffer409PreservesTerminalState() async throws {
+        let h = Harness()
+        let lotId = UUID()
+
+        // Seed a Lot in `.paid` (terminal) — the case where the server's
+        // 409 guard fires because the iOS local state is authoritative.
+        let main = h.container.mainContext
+        let lot = Lot(
+            id: lotId,
+            storeId: UUID(),
+            createdByUserId: UUID(),
+            name: "Paid Lot",
+            lotOfferState: .paid,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        lot.offeredTotalCents = 77_500
+        main.insert(lot)
+        try main.save()
+
+        // Server returns 409 — the recompute repo throws BEFORE the
+        // hydrator is called. The drainer's catch swallows the 409.
+        h.fakeLots.nextRecomputeError = FunctionsError.httpError(code: 409, data: Data())
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        // Outbox drained as success (terminal-state guard is convergent).
+        let count = await h.outboxCount()
+        #expect(count == 0)
+
+        // Local terminal state preserved — the hydrator never ran.
+        let fetched = try main.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
+        #expect(fetched?.lotOfferState == LotOfferState.paid.rawValue)
+        #expect(fetched?.offeredTotalCents == 77_500)
+    }
+
+    /// P2.4: when the recompute response matches the local cache byte-for-
+    /// byte (common after offline→online when the kicker fires and the
+    /// server returns the same numbers we already have), the hydrator must
+    /// short-circuit before bumping `lot.updatedAt`. Otherwise every kick
+    /// fans out spurious `@Query` invalidations to any view sorting by
+    /// `updatedAt`.
+    @Test("D2 (P2.4): no-op recompute response leaves lot.updatedAt unchanged")
+    @MainActor
+    func recomputeLotOfferNoOpDoesNotBumpUpdatedAt() async throws {
+        let h = Harness()
+        let lotId = UUID()
+        let originalUpdatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let main = h.container.mainContext
+        let lot = Lot(
+            id: lotId,
+            storeId: UUID(),
+            createdByUserId: UUID(),
+            name: "Steady Lot",
+            lotOfferState: .priced,
+            createdAt: Date(timeIntervalSince1970: 1_699_000_000),
+            updatedAt: originalUpdatedAt
+        )
+        lot.offeredTotalCents = 42_000
+        main.insert(lot)
+        try main.save()
+
+        // Server returns identical numbers — no diff to apply.
+        h.fakeLots.recomputeResponse = LotOfferRecomputeResponse(
+            lot_id: lotId.uuidString,
+            offered_total_cents: 42_000,
+            lot_offer_state: LotOfferState.priced.rawValue
+        )
+
+        try await h.enqueueRecomputeLotOffer(lotId: lotId)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        let fetched = try main.fetch(
+            FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
+        ).first
+        // Numbers unchanged.
+        #expect(fetched?.offeredTotalCents == 42_000)
+        #expect(fetched?.lotOfferState == LotOfferState.priced.rawValue)
+        // updatedAt NOT bumped — proves the hydrator short-circuited.
+        #expect(fetched?.updatedAt == originalUpdatedAt)
+    }
+
     @Test("dispatches commitTransaction and hydrates locally")
     @MainActor
     func dispatchesCommitTransaction() async throws {
@@ -439,10 +709,15 @@ struct OutboxDrainerTests {
         let h = Harness()
         let scanId = UUID(); let lotIdA = UUID(); let lotIdB = UUID()
         let now = h.clock.current()
-        // Enqueue in REVERSE priority order to prove the drainer reorders.
+        // All three items share `nextAttemptAt == now` so the drainer's
+        // `nextAttemptAt <= now` fetch predicate picks up the whole batch.
+        // Priority is what's being tested — kind priority (50/15/5), not
+        // chronological order — so a staggered `createdAt` would actually
+        // filter rows out under TestClock (which doesn't advance) and the
+        // drainer would never see the lower-priority items.
         try await h.enqueueUpdateLot(id: lotIdB, name: "Renamed", createdAt: now)
-        try await h.enqueueInsertLot(id: lotIdA, createdAt: now.addingTimeInterval(1))
-        try await h.enqueueDeleteScan(id: scanId, createdAt: now.addingTimeInterval(2))
+        try await h.enqueueInsertLot(id: lotIdA, createdAt: now)
+        try await h.enqueueDeleteScan(id: scanId, createdAt: now)
 
         await h.drainer.kickAndWait()
         await h.waitForIdle()

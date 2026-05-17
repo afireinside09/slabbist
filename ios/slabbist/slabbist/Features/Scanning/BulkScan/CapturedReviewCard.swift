@@ -75,7 +75,13 @@ struct CapturedReviewCard: View {
                         .stroke(AppColor.gold.opacity(0.45), lineWidth: 1)
                 )
         )
-        .shadow(color: AppColor.ink.opacity(0.4), radius: 14, y: 8)
+        // Hairline overlay replaces the prior drop shadow — the card
+        // sits over the live camera feed and needs a separator, but
+        // the brief mandates hairlines over shadows.
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
+                .stroke(AppColor.hairlineStrong, lineWidth: 1)
+        )
     }
 
     private var currentCandidate: CertCandidate {

@@ -2,10 +2,12 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(SessionStore.self) private var session
+    @Environment(OutboxFailureBridge.self) private var failureBridge
+    @State private var showFailuresSheet: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
-            SyncStatusPill()
+            SyncStatusPill(onReviewFailures: { showFailuresSheet = true })
             TabView {
                 Tab("Lots", systemImage: "square.stack.3d.up") {
                     LotsListView()
@@ -24,9 +26,17 @@ struct RootTabView: View {
                 }
             }
             .tint(AppColor.gold)
-            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .toolbarBackground(AppColor.ink, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(.dark, for: .tabBar)
+        }
+        .sheet(isPresented: $showFailuresSheet) {
+            OutboxFailuresView(
+                loader: failureBridge.load,
+                onRetry: failureBridge.retry,
+                onDiscard: failureBridge.discard,
+                onClose: { showFailuresSheet = false }
+            )
         }
     }
 

@@ -2,12 +2,20 @@ import SwiftUI
 
 struct AuthView: View {
     @State private var viewModel = AuthViewModel()
+    /// Optional so previews and tests that don't inject a `SessionStore`
+    /// still render the form; production always has the environment value.
+    @Environment(SessionStore.self) private var sessionStore: SessionStore?
 
     var body: some View {
         SlabbedRoot {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxxl) {
                     brand
+
+                    if let reason = sessionStore?.lastSignOutReason,
+                       SessionExpiryBanner.shouldShow(for: reason) {
+                        SessionExpiryBanner(reason: reason)
+                    }
 
                     if let pendingEmail = viewModel.pendingConfirmationEmail {
                         confirmEmailSection(email: pendingEmail)
@@ -54,6 +62,7 @@ struct AuthView: View {
                         .font(SlabFont.mono(size: 14))
                         .foregroundStyle(AppColor.text)
                         .tint(AppColor.gold)
+                        .accessibilityLabel("Email")
                 }
                 SlabCardDivider()
                 field(icon: "lock") {
@@ -63,6 +72,7 @@ struct AuthView: View {
                         .font(SlabFont.mono(size: 14))
                         .foregroundStyle(AppColor.text)
                         .tint(AppColor.gold)
+                        .accessibilityLabel("Password")
                 }
                 if viewModel.mode == .signUp {
                     SlabCardDivider()
@@ -88,7 +98,16 @@ struct AuthView: View {
             isLoading: viewModel.isSubmitting,
             isEnabled: !viewModel.email.isEmpty && !viewModel.password.isEmpty
         ) {
-            Task { await viewModel.submit() }
+            Task {
+                let outcome = await viewModel.submit()
+                // Only clear the expiry banner when a real session landed.
+                // Pending-confirmation sign-ups leave the user on AuthView
+                // (now on the "check your email" screen) — the banner has
+                // to keep working if they back out into sign-in.
+                if outcome == .establishedSession {
+                    sessionStore?.clearSignOutReason()
+                }
+            }
         }
 
         Button {

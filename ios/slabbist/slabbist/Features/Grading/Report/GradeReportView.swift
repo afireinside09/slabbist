@@ -29,7 +29,11 @@ struct GradeReportView: View {
         }
         .navigationTitle("PSA \(formatted(estimate.compositeGrade))")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        // Brief mandates dark opaque chrome — no glassmorphism. Set the
+        // toolbar base explicitly to `AppColor.ink` so the bar matches
+        // the surrounding `SlabbedRoot` instead of inheriting the
+        // system's tinted material.
+        .toolbarBackground(AppColor.ink, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar { toolbarItems }
@@ -61,11 +65,17 @@ struct GradeReportView: View {
     }
 
     private var photos: some View {
+        // Each photo self-sizes to a 2:3 portrait card ratio (0.66) so
+        // the row scales with available width instead of being pinned
+        // to a fixed 220pt height. The aspect ratio is forced via a
+        // sized `RoundedRectangle` so the placeholder fills the slot
+        // even before the image lands.
         HStack(spacing: Spacing.m) {
             AsyncGradePhoto(path: estimate.frontThumbPath)
+                .aspectRatio(0.66, contentMode: .fit)
             AsyncGradePhoto(path: estimate.backThumbPath)
+                .aspectRatio(0.66, contentMode: .fit)
         }
-        .frame(height: 220)
     }
 
     private var subGradesSection: some View {
@@ -185,7 +195,7 @@ struct AsyncGradePhoto: View {
                     )
                     .overlay(
                         Image(systemName: "photo")
-                            .font(.system(size: 22, weight: .regular))
+                            .font(SlabFont.sans(size: 22, weight: .regular))
                             .foregroundStyle(AppColor.dim)
                     )
             }

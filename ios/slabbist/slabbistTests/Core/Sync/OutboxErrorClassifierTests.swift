@@ -37,9 +37,12 @@ struct OutboxErrorClassifierTests {
         }
     }
 
-    @Test("unauthorized → auth")
+    @Test("unauthorized → auth(.reconnecting) — initial pause is recoverable")
     func unauthorizedIsAuth() {
-        #expect(OutboxErrorClassifier.classify(.unauthorized, for: kindInsert) == .auth)
+        // The classifier can't tell mid-refresh from "user is gone" — it
+        // defaults to `.reconnecting`. The drainer escalates to `.signedOut`
+        // after repeated auth pauses (see OutboxDrainer.handle).
+        #expect(OutboxErrorClassifier.classify(.unauthorized, for: kindInsert) == .auth(.reconnecting))
     }
 
     @Test("forbidden (RLS) → permanent")

@@ -31,7 +31,7 @@ private struct AmbientGoldBlob: ViewModifier {
                             endRadius: proxy.size.width * 0.45
                         )
                     )
-                    .frame(width: proxy.size.width * 0.9, height: proxy.size.width * 0.9)
+                    .frame(width: min(proxy.size.width * 0.9, 320), height: min(proxy.size.width * 0.9, 320))
                     .blur(radius: 40)
                     .position(center(in: proxy.size))
                     .allowsHitTesting(false)

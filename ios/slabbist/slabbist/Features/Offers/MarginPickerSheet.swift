@@ -33,7 +33,7 @@ struct MarginPickerSheet: View {
                             .padding(.vertical, Spacing.s)
                             .background(snap == pct ? AppColor.gold.opacity(0.2) : Color.clear)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                RoundedRectangle(cornerRadius: Radius.s)
                                     .stroke(AppColor.gold, lineWidth: snap == pct ? 1.5 : 0.5)
                             )
                             .accessibilityIdentifier("margin-snap-\(Int(snap * 100))")

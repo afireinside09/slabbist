@@ -3,7 +3,7 @@ import Foundation
 /// Maps a `SupabaseError` (and the `OutboxKind` of the in-flight item)
 /// to a `Disposition` the drainer can act on. Pure function — no side
 /// effects, fully unit-tested.
-enum OutboxErrorClassifier {
+nonisolated enum OutboxErrorClassifier {
     enum Disposition: Equatable {
         /// Transient — retry with exponential backoff, no max attempts.
         case transient
@@ -12,8 +12,10 @@ enum OutboxErrorClassifier {
         case success
         /// Auth expired — drainer pauses the queue and waits for session
         /// to recover (supabase-swift auto-refreshes; we re-kick on the
-        /// next signed-in observation).
-        case auth
+        /// next signed-in observation). The associated state distinguishes
+        /// a recoverable token-refresh stall (`.reconnecting`) from a
+        /// session the user has to manually sign back into (`.signedOut`).
+        case auth(AuthPauseState)
         /// Permanent — drainer marks `.failed` and stops retrying.
         case permanent
     }
@@ -21,7 +23,14 @@ enum OutboxErrorClassifier {
     static func classify(_ error: SupabaseError, for kind: OutboxKind) -> Disposition {
         switch error {
         case .unauthorized:
-            return .auth
+            // We can't always tell at this layer whether supabase-swift
+            // is mid-refresh or the refresh token is actually gone — the
+            // mapping in `SupabaseError.mapAuth` collapses both into
+            // `.unauthorized`. Default to `.reconnecting` so the user
+            // isn't told "Sign in" while the SDK is still trying. The
+            // drainer escalates to `.signedOut` after repeated auth
+            // pauses (see `OutboxDrainer.handle` for the escalation).
+            return .auth(.reconnecting)
         case .uniqueViolation:
             // 23505 on insert means "row already exists" — previous attempt
             // landed and we lost the response. Idempotent success.

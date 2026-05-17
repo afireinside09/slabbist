@@ -10,6 +10,39 @@ final class LotsViewModel {
     let currentUserId: UUID
     let currentStoreId: UUID
 
+    /// Errors a caller of `LotsViewModel.resolve(context:kicker:session:)`
+    /// might want to surface to the user when the optional return is
+    /// non-actionable (the user is signed out, or their store hasn't
+    /// synced yet). Call sites that previously logged + returned silently
+    /// (P0.2) should `throw .storeUnavailable` instead so e.g. the
+    /// `ManualPriceSheet`'s inline error state can render rather than
+    /// the tap producing no visible feedback.
+    enum ResolveError: LocalizedError {
+        case storeUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .storeUnavailable:
+                return "Your store isn't ready yet — check back once sign-in finishes syncing."
+            }
+        }
+    }
+
+    /// Resolve-or-throw variant used by write paths. The optional
+    /// `resolve(...)` is kept for read paths that want to defer rendering
+    /// instead of fail loud. New write entry points (the F3 SetPricePill
+    /// sheets) call this so a tap can't silently swallow a commit.
+    static func requireResolve(
+        context: ModelContext,
+        kicker: OutboxKicker,
+        session: SessionStore
+    ) throws -> LotsViewModel {
+        guard let vm = resolve(context: context, kicker: kicker, session: session) else {
+            throw ResolveError.storeUnavailable
+        }
+        return vm
+    }
+
     init(context: ModelContext, kicker: OutboxKicker, currentUserId: UUID, currentStoreId: UUID) {
         self.context = context
         self.kicker = kicker

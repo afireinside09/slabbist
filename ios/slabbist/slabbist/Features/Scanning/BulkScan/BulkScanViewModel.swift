@@ -13,6 +13,14 @@ final class BulkScanViewModel {
     var compRepository: CompRepository?
     var certLookupRepository: CertLookupRepository?
 
+    /// Reachability probe. The VM only needs the current status at the
+    /// instant we're about to fire a cert-lookup — injected as a closure
+    /// so tests can simulate `.offline` without spinning up `NWPathMonitor`.
+    /// `nil` (the default) means "no check" and the network call proceeds
+    /// normally, matching pre-C1 behavior.
+    @ObservationIgnored
+    private let reachabilityStatus: (@MainActor () -> ReachabilityStatus)?
+
     /// One-shot UI hook for the cert-lookup pipeline. Set by the bulk-scan
     /// view so the camera overlay can surface "looking up…" / "found" /
     /// "failed" feedback. The default no-op keeps tests insulated from the
@@ -28,7 +36,8 @@ final class BulkScanViewModel {
         lot: Lot,
         currentUserId: UUID,
         compRepository: CompRepository? = nil,
-        certLookupRepository: CertLookupRepository? = nil
+        certLookupRepository: CertLookupRepository? = nil,
+        reachabilityStatus: (@MainActor () -> ReachabilityStatus)? = nil
     ) {
         self.context = context
         self.kicker = kicker
@@ -36,6 +45,7 @@ final class BulkScanViewModel {
         self.currentUserId = currentUserId
         self.compRepository = compRepository
         self.certLookupRepository = certLookupRepository
+        self.reachabilityStatus = reachabilityStatus
         refreshRecent()
     }
 
@@ -101,20 +111,81 @@ final class BulkScanViewModel {
     /// No-ops without a `certLookupRepository` (e.g. unit tests not exercising
     /// the network path) so existing tests remain side-effect free.
     func triggerCertLookup(for scan: Scan) {
-        guard let lookup = self.certLookupRepository else { return }
+        performCertLookup(scanId: scan.id, grader: scan.grader, certNumber: scan.certNumber)
+    }
+
+    /// Retries the cert lookup for a scan stuck on a transient failure. The
+    /// pre-C1 path stranded the scan in `.pendingValidation` with no UI
+    /// recourse; this is the user-facing escape hatch. Clears the failure
+    /// reason / message (so the queue row flips back to "validating…"),
+    /// stamps a fresh attempt timestamp, and re-enters the same code path
+    /// `triggerCertLookup` uses. `validationAttemptCount` is intentionally
+    /// preserved across retries so the queue pill and detail copy can
+    /// surface the cumulative count.
+    ///
+    /// Guarded to `(.pendingValidation, "transient")` only (P1.3): retrying
+    /// a `.validated` scan would wipe identity metadata and re-fire PSA;
+    /// retrying a `not_found` / `not_pokemon` terminal would cost a round-
+    /// trip to land on the same terminal result. Either is a bug — both
+    /// paths are caller mistakes that we want to surface, not absorb.
+    func retryValidation(scan: Scan) {
+        guard scan.status == .pendingValidation,
+              scan.validationFailureReason == "transient" else {
+            AppLog.scans.warning(
+                "retryValidation called against non-transient scan (status=\(scan.status.rawValue, privacy: .public) reason=\(scan.validationFailureReason ?? "nil", privacy: .public)) — ignoring"
+            )
+            return
+        }
         let scanId = scan.id
         let grader = scan.grader
         let certNumber = scan.certNumber
+
+        var descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.id == scanId })
+        descriptor.fetchLimit = 1
+        guard let target = try? context.fetch(descriptor).first else { return }
+        target.validationFailureReason = nil
+        target.validationFailureMessage = nil
+        target.validationLastAttemptAt = Date()
+        target.updatedAt = Date()
+        try? context.save()
+        refreshRecent()
+
+        performCertLookup(scanId: scanId, grader: grader, certNumber: certNumber)
+    }
+
+    /// Inner driver shared by `triggerCertLookup` (initial scan) and
+    /// `retryValidation` (user-tapped retry). Captures the scan identity
+    /// via primitives so the `Task` doesn't retain a SwiftData model
+    /// across the actor hop.
+    private func performCertLookup(scanId: UUID, grader: Grader, certNumber: String) {
+        guard let lookup = self.certLookupRepository else { return }
         let ctx = self.context
 
         // Emit `.started` synchronously so the UI flips to "Looking up…"
         // before the network request lands.
         self.onLookupEvent(.started(grader: grader, certNumber: certNumber))
 
+        // Offline edge case: skip the network call entirely, mark the scan
+        // as a transient failure with a clear "offline" message. The pill
+        // stays tappable; the next retry from the queue re-enters this
+        // path and produces the same result until the radio is back.
+        if let reach = self.reachabilityStatus?(), reach == .offline {
+            self.recordTransientFailure(
+                scanId: scanId,
+                message: "Offline — will retry when connected"
+            )
+            self.onLookupEvent(.failed(reason: "Offline"))
+            return
+        }
+
         let kicker = self.kicker
         Task { [weak self] in
             do {
                 let result = try await lookup.lookup(grader: grader, certNumber: certNumber)
+                // Surface task cancellation as a transient failure rather
+                // than a silent skip — the user otherwise sees the scan
+                // hang in `.pendingValidation` after backgrounding mid-flight.
+                try Task.checkCancellation()
                 await MainActor.run {
                     guard let self else { return }
                     var descriptor = FetchDescriptor<Scan>(
@@ -128,6 +199,15 @@ final class BulkScanViewModel {
                     target.gradedCardIdentityId = result.identityId
                     target.grade = result.grade
                     target.status = .validated
+                    target.validationFailureReason = nil
+                    target.validationFailureMessage = nil
+                    target.validationLastAttemptAt = now
+                    // Reset the attempt counter on success — if this scan ever
+                    // re-enters validation (e.g. a future refresh / re-scan path),
+                    // the "we've tried N times" hint and queue pill copy must
+                    // start from a clean slate. Carrying old history into a new
+                    // fault produces wrong counts (P0.1).
+                    target.validationAttemptCount = 0
                     target.updatedAt = now
 
                     let patch = OutboxPayloads.UpdateScan(
@@ -158,22 +238,50 @@ final class BulkScanViewModel {
             } catch CertLookupRepository.Error.certNotFound {
                 AppLog.scans.info("cert-lookup: cert not found upstream — leaving scan pending")
                 await MainActor.run {
-                    self?.markValidationFailed(scanId: scanId)
+                    self?.markValidationFailed(scanId: scanId, reason: "not_found")
                     self?.onLookupEvent(.failed(reason: "Cert not found"))
                 }
             } catch CertLookupRepository.Error.notPokemon {
                 AppLog.scans.info("cert-lookup: cert resolved to non-pokemon product — skipping comp")
                 await MainActor.run {
-                    self?.markValidationFailed(scanId: scanId)
+                    self?.markValidationFailed(scanId: scanId, reason: "not_pokemon")
                     self?.onLookupEvent(.failed(reason: "Not a Pokémon slab"))
+                }
+            } catch is CancellationError {
+                // Task was cancelled AFTER the network call returned — caught
+                // by the explicit `try Task.checkCancellation()` above.
+                AppLog.scans.info("cert-lookup: cancelled post-response — recording as transient")
+                await MainActor.run {
+                    self?.recordTransientFailure(
+                        scanId: scanId,
+                        message: "Cancelled before PSA responded"
+                    )
+                    self?.onLookupEvent(.failed(reason: "Lookup cancelled"))
+                }
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                // The much more common cancellation surface: `URLSession`
+                // throws `URLError(.cancelled)` from the await itself when
+                // the parent `Task` is cancelled mid-flight. Without this
+                // specific catch, the user sees junk copy like "The operation
+                // couldn't be completed. NSURLErrorDomain error -999."
+                AppLog.scans.info("cert-lookup: URLSession cancelled mid-flight — recording as transient")
+                await MainActor.run {
+                    self?.recordTransientFailure(
+                        scanId: scanId,
+                        message: "Cancelled before PSA responded"
+                    )
+                    self?.onLookupEvent(.failed(reason: "Lookup cancelled"))
                 }
             } catch {
                 // Transient errors (network, upstream unavailable, rate limit)
-                // leave the scan in `pendingValidation` so a retry path remains
-                // open. The outbox worker will eventually pick up retries when
-                // a `certLookupJob` outbox kind is wired (see OutboxKind).
+                // leave the scan in `pendingValidation` so the retry pill in
+                // the queue row + detail screen can re-enter this path.
                 AppLog.scans.error("cert-lookup failed: \(error.localizedDescription, privacy: .public)")
-                await MainActor.run { self?.onLookupEvent(.failed(reason: "Lookup failed — check connection")) }
+                let message = error.localizedDescription
+                await MainActor.run {
+                    self?.recordTransientFailure(scanId: scanId, message: message)
+                    self?.onLookupEvent(.failed(reason: "Lookup failed — check connection"))
+                }
             }
         }
     }
@@ -222,12 +330,77 @@ final class BulkScanViewModel {
         return "\(head) — \(result.gradingService) \(result.grade)"
     }
 
-    private func markValidationFailed(scanId: UUID) {
+    /// Records a terminal validation failure (`not_found` or `not_pokemon`) —
+    /// the cert genuinely can't be validated, so we flip `.status` to
+    /// `.validationFailed` and stamp the reason for `ScanDetailView` to fork
+    /// its empty state on. Unlike transient failures, these don't show a
+    /// retry pill; the recourse is delete-and-rescan or set-manual-price.
+    ///
+    /// Queues an `updateScan` outbox patch so the dashboard sees the same
+    /// status transition. The `validationFailureReason` field is local-only
+    /// — the server doesn't carry a column for it yet, so we don't widen
+    /// the wire shape (would be a no-op patch server-side).
+    private func markValidationFailed(scanId: UUID, reason: String) {
         var descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.id == scanId })
         descriptor.fetchLimit = 1
         guard let target = try? context.fetch(descriptor).first else { return }
+        let now = Date()
         target.status = .validationFailed
-        target.updatedAt = Date()
+        target.validationFailureReason = reason
+        target.validationLastAttemptAt = now
+        target.updatedAt = now
+
+        let patch = OutboxPayloads.UpdateScan(
+            id: target.id.uuidString,
+            graded_card_identity_id: nil,
+            grade: nil,
+            status: ScanStatus.validationFailed.rawValue,
+            updated_at: ISO8601DateFormatter.shared.string(from: now)
+        )
+        if let payload = try? JSONEncoder().encode(patch) {
+            let outboxItem = OutboxItem(
+                id: UUID(),
+                kind: .updateScan,
+                payload: payload,
+                status: .pending,
+                attempts: 0,
+                createdAt: now,
+                nextAttemptAt: now
+            )
+            context.insert(outboxItem)
+        }
+        try? context.save()
+        kicker.kick()
+        refreshRecent()
+    }
+
+    /// Records a transient cert-lookup failure (network / 5xx / rate limit /
+    /// cancellation / offline). Critically: `.status` stays at
+    /// `.pendingValidation` so the scan reads as "retryable" rather than
+    /// "failed", and the queue row's retry pill is enabled by the
+    /// presence of `validationFailureReason == "transient"`. The attempt
+    /// counter increments on every transient pass so the pill copy can
+    /// surface the cumulative count.
+    ///
+    /// **No outbox patch.** Unlike `markValidationFailed`, this function
+    /// does NOT enqueue an `updateScan` payload. The server-side `status`
+    /// hasn't changed (still `pending_validation`), and the
+    /// `validationFailureReason` / `validationFailureMessage` /
+    /// `validationAttemptCount` fields are local-only — there are no
+    /// matching columns in `scans` yet. Adding an outbox patch here would
+    /// spam the server with no-op `status: "pending_validation"` writes.
+    /// If/when those columns land server-side, widen
+    /// `OutboxPayloads.UpdateScan` first, then enqueue from here.
+    private func recordTransientFailure(scanId: UUID, message: String) {
+        var descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.id == scanId })
+        descriptor.fetchLimit = 1
+        guard let target = try? context.fetch(descriptor).first else { return }
+        let now = Date()
+        target.validationFailureReason = "transient"
+        target.validationFailureMessage = message
+        target.validationLastAttemptAt = now
+        target.validationAttemptCount += 1
+        target.updatedAt = now
         try? context.save()
         refreshRecent()
     }

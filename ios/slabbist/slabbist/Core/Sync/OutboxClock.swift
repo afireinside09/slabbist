@@ -5,10 +5,10 @@ import Foundation
 /// without reaching for `Date()` directly. Production code injects
 /// `SystemClock`; tests inject a `TestClock` that advances on demand.
 public protocol OutboxClock: Sendable {
-    func current() -> Date
+    nonisolated func current() -> Date
 }
 
-public struct SystemClock: OutboxClock {
+public nonisolated struct SystemClock: OutboxClock {
     public init() {}
     public func current() -> Date { Date() }
 }

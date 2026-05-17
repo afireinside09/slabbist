@@ -26,8 +26,20 @@ final class AuthViewModel {
         self.client = client
     }
 
-    func submit() async {
-        guard !isSubmitting else { return }
+    /// Result of a single submit() call. `establishedSession` means Supabase
+    /// returned a session the SessionStore will see — used by the view to
+    /// decide whether to clear the expiry banner. `pendingConfirmation` is
+    /// sign-up with a confirm-email gate (no session yet); `failure` is a
+    /// thrown error already surfaced via `errorMessage`.
+    enum SubmitOutcome: Equatable {
+        case establishedSession
+        case pendingConfirmation
+        case failure
+    }
+
+    @discardableResult
+    func submit() async -> SubmitOutcome {
+        guard !isSubmitting else { return .failure }
         errorMessage = nil
         isSubmitting = true
         defer { isSubmitting = false }
@@ -36,6 +48,7 @@ final class AuthViewModel {
             switch mode {
             case .signIn:
                 _ = try await client.auth.signIn(email: email, password: password)
+                return .establishedSession
             case .signUp:
                 let metadata: [String: AnyJSON] = storeName.isEmpty
                     ? [:]
@@ -51,11 +64,14 @@ final class AuthViewModel {
                 if response.session == nil {
                     pendingConfirmationEmail = email
                     password = ""
+                    return .pendingConfirmation
                 }
+                return .establishedSession
             }
         } catch {
             errorMessage = error.localizedDescription
             AppLog.auth.error("auth submit failed: \(error.localizedDescription, privacy: .public)")
+            return .failure
         }
     }
 

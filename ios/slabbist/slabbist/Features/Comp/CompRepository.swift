@@ -1,5 +1,7 @@
 import Foundation
 import SwiftData
+import Supabase
+import Auth
 
 @MainActor
 final class CompRepository {
@@ -198,5 +200,18 @@ final class CompRepository {
         guard let http = response as? HTTPURLResponse else { throw Error.httpStatus(0) }
         if http.statusCode == 200 { return try Self.decode(data: data) }
         try Self.decodeErrorBody(data, statusCode: http.statusCode)
+    }
+
+    /// Production constructor used by every UI surface that needs to
+    /// re-fire a comp fetch (the scan detail Retry button, the
+    /// lot-detail row retry, the queue-row retry). Single source of the
+    /// base URL + auth token closure — duplicated inline construction
+    /// risks URL drift across surfaces (P1.4 / CLAUDE.md Rule 3).
+    static func live() -> CompRepository {
+        let baseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
+        return CompRepository(
+            baseURL: baseURL,
+            authTokenProvider: { try? await AppSupabase.shared.client.auth.session.accessToken }
+        )
     }
 }

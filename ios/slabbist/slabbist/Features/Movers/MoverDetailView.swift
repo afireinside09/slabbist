@@ -93,7 +93,7 @@ struct MoverDetailView: View {
             .fill(AppColor.elev)
             .overlay(
                 Image(systemName: "photo")
-                    .font(.system(size: 28, weight: .regular))
+                    .font(SlabFont.sans(size: 28, weight: .regular))
                     .foregroundStyle(AppColor.dim)
             )
             .frame(height: 240)
@@ -259,7 +259,7 @@ struct MoverDetailView: View {
     private func chartEmpty(message: String, isError: Bool = false) -> some View {
         VStack(spacing: Spacing.s) {
             Image(systemName: isError ? "exclamationmark.triangle" : "chart.line.flattrend.xyaxis")
-                .font(.system(size: 24, weight: .regular))
+                .font(SlabFont.sans(size: 24, weight: .regular))
                 .foregroundStyle(isError ? AppColor.negative : AppColor.gold.opacity(0.7))
             Text(message)
                 .font(SlabFont.sans(size: 12))
@@ -345,7 +345,7 @@ struct MoverDetailView: View {
                             image.resizable().scaledToFit()
                         case .empty, .failure:
                             Image(systemName: "photo")
-                                .font(.system(size: 24, weight: .regular))
+                                .font(SlabFont.sans(size: 24, weight: .regular))
                                 .foregroundStyle(AppColor.dim)
                         @unknown default:
                             EmptyView()

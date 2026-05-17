@@ -9,6 +9,7 @@ struct ScanDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(SessionStore.self) private var session
     @Environment(OutboxKicker.self) private var kicker
+    @Environment(Reachability.self) private var reachability
     @Query private var snapshots: [GradedMarketSnapshot]
     @Query private var identities: [GradedCardIdentity]
     @State private var showingManualPrice = false
@@ -205,18 +206,135 @@ struct ScanDetailView: View {
         )
     }
 
+    /// Empty / error state for scans that haven't yet resolved a graded card
+    /// identity. Forks on `(scan.status, scan.validationFailureReason)`:
+    ///   - In-flight lookup: "Validating cert…" spinner, no CTA.
+    ///   - Transient failure (offline / 5xx / cancellation): "Couldn't reach
+    ///     PSA" with a retry CTA — the user's escape from the pre-C1 hang.
+    ///   - `not_found`: terminal "delete and rescan" path.
+    ///   - `not_pokemon`: terminal "manual price" path.
+    ///
+    /// `@ViewBuilder` (not `AnyView`) so SwiftUI's structural diff sees
+    /// the four concrete branches and re-uses identity across re-renders.
+    /// `AnyView` erases the structural type and would force full subtree
+    /// rebuilds on every Scan mutation (P1.5).
+    @ViewBuilder
     private var certNotResolvedState: some View {
+        let reason = scan.validationFailureReason
+        let isTransient = reason == "transient"
+        let isFailedTerminal = scan.status == .validationFailed && !isTransient
+        let isNotPokemon = reason == "not_pokemon"
+
+        if isTransient {
+            transientCertLookupState
+        } else if isNotPokemon {
+            notPokemonState
+        } else if isFailedTerminal {
+            notFoundState
+        } else {
+            validatingCertState
+        }
+    }
+
+    /// In-flight cert lookup — the only state that legitimately spins. No
+    /// retry CTA: the user just has to wait.
+    private var validatingCertState: some View {
         emptyState(
-            kicker: scan.status == .validationFailed ? "Cert not found" : "Validating",
-            symbol: scan.status == .validationFailed ? "exclamationmark.circle" : "hourglass",
-            symbolTint: scan.status == .validationFailed ? AppColor.negative : AppColor.gold,
-            title: scan.status == .validationFailed ? "Cert lookup failed" : "Validating cert…",
-            detail: scan.status == .validationFailed
-                ? "PSA didn't recognize cert \(scan.certNumber). Delete this slab and re-scan if the digits look wrong."
-                : "Once PSA confirms the cert, eBay listings will load automatically.",
-            showsProgress: scan.status != .validationFailed,
-            cta: nil
+            kicker: "Validating",
+            symbol: "hourglass",
+            symbolTint: AppColor.gold,
+            title: "Validating cert…",
+            detail: "Once PSA confirms the cert, eBay listings will load automatically.",
+            showsProgress: true,
+            cta: nil,
+            lastAttemptAt: nil,
+            footerDetail: nil
         )
+    }
+
+    /// Terminal: PSA returned `CERT_NOT_FOUND`. Recourse is delete-and-rescan.
+    private var notFoundState: some View {
+        emptyState(
+            kicker: "Cert not found",
+            symbol: "exclamationmark.circle",
+            symbolTint: AppColor.negative,
+            title: "PSA didn't recognize this cert",
+            detail: "Cert #\(scan.certNumber) isn't in PSA's database. The digits on the slab may have been misread — delete this scan and try again.",
+            showsProgress: false,
+            cta: nil,
+            lastAttemptAt: scan.validationLastAttemptAt,
+            footerDetail: nil
+        )
+    }
+
+    /// Terminal: cert resolves to a non-Pokemon product. Slabbist comps are
+    /// Pokemon-only — recourse is set-manual-price (gold CTA so the lot total
+    /// stays accurate).
+    private var notPokemonState: some View {
+        emptyState(
+            kicker: "Different game",
+            symbol: "questionmark.square.dashed",
+            symbolTint: AppColor.muted,
+            title: "This slab isn't a Pokémon card",
+            detail: "Slabbist comps are Pokémon-only. You can still set a manual price to keep this slab in the lot total.",
+            showsProgress: false,
+            cta: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil,
+            lastAttemptAt: scan.validationLastAttemptAt,
+            footerDetail: nil
+        )
+    }
+
+    /// Transient cert-lookup failure (network / 5xx / cancellation / offline).
+    /// Primary CTA is "Retry cert lookup" (gold). Secondary is set-manual-price
+    /// so the operator can still ship the lot if PSA stays unreachable.
+    /// After >=3 attempts we surface a network hint in the detail copy.
+    private var transientCertLookupState: some View {
+        let hint = scan.validationAttemptCount >= 3
+            ? " Check your connection — we've tried \(scan.validationAttemptCount) times."
+            : ""
+        return emptyState(
+            kicker: "Couldn't reach PSA",
+            symbol: "wifi.exclamationmark",
+            symbolTint: AppColor.negative,
+            title: "PSA lookup failed",
+            detail: "We couldn't reach PSA to verify cert #\(scan.certNumber). Tap retry to try again.\(hint)",
+            showsProgress: false,
+            cta: ("Retry cert lookup", retryCertLookup),
+            lastAttemptAt: scan.validationLastAttemptAt,
+            footerDetail: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
+        )
+    }
+
+    /// Re-fires the cert lookup from the detail screen. Needs a viewModel
+    /// scoped to this scan's lot — we build a fresh one because the detail
+    /// view doesn't carry the bulk-scan VM in environment.
+    ///
+    /// Forwards the env-injected `Reachability` so the detail-screen retry
+    /// honors offline the same way the queue-row retry does (P0.2). Without
+    /// this, a user tapping the gold "Retry cert lookup" CTA while offline
+    /// gets the generic transient copy instead of the clean
+    /// "Offline — will retry when connected" message.
+    private func retryCertLookup() {
+        let functionsBaseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
+        let tokenProvider: () async -> String? = {
+            try? await AppSupabase.shared.client.auth.session.accessToken
+        }
+        let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
+        guard let lot = lookupLot() else {
+            AppLog.scans.error("retry cert lookup: parent lot missing")
+            return
+        }
+        let reach = self.reachability
+        let vm = BulkScanViewModel(
+            context: context,
+            kicker: kicker,
+            lot: lot,
+            currentUserId: session.userId ?? UUID(),
+            compRepository: nil,
+            certLookupRepository: cert,
+            reachabilityStatus: { reach.status }
+        )
+        vm.retryValidation(scan: scan)
     }
 
     private var noDataState: some View {
@@ -446,6 +564,14 @@ struct ScanDetailView: View {
 
     /// Shared empty / loading / error layout. Keeps the visual rhythm
     /// consistent across the four state-machine branches.
+    ///
+    /// `lastAttemptAt` overrides the implicit `scan.compFetchedAt` footer —
+    /// the cert-resolution states use `scan.validationLastAttemptAt`
+    /// instead because the failure they're describing predates any comp
+    /// fetch. Passing `nil` for both keeps the footer hidden.
+    ///
+    /// `footerDetail` is the alias for `secondaryCta` — kept as a tuple of
+    /// `(label, action)` so the call sites read naturally.
     private func emptyState(
         kicker: String,
         symbol: String,
@@ -454,9 +580,13 @@ struct ScanDetailView: View {
         detail: String,
         showsProgress: Bool,
         cta: (label: String, action: () -> Void)?,
-        secondaryCta: (label: String, action: () -> Void)? = nil
+        secondaryCta: (label: String, action: () -> Void)? = nil,
+        lastAttemptAt: Date? = nil,
+        footerDetail: (label: String, action: () -> Void)? = nil
     ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.m) {
+        let resolvedAttemptAt = lastAttemptAt ?? scan.compFetchedAt
+        let resolvedSecondary = footerDetail ?? secondaryCta
+        return VStack(alignment: .leading, spacing: Spacing.m) {
             KickerLabel(kicker)
             SlabCard {
                 VStack(spacing: Spacing.m) {
@@ -474,7 +604,7 @@ struct ScanDetailView: View {
                         .font(SlabFont.sans(size: 13))
                         .foregroundStyle(AppColor.muted)
                         .multilineTextAlignment(.center)
-                    if let at = scan.compFetchedAt, !showsProgress {
+                    if let at = resolvedAttemptAt, !showsProgress {
                         Text("Last attempt \(at.formatted(date: .abbreviated, time: .shortened))")
                             .font(SlabFont.mono(size: 11))
                             .foregroundStyle(AppColor.dim)
@@ -487,9 +617,9 @@ struct ScanDetailView: View {
             if let cta {
                 PrimaryGoldButton(title: cta.label, action: cta.action)
             }
-            if let secondaryCta {
-                Button(action: secondaryCta.action) {
-                    Text(secondaryCta.label)
+            if let secondary = resolvedSecondary {
+                Button(action: secondary.action) {
+                    Text(secondary.label)
                         .font(SlabFont.sans(size: 14, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.md)
@@ -506,32 +636,22 @@ struct ScanDetailView: View {
     }
 
     private func retry() {
-        let baseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
-        let repo = CompRepository(
-            baseURL: baseURL,
-            authTokenProvider: { try? await AppSupabase.shared.client.auth.session.accessToken }
-        )
-        CompFetchService.fetch(scan: scan, repository: repo, context: context, kicker: kicker)
+        CompFetchService.fetch(scan: scan, repository: CompRepository.live(), context: context, kicker: kicker)
     }
 
-    /// True when the scan thinks it's fetching but the originating
-    /// task can no longer exist — used to recover from app kills /
-    /// view-model teardowns that left the persisted state at
-    /// `.fetching` with nothing actually in flight.
-    private static let fetchingStaleThreshold: TimeInterval = 90
-
+    /// Auto-recover from two real-world stuck states (see `body.task`):
+    /// state is `nil` (cert lookup landed but bulk scan exited before
+    /// firing comp fetch) or state is `.fetching` but the originating
+    /// task is gone (app kill / VM teardown). The stale-fetch detection
+    /// lives on `CompFetchService.isStaleFetching` so the same threshold
+    /// drives the queue-row + lot-row Retry pills.
     private func autoTriggerCompFetchIfNeeded() {
         guard scan.gradedCardIdentityId != nil else { return }
         // Either source landing means we have *something* to render;
         // only auto-trigger when we have nothing at all.
         guard pptSnapshot == nil && poketraceSnapshot == nil else { return }
         let state = scan.compFetchState.flatMap(CompFetchState.init(rawValue:))
-        let stale: Bool = {
-            guard state == .fetching else { return false }
-            guard let last = scan.compFetchedAt else { return true }
-            return Date().timeIntervalSince(last) > Self.fetchingStaleThreshold
-        }()
-        if state == nil || stale {
+        if state == nil || CompFetchService.isStaleFetching(scan) {
             retry()
         }
     }

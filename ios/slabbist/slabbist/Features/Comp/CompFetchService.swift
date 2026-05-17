@@ -21,7 +21,11 @@ final class CompFetchService {
     /// In-flight fetches keyed by `(identityId|service|grade)`. New calls for
     /// an in-flight key are absorbed (the requesting scan is flipped to
     /// `.fetching` and will pick up the snapshot via `@Query` when the
-    /// shared task lands).
+    /// shared task lands). `fetch` is `@MainActor` and contains no
+    /// `await` between the `inFlight[key]` check and the assignment, so
+    /// the check-then-set is non-interleavable — no token-stamped cleanup
+    /// is required. If this class ever loses `@MainActor`, this
+    /// dictionary's semantics need rethinking from scratch.
     private var inFlight: [String: Task<Void, Never>] = [:]
 
     /// Test-friendly context, used by `persist(scan:decoded:)` when the
@@ -76,9 +80,16 @@ final class CompFetchService {
         // clear "fetching" mode. Done unconditionally — both the kicker and
         // the absorber paths set it so a freshly-arriving scan gets the same
         // visible state as the scan that originally triggered the fetch.
+        //
+        // `compFetchedAt` is **not** stamped here — it must keep meaning
+        // "last time we got a real answer" so the detail screen's "Last
+        // refreshed …" caption can't display a future-tense lie while the
+        // spinner is still up. The start-time stamp lives on
+        // `compFetchStartedAt` so the stale-fetch detector
+        // (`isStaleFetching(_:)`) still has an anchor to fire from.
         scan.compFetchState = CompFetchState.fetching.rawValue
         scan.compFetchError = nil
-        scan.compFetchedAt = Date()
+        scan.compFetchStartedAt = Date()
         try? context.save()
 
         // Already a request in flight for this exact key — absorb. The shared
@@ -178,6 +189,26 @@ final class CompFetchService {
         "\(identityId.uuidString)|\(service)|\(grade)"
     }
 
+    /// Window after which a `.fetching` scan is treated as a ghost — the
+    /// originating task most likely died with the app and nothing is going
+    /// to flip the state. UI surfaces that surface stuck rows (the queue
+    /// row, the lot-detail row, the scan-detail screen) read this through
+    /// `isStaleFetching(_:)` so a single threshold drives every recovery
+    /// affordance.
+    static let fetchingStaleThreshold: TimeInterval = 90
+
+    /// True when `scan` claims to be fetching but the originating task can
+    /// no longer plausibly exist — either no `compFetchStartedAt` was
+    /// recorded (legacy row) or the start stamp is older than
+    /// `fetchingStaleThreshold`. List rows use this to surface a Retry CTA
+    /// inline; the scan-detail screen uses it to auto-trigger a fresh
+    /// fetch on appear.
+    static func isStaleFetching(_ scan: Scan, now: Date = Date()) -> Bool {
+        guard scan.compFetchState == CompFetchState.fetching.rawValue else { return false }
+        guard let started = scan.compFetchStartedAt else { return true }
+        return now.timeIntervalSince(started) > fetchingStaleThreshold
+    }
+
     /// Flip every `Scan` whose `(identityId, grader, grade)` matches the
     /// completed fetch — keeps absorbed requests in sync with the original.
     private static func flipMatching(
@@ -227,10 +258,17 @@ final class CompFetchService {
             scanId: scan.id,
             context: context
         )
-        // `persistSnapshots` writes `reconciledHeadlinePriceCents` onto every
-        // matching scan via the predicate; ensure the in-memory `scan` arg
-        // (which may not be the same object identity as the fetched row in
-        // some test contexts) reflects it too.
+        // `persistSnapshots` mirrors the reconciled headline onto the
+        // originating `scanId` ONLY (see `fetchScan(scanId, in:)` at the
+        // tail of `persistSnapshots`). Sibling scans with the same
+        // (identity, grader, grade) are intentionally untouched so a
+        // refresh on one row can't silently rewrite the hero number on
+        // another. Anchored by `refreshDoesNotBroadcastReconciledHeadline`
+        // and `siblingCanFetchAfterPeerRefresh` in CompFetchE2ETests.
+        //
+        // This test seam still writes the in-memory `scan` arg explicitly
+        // because callers may hold a `Scan` instance that isn't the same
+        // object identity as the fetched row in some test contexts.
         scan.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
         scan.reconciledSource = decoded.reconciledSource
         try context.save()

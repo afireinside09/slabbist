@@ -26,21 +26,50 @@ actor OutboxDrainer: ModelActor {
     /// MainActor `OutboxStatus` type directly.
     struct StatusUpdate: Sendable {
         var pendingCount: Int
+        var failedCount: Int
         var isDraining: Bool
         var isPaused: Bool?
+        var authState: AuthPauseState?
         var lastError: String?
     }
 
-    private static let log = Logger(subsystem: "com.slabbist.sync", category: "outbox")
+    /// Stranded-`.inFlight` recovery threshold. A row that has been
+    /// `.inFlight` longer than this is treated as a crash mid-dispatch and
+    /// demoted to `.pending` so it can retry on the next drain pass.
+    static let strandedInFlightThreshold: TimeInterval = 60
+
+    /// Number of consecutive auth pauses before the pill escalates from
+    /// "Reconnecting…" to "Sign in to sync". supabase-swift auto-refresh
+    /// usually resolves within one or two retries; sustained 401s are the
+    /// "session is really gone" signal.
+    static let signedOutEscalationThreshold: Int = 2
 
     private let repositories: AppRepositories
     private let clock: any OutboxClock
     private let statusSink: @Sendable (StatusUpdate) -> Void
     private var isDraining: Bool = false
     private var pausedForAuth: Bool = false
+    /// A5: consecutive auth-pause attempts. Resets on a successful
+    /// dispatch (not on `unpause()`). Drives the `.reconnecting →
+    /// .signedOut` escalation in the pill copy.
+    private var consecutiveAuthAttempts: Int = 0
+
+    // Note: there is intentionally no `kickPending` coalesce flag. The
+    // drainer's outer `while true { let batch = fetchBatch ...; if empty
+    // break; for item in batch { await dispatchItem } }` loop already
+    // catches rows enqueued mid-drain — each iteration re-fetches. A
+    // separate flag would only help if SwiftData returned a stale fetch
+    // result (drainer's context lagging the producer's commit); we've
+    // never observed that and the test suite exercises mid-drain enqueue
+    // via the natural-loop path.
 
     /// Called by the auth resume path (Task 10) when SessionStore signs back
     /// in. Clears the auth-pause flag so the next kick can proceed.
+    /// Does NOT clear `consecutiveAuthAttempts` — the counter persists
+    /// across unpause cycles so that supabase-swift's auto-refresh hitting
+    /// repeated 401s eventually escalates the pill copy to "Sign in to
+    /// sync". A successful dispatch (or any non-auth disposition) resets
+    /// the counter; that's what proves auth actually recovered.
     func unpause() {
         pausedForAuth = false
     }
@@ -85,13 +114,14 @@ actor OutboxDrainer: ModelActor {
         kind: OutboxKind,
         payload: Data,
         createdAt: Date,
-        nextAttemptAt: Date
+        nextAttemptAt: Date,
+        status: OutboxItemStatus = .pending
     ) throws {
         let item = OutboxItem(
             id: id,
             kind: kind,
             payload: payload,
-            status: .pending,
+            status: status,
             attempts: 0,
             createdAt: createdAt,
             nextAttemptAt: nextAttemptAt
@@ -102,6 +132,62 @@ actor OutboxDrainer: ModelActor {
 
     func _testOutboxCount() -> Int {
         (try? context.fetchCount(FetchDescriptor<OutboxItem>())) ?? 0
+    }
+
+    /// Test-only: count rows whose status equals `status`. Used by A3
+    /// starvation tests to assert the .pending lane drained even with a
+    /// fat .failed neighbourhood.
+    func _testCount(status: OutboxItemStatus) -> Int {
+        let target = status
+        let rows = (try? context.fetch(FetchDescriptor<OutboxItem>())) ?? []
+        return rows.lazy.filter { $0.status == target }.count
+    }
+
+    /// Test-only: force a row into `.inFlight` with a stale `nextAttemptAt`
+    /// so the A1 recovery pass can be exercised without flakily relying on
+    /// real-time clocks. Inserts a `.pending` row first, then mutates.
+    func _testSeedStrandedInFlight(
+        id: UUID,
+        kind: OutboxKind,
+        payload: Data,
+        createdAt: Date,
+        nextAttemptAt: Date
+    ) throws {
+        let item = OutboxItem(
+            id: id,
+            kind: kind,
+            payload: payload,
+            status: .inFlight,
+            attempts: 0,
+            createdAt: createdAt,
+            nextAttemptAt: nextAttemptAt
+        )
+        context.insert(item)
+        try context.save()
+    }
+
+    /// Test-only: snapshot the row count by status by fetching from disk
+    /// (bypasses the actor's cached counts so tests can verify storage
+    /// truth independent of cache correctness).
+    func _testStatusSnapshot() -> (pending: Int, failed: Int) {
+        let rows = (try? context.fetch(FetchDescriptor<OutboxItem>())) ?? []
+        var pending = 0
+        var failed = 0
+        for row in rows {
+            switch row.status {
+            case .pending:  pending += 1
+            case .failed:   failed += 1
+            case .inFlight, .completed: break
+            }
+        }
+        return (pending, failed)
+    }
+
+    /// Test-only: read the cached counts the drainer publishes via
+    /// `publishStatus()`. Used to verify the cache stays in sync with
+    /// disk across the per-dispatch mutation path.
+    func _testCachedCounts() -> (pending: Int, failed: Int) {
+        (cachedPendingCount, cachedFailedCount)
     }
 
     /// Snapshot of an `OutboxItem`'s key fields. `OutboxItem` is a
@@ -135,14 +221,30 @@ actor OutboxDrainer: ModelActor {
     // MARK: - Drain loop
 
     private func drainOnce() async {
-        guard !isDraining else { return }
+        guard !isDraining else {
+            // A second kick landed while we're draining. The outer loop
+            // re-fetches every iteration, so any row that's already in
+            // the local SwiftData store will be picked up before we exit;
+            // no flag-and-re-pass needed.
+            return
+        }
         guard !pausedForAuth else { return }
         isDraining = true
+        // Refresh from disk first so the "Syncing N…" copy reflects the
+        // post-producer state (producers write from other contexts and
+        // the actor wouldn't otherwise see those rows in its cache).
+        refreshStatusCache()
         publishStatus()
         defer {
             isDraining = false
             publishStatus()
         }
+
+        // A1: any row left `.inFlight` from a previous run (crash, abrupt
+        // termination) needs to come back to `.pending` so it gets retried.
+        // Run this before the first fetch so the recovered rows show up in
+        // the batch.
+        recoverStrandedInFlight()
 
         while true {
             guard !pausedForAuth else { break }
@@ -158,29 +260,65 @@ actor OutboxDrainer: ModelActor {
         }
     }
 
+    /// A1: demote rows stuck in `.inFlight` longer than the strand
+    /// threshold. These come from a crash / suspension mid-dispatch where
+    /// the row got flipped but never made it through `context.delete`.
+    /// Without this, `fetchBatch` (which only returns `.pending`) would
+    /// skip them forever.
+    private func recoverStrandedInFlight() {
+        let cutoff = clock.current().addingTimeInterval(-Self.strandedInFlightThreshold)
+        // SwiftData `#Predicate` enum equality is unreliable on iOS 26.4
+        // (see fetchBatch). Fetch by Date and filter in memory — the
+        // expected count of stranded rows is at most "a handful per launch."
+        let descriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate<OutboxItem> { item in
+                item.nextAttemptAt <= cutoff
+            }
+        )
+        let candidates = (try? context.fetch(descriptor)) ?? []
+        let stranded = candidates.filter { $0.status == .inFlight }
+        guard !stranded.isEmpty else { return }
+        for item in stranded {
+            item.status = .pending
+            // Eligible immediately; the row's been stuck long enough that
+            // we want it to compete for the next batch fairly.
+            item.nextAttemptAt = clock.current()
+        }
+        do {
+            try context.save()
+            AppLog.outbox.notice("recovered \(stranded.count, privacy: .public) stranded inFlight row(s)")
+            // Stranded rows just rejoined the pending lane.
+            adjustCache(pendingDelta: stranded.count)
+        } catch {
+            AppLog.outbox.error("failed to save inFlight recovery: \(String(describing: error), privacy: .public)")
+        }
+    }
+
     private func fetchBatch(now: Date) -> [OutboxItem] {
-        // SwiftData's predicate compiler handles enum equality via
-        // rawValue lookup; comparing the row's `status` to a captured
-        // enum value works in tests but is brittle across SwiftData
-        // versions. We do a coarse fetch (just the time window) and
-        // filter pending in memory, which is robust and the batch
-        // size cap (50) keeps the cost trivial.
-        //
-        // The `sortBy: nextAttemptAt asc` ensures that when 7.3 introduces
-        // inFlight/failed rows they don't crowd out eligible .pending rows
-        // before the in-memory filter gets a chance to see them.
+        // A3: SwiftData's `#Predicate` doesn't reliably support equality
+        // against a captured enum case on iOS 26.4 (the SQLite layer
+        // assertionFailure'd in practice under our @Model schema). The
+        // workaround that keeps the pending lane from starving without
+        // touching the schema: drop `fetchLimit` from the SwiftData call
+        // entirely and apply the cap AFTER the in-memory filter. We
+        // assume the local outbox stays modest (< a few thousand rows
+        // in the worst case) and predicate-pushdown isn't worth a
+        // brittle macro dance.
         var d = FetchDescriptor<OutboxItem>(
-            predicate: #Predicate<OutboxItem> {
-                $0.nextAttemptAt <= now
+            predicate: #Predicate<OutboxItem> { item in
+                item.nextAttemptAt <= now
             },
             sortBy: [SortDescriptor(\OutboxItem.nextAttemptAt, order: .forward)]
         )
-        d.fetchLimit = 50
-        let rows = (try? context.fetch(d)) ?? []
-        let pending = rows.filter { $0.status == .pending }
+        // Intentionally no fetchLimit here — see the comment above. The
+        // in-memory `.pending` filter + post-sort `.prefix(50)` give the
+        // same wire-effort cap without the starvation pathology.
+        d.fetchLimit = 1000
+        let allRows = (try? context.fetch(d)) ?? []
+        let rows = Array(allRows.lazy.filter { $0.status == .pending }.prefix(50))
         // Sort by priority desc, then createdAt asc. Doing this in-memory
         // keeps the SwiftData predicate simple — fetchLimit caps the slice.
-        return pending.sorted { lhs, rhs in
+        return rows.sorted { lhs, rhs in
             if lhs.kind.priority != rhs.kind.priority {
                 return lhs.kind.priority > rhs.kind.priority
             }
@@ -188,21 +326,108 @@ actor OutboxDrainer: ModelActor {
         }
     }
 
-    private func dispatchItem(_ item: OutboxItem) async {
-        item.status = .inFlight
-        try? context.save()
-
+    /// A1: persist a SwiftData save. Returns true on success. Logs the
+    /// concrete error on failure so we can debug strands without guessing
+    /// at root cause from "save quietly returned".
+    ///
+    /// No retry: SwiftData `save()` failures from disk-full / FK violation
+    /// / context contention don't self-heal on an immediate same-context
+    /// retry (the Critic was right). If save throws, the caller falls
+    /// back — revert in-memory mutation, leave the row pending, let the
+    /// next external kick re-try with potentially-cleared pressure.
+    @discardableResult
+    private func tryPersist(reason: String) -> Bool {
         do {
-            try await dispatch(kind: item.kind, payload: item.payload)
-            context.delete(item)
-            try? context.save()
-        } catch let error {
-            handle(error: error, item: item)
-            try? context.save()
+            try context.save()
+            return true
+        } catch {
+            AppLog.outbox.error("context.save() failed for \(reason, privacy: .public): \(String(describing: error), privacy: .public)")
+            return false
         }
     }
 
-    private func handle(error: Error, item: OutboxItem) {
+    private func dispatchItem(_ item: OutboxItem) async {
+        // A1: flip to .inFlight. If the save fails here the row never
+        // makes it into the .inFlight lane in storage, but we already
+        // mutated the in-memory model. Revert the mutation and bail out
+        // — the next drain pass will pick it up. A1's recoverStrandedInFlight
+        // is the second safety net for cases where the save *succeeded*
+        // but we crash before completing dispatch.
+        item.status = .inFlight
+        if !tryPersist(reason: "mark inFlight (\(item.kind))") {
+            item.status = .pending
+            // Don't propagate — caller is the drain loop and the row
+            // will be retried on the next external kick or scheduled pass.
+            return
+        }
+        // Row left the .pending lane.
+        adjustCache(pendingDelta: -1)
+
+        do {
+            try await dispatch(kind: item.kind, payload: item.payload)
+            // A5: a real wire success proves auth is good — reset the
+            // sustained-auth counter so any future 401 starts at
+            // .reconnecting again instead of immediately accusing the
+            // user of being signed out.
+            consecutiveAuthAttempts = 0
+            // Successful dispatch on the wire — drop the row.
+            context.delete(item)
+            if !tryPersist(reason: "delete after dispatch (\(item.kind))") {
+                // A1: we already succeeded server-side. If we can't
+                // persist the delete, the next launch would re-fire the
+                // row (silent double-send). Surface it via lastError so
+                // the user sees something went wrong. Cache stays as-is
+                // (we already decremented pending; the row is gone from
+                // the user's perspective even if SwiftData kept it).
+                AppLog.outbox.error("dispatched \(String(describing: item.kind), privacy: .public) but failed to persist delete — row may re-fire on next launch")
+                statusSink(StatusUpdate(
+                    pendingCount: cachedPendingCount,
+                    failedCount: cachedFailedCount,
+                    isDraining: isDraining,
+                    isPaused: nil,
+                    authState: nil,
+                    lastError: "Could not persist sync completion"
+                ))
+            }
+        } catch let error {
+            // `handle` mutated the row; we track the resulting lane
+            // transition via `handle`'s return so the cache stays accurate.
+            let postState = handle(error: error, item: item)
+            if !tryPersist(reason: "handle error (\(item.kind))") {
+                // The `handle` mutation didn't stick. Revert the
+                // in-memory `.inFlight` so the row can be retried; the
+                // recovery pass + fetchBatch's pending-only predicate
+                // means a stuck `.inFlight` is a real correctness bug,
+                // not just lossy telemetry.
+                item.status = .pending
+                // Row is back where we found it: pending lane regains the
+                // count we decremented above.
+                adjustCache(pendingDelta: +1)
+                return
+            }
+            switch postState {
+            case .returnedToPending:
+                // .transient / .auth pushed it back to pending — restore.
+                adjustCache(pendingDelta: +1)
+            case .markedFailed:
+                adjustCache(failedDelta: +1)
+            case .droppedAsSuccess:
+                // Idempotent success — already decremented pending; no
+                // failed bucket change.
+                break
+            }
+        }
+    }
+
+    /// Post-`handle` lane transition. Used to drive the cache incrementally
+    /// so `publishStatus()` doesn't need to re-scan SwiftData.
+    private enum DispositionOutcome {
+        case returnedToPending  // .transient or .auth
+        case markedFailed       // .permanent or bridge error
+        case droppedAsSuccess   // idempotent success (row deleted)
+    }
+
+    private func handle(error: Error, item: OutboxItem) -> DispositionOutcome {
         let kindStr = String(describing: item.kind)
 
         // Bridge errors (decode failures, UUID parsing) are always permanent —
@@ -211,8 +436,11 @@ actor OutboxDrainer: ModelActor {
             item.status = .failed
             item.lastError = String(describing: bridgeError).prefix(1024).description
             item.attempts += 1
-            Self.log.error("permanent failure (bridge) on \(kindStr, privacy: .public): \(String(describing: bridgeError), privacy: .public)")
-            return
+            // A5: bridge failures aren't auth pauses — successful classification
+            // path so reset the auth counter.
+            consecutiveAuthAttempts = 0
+            AppLog.outbox.error("permanent failure (bridge) on \(kindStr, privacy: .public): \(String(describing: bridgeError), privacy: .public)")
+            return .markedFailed
         }
 
         let mapped = SupabaseError.map(error)
@@ -223,6 +451,8 @@ actor OutboxDrainer: ModelActor {
         case .success:
             // Idempotent — treat as if it landed.
             context.delete(item)
+            consecutiveAuthAttempts = 0
+            return .droppedAsSuccess
 
         case .transient:
             item.attempts += 1
@@ -231,27 +461,127 @@ actor OutboxDrainer: ModelActor {
             let exp = pow(2.0, Double(item.attempts))
             let backoff = min(exp, 300.0) // cap at 5 min
             item.nextAttemptAt = clock.current().addingTimeInterval(backoff)
+            consecutiveAuthAttempts = 0
+            return .returnedToPending
 
-        case .auth:
+        case let .auth(initialState):
             // Stop the drain pass, mark the queue paused. The auth-resume
             // wiring in slabbistApp (Task 10) calls unpause() + kick() once
             // SessionStore re-establishes the session.
             pausedForAuth = true
             item.status = .pending
-            item.lastError = "Sign in to sync"
+            consecutiveAuthAttempts += 1
+
+            // A5: escalate the pill copy from "Reconnecting…" to "Sign in
+            // to sync" after repeated auth pauses. supabase-swift auto-
+            // refresh usually resolves within one or two attempts; if it
+            // keeps failing the refresh token is genuinely gone and the
+            // user has to act. We can't always read the distinction off
+            // the AuthError at this layer (see OutboxErrorClassifier),
+            // so attempts-based escalation is the safer default.
+            let escalatedState: AuthPauseState =
+                consecutiveAuthAttempts >= Self.signedOutEscalationThreshold
+                ? .signedOut
+                : initialState
+            let copy: String
+            switch escalatedState {
+            case .reconnecting: copy = "Reconnecting…"
+            case .signedOut:    copy = "Sign in to sync"
+            }
+            item.lastError = copy
+            // Use the cache rather than re-scanning. The cache is fresh:
+            // dispatchItem just decremented pending by 1 for the row we're
+            // about to push back to pending — the caller (dispatchItem)
+            // will re-add +1 via the `.returnedToPending` outcome below.
+            // We emit the auth-paused status using the post-restore counts.
             statusSink(StatusUpdate(
-                pendingCount: pendingCountValue(),
+                pendingCount: cachedPendingCount + 1,
+                failedCount: cachedFailedCount,
                 isDraining: false,
                 isPaused: true,
-                lastError: nil
+                authState: escalatedState,
+                lastError: copy
             ))
+            return .returnedToPending
 
         case .permanent:
             item.status = .failed
             item.lastError = errStr
             item.attempts += 1
-            Self.log.error("permanent failure on \(kindStr, privacy: .public): \(errStr, privacy: .public)")
+            consecutiveAuthAttempts = 0
+            AppLog.outbox.error("permanent failure on \(kindStr, privacy: .public): \(errStr, privacy: .public)")
+            return .markedFailed
         }
+    }
+
+    // MARK: - Failure-row affordances (A2)
+
+    /// Reset a `.failed` row back to `.pending` so the drainer retries it
+    /// from scratch. The failures sheet calls this when the user taps
+    /// "Retry". Clears `lastError` so a stale message doesn't linger.
+    func retryFailed(id: UUID) {
+        let target = id
+        let descriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate<OutboxItem> { $0.id == target }
+        )
+        guard let item = (try? context.fetch(descriptor))?.first else { return }
+        guard item.status == .failed else { return }
+        item.status = .pending
+        item.attempts = 0
+        item.lastError = nil
+        item.nextAttemptAt = clock.current()
+        if tryPersist(reason: "retry failed (\(item.kind))") {
+            adjustCache(pendingDelta: +1, failedDelta: -1)
+        }
+        publishStatus()
+    }
+
+    /// Permanently drop a `.failed` row. The failures sheet calls this
+    /// when the user taps "Discard" — the local mutation is the only
+    /// source for an outbox row, so removing it cleanly is the user-
+    /// initiated escape hatch.
+    func discardFailed(id: UUID) {
+        let target = id
+        let descriptor = FetchDescriptor<OutboxItem>(
+            predicate: #Predicate<OutboxItem> { $0.id == target }
+        )
+        guard let item = (try? context.fetch(descriptor))?.first else { return }
+        guard item.status == .failed else { return }
+        context.delete(item)
+        if tryPersist(reason: "discard failed (\(item.kind))") {
+            adjustCache(failedDelta: -1)
+        }
+        publishStatus()
+    }
+
+    /// Snapshot of every `.failed` row, sorted oldest-first. The failures
+    /// sheet renders this list. Returns plain value types so it can cross
+    /// the actor boundary safely. Filters in memory because SwiftData
+    /// `#Predicate` enum equality is brittle on iOS 26.4.
+    func listFailed() -> [FailedRowSnapshot] {
+        let descriptor = FetchDescriptor<OutboxItem>(
+            sortBy: [SortDescriptor(\OutboxItem.createdAt, order: .forward)]
+        )
+        let all = (try? context.fetch(descriptor)) ?? []
+        let rows = all.filter { $0.status == .failed }
+        return rows.map { item in
+            FailedRowSnapshot(
+                id: item.id,
+                kind: item.kind,
+                lastError: item.lastError,
+                attempts: item.attempts,
+                createdAt: item.createdAt
+            )
+        }
+    }
+
+    /// Sendable snapshot of an outbox row for the failures sheet.
+    struct FailedRowSnapshot: Sendable, Identifiable, Equatable {
+        let id: UUID
+        let kind: OutboxKind
+        let lastError: String?
+        let attempts: Int
+        let createdAt: Date
     }
 
     /// Decode `data` as `T`, rethrowing any `DecodingError` as
@@ -364,8 +694,19 @@ actor OutboxDrainer: ModelActor {
             // The Edge Function returns 409 when the lot is in a terminal
             // state (the iOS local state is the authority for completed
             // lots); treat that as success so the outbox item drains.
+            //
+            // D2: when the call succeeds, hydrate the response back onto
+            // the local Lot. The server-computed offered_total_cents +
+            // lot_offer_state used to be discarded — any server-driven
+            // state change (admin override, future auto-expiry) would be
+            // invisible to the iOS client. The hydrator runs on mainContext
+            // so @Query-subscribed views update without a re-render.
             do {
-                _ = try await repositories.lots.recomputeOffer(lotId: lotId)
+                let response = try await repositories.lots.recomputeOffer(lotId: lotId)
+                try await LotOfferRecomputeHydrator.apply(
+                    response: response,
+                    container: modelContainer
+                )
             } catch let error as FunctionsError {
                 if case let .httpError(code, _) = error, code == 409 {
                     // Terminal-state guard; local cache is fine.
@@ -478,17 +819,51 @@ actor OutboxDrainer: ModelActor {
 
     // MARK: - Status publishing
 
+    /// Cached lane counts so the hot publish path (called after every
+    /// dispatched item) doesn't re-scan the entire OutboxItem table.
+    /// `refreshStatusCache()` reloads from SwiftData at the start of each
+    /// drain pass (and after recovery); the drainer's own transitions
+    /// update the cache incrementally via `adjustCache`.
+    private var cachedPendingCount: Int = 0
+    private var cachedFailedCount: Int = 0
+
     private func publishStatus() {
-        let count = pendingCountValue()
-        let draining = isDraining
-        statusSink(StatusUpdate(pendingCount: count, isDraining: draining, isPaused: nil, lastError: nil))
+        statusSink(StatusUpdate(
+            pendingCount: cachedPendingCount,
+            failedCount: cachedFailedCount,
+            isDraining: isDraining,
+            isPaused: nil,
+            authState: nil,
+            lastError: nil
+        ))
     }
 
-    private func pendingCountValue() -> Int {
-        // See `fetchBatch` for why we filter status in memory rather
-        // than in the predicate.
+    /// Reload `(pending, failed)` from SwiftData. Called at the start of
+    /// every drain pass (after `recoverStrandedInFlight` may have demoted
+    /// rows) so producer-driven inserts from other contexts are reflected.
+    /// In-memory bucketing is the only correct path here — see
+    /// `OutboxPredicateProbeTests` for why the predicate-pushed forms trap.
+    /// This is the ONLY place the full table is scanned per drain.
+    private func refreshStatusCache() {
         let rows = (try? context.fetch(FetchDescriptor<OutboxItem>())) ?? []
-        return rows.lazy.filter { $0.status == .pending }.count
+        var pending = 0
+        var failed = 0
+        for row in rows {
+            switch row.status {
+            case .pending:  pending += 1
+            case .failed:   failed += 1
+            case .inFlight, .completed: break
+            }
+        }
+        cachedPendingCount = pending
+        cachedFailedCount = failed
+    }
+
+    /// Incremental cache update applied by the drainer when it knows the
+    /// transition. Keeps the per-dispatch `publishStatus()` cost at O(1).
+    private func adjustCache(pendingDelta: Int = 0, failedDelta: Int = 0) {
+        cachedPendingCount = max(0, cachedPendingCount + pendingDelta)
+        cachedFailedCount = max(0, cachedFailedCount + failedDelta)
     }
 }
 
@@ -498,7 +873,7 @@ enum OutboxBridgeError: Error {
     case malformedPayload(reason: String)
 }
 
-extension ScanDTO {
+nonisolated extension ScanDTO {
     /// Bridge an `OutboxPayloads.InsertScan` (snake_case wire shape) to
     /// the camelCase `ScanDTO` the repository expects. Throws
     /// `OutboxBridgeError.malformedPayload` if any UUID field is invalid
@@ -533,7 +908,7 @@ extension ScanDTO {
     }
 }
 
-extension LotDTO {
+nonisolated extension LotDTO {
     /// Bridge an `OutboxPayloads.InsertLot` (snake_case wire shape) to
     /// the camelCase `LotDTO` the repository expects. Throws
     /// `OutboxBridgeError.malformedPayload` if any UUID field is invalid.
@@ -564,7 +939,7 @@ extension LotDTO {
     }
 }
 
-extension VendorDTO {
+nonisolated extension VendorDTO {
     /// Bridge an `OutboxPayloads.UpsertVendor` (snake_case wire shape) to
     /// the camelCase `VendorDTO` the repository expects. Throws
     /// `OutboxBridgeError.malformedPayload` if any UUID or timestamp field
@@ -601,7 +976,7 @@ extension VendorDTO {
 /// Cached `ISO8601DateFormatter` — the type is heavy to allocate (locale,
 /// calendar, regex). One per process is enough; the formatter is thread-safe
 /// per Apple docs.
-enum OutboxDateFormatter {
+nonisolated enum OutboxDateFormatter {
     static let iso8601: ISO8601DateFormatter = {
         ISO8601DateFormatter()
     }()

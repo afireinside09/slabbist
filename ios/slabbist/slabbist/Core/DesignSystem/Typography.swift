@@ -29,6 +29,9 @@ extension View {
         self.font(SlabFont.serif(size: 68))
             .tracking(-2)
             .foregroundStyle(AppColor.text)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     /// 36pt Instrument Serif, tracking -1. For screen titles.
@@ -36,6 +39,9 @@ extension View {
         self.font(SlabFont.serif(size: 36))
             .tracking(-1)
             .foregroundStyle(AppColor.text)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     /// 11pt uppercase sans medium, tracking 2.0, .dim foreground.

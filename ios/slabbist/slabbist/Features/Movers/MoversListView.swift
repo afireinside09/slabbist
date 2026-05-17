@@ -270,7 +270,7 @@ struct MoversListView: View {
                                     .font(SlabFont.mono(size: 11))
                                     .foregroundStyle(AppColor.dim)
                                 Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(SlabFont.sans(size: 11, weight: .semibold))
                                     .foregroundStyle(AppColor.dim)
                             }
                             .padding(.horizontal, Spacing.l)
@@ -376,7 +376,7 @@ struct MoversListView: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack(spacing: Spacing.s) {
                 Image(systemName: "tag")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(SlabFont.sans(size: 11, weight: .semibold))
                     .foregroundStyle(AppColor.gold)
                 KickerLabel("Pokémon products with listings")
                 Spacer()
@@ -438,7 +438,7 @@ struct MoversListView: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack(spacing: Spacing.s) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(SlabFont.sans(size: 11, weight: .semibold))
                     .foregroundStyle(tint)
                 KickerLabel(title)
                 Spacer()
@@ -510,7 +510,7 @@ private struct SetChip: View {
                         .stroke(isSelected ? Color.clear : AppColor.hairline, lineWidth: 1)
                 )
                 .lineLimit(1)
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -586,7 +586,7 @@ private struct MoverRow: View {
                                         .fill(AppColor.gold.opacity(0.12))
                                 )
                                 .lineLimit(1)
-                                .fixedSize()
+                                .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityHidden(true)
                         }
                     }
@@ -608,7 +608,7 @@ private struct MoverRow: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(SlabFont.sans(size: 11, weight: .semibold))
                     .foregroundStyle(AppColor.dim)
             }
             .padding(.horizontal, Spacing.l)
@@ -654,6 +654,7 @@ private struct PercentChip: View {
 private struct SkeletonRows: View {
     let count: Int
     @State private var shimmer = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -694,7 +695,7 @@ private struct SkeletonRows: View {
         }
         .onAppear { shimmer = true }
         .animation(
-            .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+            reduceMotion ? nil : .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
             value: shimmer
         )
     }
@@ -706,7 +707,7 @@ private struct EmptyMoversRow: View {
     var body: some View {
         VStack(spacing: Spacing.m) {
             Image(systemName: "chart.line.flattrend.xyaxis")
-                .font(.system(size: 32, weight: .regular))
+                .font(SlabFont.sans(size: 32, weight: .regular))
                 .foregroundStyle(AppColor.gold.opacity(0.7))
                 .padding(.top, Spacing.l)
             Text("No \(direction.displayName.lowercased()) yet")
@@ -731,7 +732,7 @@ private struct ErrorMoversRow: View {
     var body: some View {
         VStack(spacing: Spacing.s) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24, weight: .regular))
+                .font(SlabFont.sans(size: 24, weight: .regular))
                 .foregroundStyle(AppColor.negative)
                 .padding(.top, Spacing.l)
             Text("Couldn’t load movers")
@@ -807,7 +808,7 @@ private struct EbayProductRow: View {
                                         .fill(AppColor.gold.opacity(0.12))
                                 )
                                 .lineLimit(1)
-                                .fixedSize()
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     if let set = group.groupName, !set.isEmpty {
@@ -833,7 +834,7 @@ private struct EbayProductRow: View {
                         }
                     }
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(SlabFont.sans(size: 11, weight: .semibold))
                         .foregroundStyle(AppColor.dim)
                 }
             }
@@ -871,7 +872,7 @@ private struct EbayProductRow: View {
                         image.resizable().scaledToFit()
                     case .empty, .failure:
                         Image(systemName: "photo")
-                            .font(.system(size: 16))
+                            .font(SlabFont.sans(size: 16))
                             .foregroundStyle(AppColor.dim)
                     @unknown default:
                         EmptyView()
@@ -888,7 +889,7 @@ private struct EbayEmptyRow: View {
     var body: some View {
         VStack(spacing: Spacing.m) {
             Image(systemName: "tag")
-                .font(.system(size: 28, weight: .regular))
+                .font(SlabFont.sans(size: 28, weight: .regular))
                 .foregroundStyle(AppColor.gold.opacity(0.7))
                 .padding(.top, Spacing.l)
             Text("No listings yet")

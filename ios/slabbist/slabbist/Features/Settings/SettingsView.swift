@@ -138,7 +138,7 @@ struct SettingsView: View {
             }
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(SlabFont.sans(size: 12, weight: .regular))
                     .foregroundStyle(AppColor.dim)
             }
         }

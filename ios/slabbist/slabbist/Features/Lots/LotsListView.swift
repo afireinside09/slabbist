@@ -214,7 +214,7 @@ struct LotsListView: View {
                                 .accessibilityIdentifier("lot-row-\(lot.name)")
                                 .contextMenu {
                                     Button("Delete lot", systemImage: "trash", role: .destructive) {
-                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                        withAnimation(.easeOut(duration: 0.25)) {
                                             lotPendingDelete = lot
                                         }
                                     }
@@ -247,13 +247,13 @@ struct LotsListView: View {
     }
 
     private func dismissDeleteConfirmation() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             lotPendingDelete = nil
         }
     }
 
     private func confirmDelete(_ lot: Lot) {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             lotPendingDelete = nil
         }
         do {
@@ -267,13 +267,13 @@ struct LotsListView: View {
     private func rowMenu(for lot: Lot) -> some View {
         Menu {
             Button("Delete lot", systemImage: "trash", role: .destructive) {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                withAnimation(.easeOut(duration: 0.25)) {
                     lotPendingDelete = lot
                 }
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
+                .font(SlabFont.sans(size: 14, weight: .semibold))
                 .foregroundStyle(AppColor.dim)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -371,16 +371,13 @@ struct LotsListView: View {
 
     private func formatCents(_ cents: Int64) -> String {
         let dollars = Double(cents) / 100
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = "USD"
-        return f.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        return Currency.usdFormatter.string(from: dollars as NSNumber) ?? "$\(dollars)"
     }
 
     private func missingEntityView(label: String) -> some View {
         VStack(spacing: Spacing.m) {
             Image(systemName: "questionmark.circle")
-                .font(.system(size: 36))
+                .font(SlabFont.sans(size: 36))
                 .foregroundStyle(AppColor.dim)
             Text("\(label) no longer available")
                 .font(SlabFont.sans(size: 14, weight: .semibold))
@@ -401,7 +398,7 @@ struct LotsListView: View {
             Spacer()
             statePill(for: lot)
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .regular))
+                .font(SlabFont.sans(size: 14))
                 .foregroundStyle(AppColor.dim)
         }
         .padding(.horizontal, Spacing.l)
@@ -433,7 +430,7 @@ struct LotsListView: View {
             .tracking(1)
             .foregroundStyle(color)
             .padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xxs)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(color.opacity(0.4), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: Radius.xs).stroke(color.opacity(0.4), lineWidth: 1))
     }
 
     private func rowSubtitle(for lot: Lot) -> String {

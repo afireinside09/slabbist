@@ -221,6 +221,68 @@ struct LotsViewModelTests {
     }
 }
 
+// MARK: - P0.2 — requireResolve must throw on missing-store paths so
+// downstream sheets (ManualPriceSheet etc.) can surface an inline error
+// rather than silently swallow the user's tap.
+
+@Suite("LotsViewModel.requireResolve")
+@MainActor
+struct LotsViewModelRequireResolveTests {
+    @Test("throws .storeUnavailable when no signed-in user")
+    func throwsWhenSignedOut() throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+        // Default SessionStore has `userId == nil` until bootstrap lands.
+        let session = SessionStore()
+        let kicker = OutboxKicker { }
+
+        do {
+            _ = try LotsViewModel.requireResolve(context: context, kicker: kicker, session: session)
+            Issue.record("requireResolve should throw when no user is signed in")
+        } catch let error as LotsViewModel.ResolveError {
+            #expect(error == .storeUnavailable)
+            #expect(error.errorDescription?.isEmpty == false,
+                    "ResolveError must carry a user-visible message so ManualPriceSheet's error row has copy")
+        } catch {
+            Issue.record("Expected LotsViewModel.ResolveError, got \(error)")
+        }
+    }
+
+    @Test("throws .storeUnavailable when the signed-in user has no local Store")
+    func throwsWhenNoStore() throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+        let session = SessionStore()
+        session.applyUITestUser(userId: UUID())  // signed in, but no Store row
+        let kicker = OutboxKicker { }
+
+        do {
+            _ = try LotsViewModel.requireResolve(context: context, kicker: kicker, session: session)
+            Issue.record("requireResolve should throw when the user has no local Store")
+        } catch let error as LotsViewModel.ResolveError {
+            #expect(error == .storeUnavailable)
+        } catch {
+            Issue.record("Expected LotsViewModel.ResolveError, got \(error)")
+        }
+    }
+
+    @Test("succeeds when the signed-in user has a local Store")
+    func succeedsWhenStoreExists() throws {
+        let container = AppModelContainer.inMemory()
+        let context = ModelContext(container)
+        let userId = UUID()
+        let store = Store(id: UUID(), name: "Test Store", ownerUserId: userId, createdAt: Date())
+        context.insert(store)
+        try context.save()
+        let session = SessionStore()
+        session.applyUITestUser(userId: userId)
+
+        let vm = try LotsViewModel.requireResolve(context: context, kicker: OutboxKicker { }, session: session)
+        #expect(vm.currentUserId == userId)
+        #expect(vm.currentStoreId == store.id)
+    }
+}
+
 // MARK: - Test helpers
 
 private actor KickCounter {

@@ -81,7 +81,7 @@ struct EbayProductListingsView: View {
             .fill(AppColor.elev)
             .overlay(
                 Image(systemName: "photo")
-                    .font(.system(size: 28, weight: .regular))
+                    .font(SlabFont.sans(size: 28, weight: .regular))
                     .foregroundStyle(AppColor.dim)
             )
             .frame(height: 240)
@@ -177,7 +177,7 @@ private struct EbayProductListingRow: View {
                     Text(MoversFormat.price(listing.price))
                         .slabMetric()
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(SlabFont.sans(size: 11, weight: .semibold))
                         .foregroundStyle(AppColor.dim)
                 }
             }
@@ -203,7 +203,7 @@ private struct EbayProductListingRow: View {
                         image.resizable().scaledToFit()
                     case .empty, .failure:
                         Image(systemName: "photo")
-                            .font(.system(size: 16))
+                            .font(SlabFont.sans(size: 16))
                             .foregroundStyle(AppColor.dim)
                     @unknown default:
                         EmptyView()

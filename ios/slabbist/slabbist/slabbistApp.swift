@@ -11,6 +11,10 @@ struct SlabbistApp: App {
     @State private var status: OutboxStatus
     @State private var kicker: OutboxKicker
     private let drainer: OutboxDrainer
+    /// A2: failures-sheet bridge built once at app init and injected via
+    /// environment so `SyncStatusPill` can present the review sheet
+    /// without importing the drainer directly.
+    private let failureBridge: OutboxFailureBridge
 
     /// Resolved once at app start. Under XCUITests this swaps to an
     /// in-memory container so every test launch starts with an empty
@@ -40,17 +44,38 @@ struct SlabbistApp: App {
                 Task { @MainActor in
                     statusBox.update(
                         pendingCount: update.pendingCount,
+                        failedCount: update.failedCount,
                         isDraining: update.isDraining
                     )
                     if let isPaused = update.isPaused {
-                        statusBox.setPaused(isPaused, reason: update.lastError)
+                        statusBox.setPaused(
+                            isPaused,
+                            reason: update.lastError,
+                            authState: update.authState
+                        )
                     }
                 }
             }
         )
         self.drainer = drainer
         self._status = State(initialValue: statusBox)
-        self._kicker = State(initialValue: OutboxKicker { await drainer.kick() })
+        // A4: `kick()` itself sets `kickPending` when it lands during a
+        // drain pass — see `OutboxDrainer.drainOnce`. The kicker just
+        // forwards; the drainer owns the coalesce semantics.
+        let liveKicker = OutboxKicker { await drainer.kick() }
+        self._kicker = State(initialValue: liveKicker)
+        // A2: failures-sheet bridge. Retry kicks the drainer through the
+        // kicker so producers / lifecycle hooks share one entry point.
+        self.failureBridge = OutboxFailureBridge(
+            load: { await drainer.listFailed() },
+            retry: { id in
+                await drainer.retryFailed(id: id)
+                await drainer.kick()
+            },
+            discard: { id in
+                await drainer.discardFailed(id: id)
+            }
+        )
     }
 
     var body: some Scene {
@@ -61,6 +86,7 @@ struct SlabbistApp: App {
                 .environment(reachability)
                 .environment(status)
                 .environment(kicker)
+                .environment(failureBridge)
                 .onAppear {
                     if UITestEnvironment.isActive {
                         // UI test harness: skip Supabase auth + hydrator.

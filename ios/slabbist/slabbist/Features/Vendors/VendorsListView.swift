@@ -126,7 +126,7 @@ struct VendorsListView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12)).foregroundStyle(AppColor.dim)
+                    .font(SlabFont.sans(size: 12)).foregroundStyle(AppColor.dim)
             }
             .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.md)
             .contentShape(Rectangle())
