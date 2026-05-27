@@ -698,6 +698,10 @@ private struct SkeletonRows: View {
                         .fill(AppColor.elev2)
                         .frame(width: 22, height: 10)
 
+                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                        .fill(AppColor.elev2)
+                        .frame(width: 40, height: 56)
+
                     VStack(alignment: .leading, spacing: 6) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(AppColor.elev2)
