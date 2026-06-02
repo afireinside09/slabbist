@@ -40,6 +40,11 @@ struct GradeGainsListView: View {
                     .padding(.bottom, Spacing.xxxl)
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                SettingsGearButton()
+                    .padding(.top, Spacing.l)
+                    .padding(.trailing, Spacing.l)
+            }
             .toolbar(.hidden, for: .navigationBar)
             // Keying on set + tier means any picker change kicks off
             // exactly one reload. The view-model dedupes inflight fetches.

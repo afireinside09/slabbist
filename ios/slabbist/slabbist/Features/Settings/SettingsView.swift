@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(SessionStore.self) private var session
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         // RootTabView mounts this view directly into a `Tab`, so we own
@@ -26,6 +27,13 @@ struct SettingsView: View {
                     .padding(.horizontal, Spacing.xxl)
                     .padding(.top, Spacing.l)
                     .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(AppColor.gold)
+                        .accessibilityIdentifier("settings-done")
                 }
             }
         }

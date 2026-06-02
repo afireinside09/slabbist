@@ -75,6 +75,11 @@ struct LotsListView: View {
                     .padding(.bottom, Spacing.xxxl)
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                SettingsGearButton()
+                    .padding(.top, Spacing.l)
+                    .padding(.trailing, Spacing.l)
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingNewLot) {

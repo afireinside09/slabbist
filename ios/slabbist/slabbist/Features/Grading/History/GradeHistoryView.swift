@@ -53,6 +53,9 @@ struct GradeHistoryView: View {
             }
             .navigationTitle("Pre-grade")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    SettingsGearButton()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         openCapture = true
