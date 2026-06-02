@@ -36,7 +36,7 @@ Canonical IA: **Lots / Scans / Comps / Offers.** These map onto the real iOS sur
 |---|---|
 | Lots | `Lots`, `Stores` |
 | Scans | `Scanning` (incl. `BulkScan`), `CertLookup` |
-| Comps | `Comp`, `Movers` |
+| Comps | `Comp`, `Movers`, `GradeGains` |
 | Offers | `Offers`, `Vendors`, `Transactions` |
 | (cross-cutting) | `Grading` (pre-grade estimator), `Auth`, `Settings`, `Shell` |
 

@@ -30,9 +30,9 @@ Multiple sources feed comps and signals; they are independent and fan out in par
 Where the moving parts live, so a session can navigate fast.
 
 **iOS (`ios/slabbist/slabbist/`):**
-- `Features/` — one folder per surface: `Lots`, `Scanning` (`Camera`, `BulkScan`), `Comp`, `Movers`, `Offers`, `Vendors`, `Transactions`, `Grading` (`Capture`, `History`, `Report`), `CertLookup`, `Stores`, `Settings`, `Auth`, `Shell`.
-- `Core/Data/DTOs/` — wire types: e.g. `MoverDTO`, `MoversSetDTO`, `MoverEbayListingDTO`, `ScanDTO`, `LotDTO`, `GradeEstimateDTO`, `PriceHistoryDTO`, `VendorDTO`, `StoreDTO`, `EbayListingBrowseRowDTO`.
-- `Core/Data/Repositories/` — the only Supabase-facing layer: `MoversRepository`, `ScanRepository`, `LotRepository`, `GradeEstimateRepository`, `VendorRepository`, `TransactionRepository`, `StoreRepository`, `StoreMemberRepository`, `GradePhotoUploader`, `SupabaseRepository`, `RepositoryProtocols`.
+- `Features/` — one folder per surface: `Lots`, `Scanning` (`Camera`, `BulkScan`), `Comp`, `Movers`, `GradeGains`, `Offers`, `Vendors`, `Transactions`, `Grading` (`Capture`, `History`, `Report`), `CertLookup`, `Stores`, `Settings`, `Auth`, `Shell`.
+- `Core/Data/DTOs/` — wire types: e.g. `MoverDTO`, `MoversSetDTO`, `MoverEbayListingDTO`, `ScanDTO`, `LotDTO`, `GradeEstimateDTO`, `GradeGainDTO`, `GradeGainSetDTO`, `PriceHistoryDTO`, `VendorDTO`, `StoreDTO`, `EbayListingBrowseRowDTO`.
+- `Core/Data/Repositories/` — the only Supabase-facing layer: `MoversRepository`, `ScanRepository`, `LotRepository`, `GradeEstimateRepository`, `GradeGainRepository`, `VendorRepository`, `TransactionRepository`, `StoreRepository`, `StoreMemberRepository`, `GradePhotoUploader`, `SupabaseRepository`, `RepositoryProtocols`.
 - `Core/Data/Mapping/` — DTO ↔ SwiftData model mapping.
 - `Core/Sync/` — `OutboxDrainer` and the offline-first sync machinery; `Core/Persistence/Outbox/`.
 
