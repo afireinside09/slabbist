@@ -18,6 +18,8 @@ enum PhotoCertParser {
         case .SGC:       body = #"\b(\d{7,8})\b"#
         case .TAG:       body = #"\b([A-Z0-9]{10,12})\b"#
         }
+        // `.caseInsensitive` mirrors CertOCRPatterns; input is already
+        // uppercased so it's effectively a no-op for these patterns.
         return try! NSRegularExpression(pattern: body, options: [.caseInsensitive])
     }
 

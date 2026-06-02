@@ -18,6 +18,15 @@ struct PhotoCertParserTests {
         #expect(certs == ["09812345"])
     }
 
+    @Test("preserves first-appearance order across lines")
+    func preservesInsertionOrder() {
+        // WHY: the review list shows rows in detection order; if dedup kept
+        // last-appearance, earlier certs would jump position on a re-read.
+        let lines = ["081234567", "09812345", "081234567"]
+        let certs = PhotoCertParser.extractCerts(from: lines, grader: .PSA)
+        #expect(certs == ["081234567", "09812345"])
+    }
+
     @Test("excludes a year and a short population count for PSA")
     func excludesNonCertNumbers() {
         // WHY: a 4-digit year (2022) and a 4-digit pop count must never be
