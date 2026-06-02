@@ -54,15 +54,15 @@ struct GradeHistoryView: View {
             .navigationTitle("Pre-grade")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    SettingsGearButton()
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         openCapture = true
                     } label: {
                         Image(systemName: "camera.viewfinder")
                     }
                     .accessibilityLabel("Grade a card")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    SettingsGearButton()
                 }
             }
             .task { await vm.load() }
@@ -107,7 +107,7 @@ struct GradeHistoryView: View {
         switch vm.filter {
         case .all:
             return [
-                "Tap the camera in the top right to start a capture.",
+                "Tap the camera in the top left to start a capture.",
                 "Frame the front, back, corners, and edges as prompted.",
                 "Slabbist returns a 1–10 estimate per criterion plus a composite.",
             ]
