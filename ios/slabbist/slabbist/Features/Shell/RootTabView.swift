@@ -21,6 +21,9 @@ struct RootTabView: View {
                 Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
                     MoversListView()
                 }
+                Tab("Grade Gains", systemImage: "arrow.up.forward.square") {
+                    GradeGainsListView()
+                }
                 Tab("More", systemImage: "ellipsis.circle") {
                     SettingsView()
                 }
