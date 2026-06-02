@@ -401,6 +401,8 @@ private struct GradeGainRow: View {
                     .foregroundStyle(AppColor.dim)
                     .frame(width: 22, alignment: .leading)
 
+                thumbnail
+
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(spacing: Spacing.xs) {
                         Text(gain.productName)
@@ -456,6 +458,34 @@ private struct GradeGainRow: View {
         .accessibilityHint("Opens grade-gain detail")
     }
 
+    private var thumbnail: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                .fill(AppColor.elev2)
+            if let urlString = gain.imageUrl, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                    case .empty, .failure:
+                        Image(systemName: "photo")
+                            .font(SlabFont.sans(size: 14))
+                            .foregroundStyle(AppColor.dim)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                Image(systemName: "photo")
+                    .font(SlabFont.sans(size: 14))
+                    .foregroundStyle(AppColor.dim)
+            }
+        }
+        .frame(width: 40, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
     private var spreadLabel: String {
         "\(GradeGainFormat.money(gain.rawPriceCents)) → \(GradeGainFormat.money(gain.psa10PriceCents))"
     }
@@ -483,6 +513,10 @@ private struct GradeGainSkeletonRows: View {
                     RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
                         .fill(AppColor.elev2)
                         .frame(width: 22, height: 10)
+
+                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                        .fill(AppColor.elev2)
+                        .frame(width: 40, height: 56)
 
                     VStack(alignment: .leading, spacing: 6) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
