@@ -4,6 +4,7 @@ import { createLogger } from "@/shared/logger.js";
 import { getSupabase } from "@/shared/db/supabase.js";
 import { ingestPokemonAllCategories } from "@/raw/ingest.js";
 import { runPopReportIngest } from "@/graded/ingest/pop-reports.js";
+import { runPoketraceCompIngest } from "@/graded/ingest/poketrace-comp.js";
 import { runMoverListingsIngest } from "@/graded/ingest/mover-listings.js";
 import { mintEbayBrowseToken } from "@/graded/sources/ebay-oauth.js";
 import { runPopularSlabsSeed } from "@/graded/seeds/popular-slabs.js";
@@ -43,8 +44,10 @@ run.command("raw")
   });
 
 run.command("graded")
-  .argument("<job>", "job: pop")
+  .argument("<job>", "job: pop | poketrace-comp")
   .option("-s, --service <svc>", "pop: which services (comma-separated or 'all')", "all")
+  .option("--max-requests <n>", "poketrace-comp: hard cap on requests this run", "0")
+  .option("--daily-floor <n>", "poketrace-comp: stop when x-ratelimit-daily-remaining < floor", "200")
   .action(async (job, o) => {
     const cfg = loadConfig();
     const log = createLogger({ level: cfg.runtime.logLevel });
@@ -75,6 +78,20 @@ run.command("graded")
       const res = await runPopReportIngest(popOpts);
       log.info("pop ingest complete", { ...res });
       if (res.status === "failed") process.exit(1);
+      return;
+    }
+    if (job === "poketrace-comp") {
+      if (!cfg.poketrace.apiKey) { log.error("POKETRACE_API_KEY not set"); process.exit(2); }
+      const maxRequests = Number(o.maxRequests) > 0 ? Number(o.maxRequests) : Infinity;
+      const res = await runPoketraceCompIngest({
+        supabase: getSupabase(),
+        client: { apiKey: cfg.poketrace.apiKey, baseUrl: cfg.poketrace.baseUrl },
+        dailyFloor: Number(o.dailyFloor),
+        maxRequests,
+        log,
+      });
+      log.info("poketrace-comp done", { runId: res.runId, covered: res.covered, noMatch: res.noMatch,
+        transient: res.transient, skippedFresh: res.skippedFresh, requests: res.requests, stoppedOnBudget: res.stoppedOnBudget });
       return;
     }
     log.error("unknown graded job", { job });
