@@ -80,6 +80,11 @@ struct ScanShortcutView: View {
                     Spacer()
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                SettingsGearButton()
+                    .padding(.top, Spacing.l)
+                    .padding(.trailing, Spacing.l)
+            }
             .sheet(isPresented: $showingNewLot) {
                 if let viewModel {
                     NewLotSheet { name in

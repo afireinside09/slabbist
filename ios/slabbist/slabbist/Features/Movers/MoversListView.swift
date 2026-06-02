@@ -42,6 +42,11 @@ struct MoversListView: View {
                 }
                 .refreshable { await viewModel.refresh() }
             }
+            .overlay(alignment: .topTrailing) {
+                SettingsGearButton()
+                    .padding(.top, Spacing.l)
+                    .padding(.trailing, Spacing.l)
+            }
             .toolbar(.hidden, for: .navigationBar)
             // Keying on tab + set + tier means any picker change kicks
             // off exactly one reload. Caches in the view-model make

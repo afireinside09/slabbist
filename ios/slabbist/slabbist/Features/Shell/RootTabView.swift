@@ -24,9 +24,6 @@ struct RootTabView: View {
                 Tab("Grade Gains", systemImage: "arrow.up.forward.square") {
                     GradeGainsListView()
                 }
-                Tab("More", systemImage: "ellipsis.circle") {
-                    SettingsView()
-                }
             }
             .tint(AppColor.gold)
             .toolbarBackground(AppColor.ink, for: .tabBar)
