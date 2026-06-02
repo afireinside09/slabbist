@@ -574,6 +574,8 @@ private struct MoverRow: View {
                     .foregroundStyle(AppColor.dim)
                     .frame(width: 22, alignment: .leading)
 
+                thumbnail
+
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(spacing: Spacing.xs) {
                         Text(mover.productName)
@@ -632,6 +634,35 @@ private struct MoverRow: View {
         let variant = MoversFormat.variantBadge(mover.subTypeName).map { ", \($0)" } ?? ""
         return "Rank \(rank). \(mover.productName)\(variant)\(set). \(MoversFormat.price(mover.currentPrice)). \(pct)."
     }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                .fill(AppColor.elev2)
+            if let urlString = mover.imageUrl, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                    case .empty, .failure:
+                        Image(systemName: "photo")
+                            .font(SlabFont.sans(size: 14))
+                            .foregroundStyle(AppColor.dim)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                Image(systemName: "photo")
+                    .font(SlabFont.sans(size: 14))
+                    .foregroundStyle(AppColor.dim)
+            }
+        }
+        .frame(width: 40, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+        .accessibilityHidden(true)
+    }
 }
 
 // MARK: - % chip
@@ -671,6 +702,10 @@ private struct SkeletonRows: View {
                     RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
                         .fill(AppColor.elev2)
                         .frame(width: 22, height: 10)
+
+                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                        .fill(AppColor.elev2)
+                        .frame(width: 40, height: 56)
 
                     VStack(alignment: .leading, spacing: 6) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
