@@ -81,20 +81,25 @@ export interface RunOptions {
 }
 
 /**
- * Pull English (category 3) products ordered by their group's
- * published_on DESC, joined to any existing comp row's resolved_at so
- * the core can skip fresh ones. Oldest-stale-first falls out naturally
- * because freshly-resolved rows are skipped and re-run picks up where it
- * stopped.
+ * Pull English (category 3) candidate products newest-set-first, one group
+ * at a time. A single global product sort exceeded the statement timeout;
+ * instead we walk groups newest-first (cheap) and pull each group's stale
+ * candidates by the group_id index (cheap), stopping once we have `limit`.
  */
-async function loadProducts(supabase: SupabaseClient): Promise<CompProduct[]> {
-  // tcg_products has no published_on; order via the group. A SQL view or
-  // RPC keeps this tidy — but a direct join query is fine here.
-  const { data, error } = await supabase.rpc("grade_comp_candidates");
-  if (error) throw error;
-  return (data ?? []).map((r: { product_id: number; resolved_at: string | null }) => ({
-    productId: r.product_id, resolvedAt: r.resolved_at,
-  }));
+async function loadCandidatesNewestFirst(supabase: SupabaseClient, limit: number): Promise<CompProduct[]> {
+  const { data: groups, error: gErr } = await supabase.rpc("grade_comp_groups");
+  if (gErr) throw gErr;
+  const out: CompProduct[] = [];
+  for (const g of ((groups ?? []) as { group_id: number }[])) {
+    if (out.length >= limit) break;
+    const { data, error } = await supabase.rpc("grade_comp_candidates_for_group", { p_group_id: g.group_id });
+    if (error) throw error;
+    for (const r of ((data ?? []) as { product_id: number; resolved_at: string | null }[])) {
+      out.push({ productId: r.product_id, resolvedAt: r.resolved_at });
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
 }
 
 export async function runPoketraceCompIngest(opts: RunOptions): Promise<BackfillResult & { runId: string }> {
@@ -103,7 +108,8 @@ export async function runPoketraceCompIngest(opts: RunOptions): Promise<Backfill
     id: runId, source: "poketrace-comp", status: "running", started_at: new Date().toISOString(), stats: {},
   }));
   try {
-    const products = await loadProducts(opts.supabase);
+    const fetchLimit = Number.isFinite(opts.maxRequests) ? opts.maxRequests : 6000;
+    const products = await loadCandidatesNewestFirst(opts.supabase, fetchLimit);
     const result = await backfillProducts(products, {
       now: () => Date.now(),
       dailyFloor: opts.dailyFloor,

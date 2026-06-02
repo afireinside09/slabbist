@@ -83,15 +83,20 @@ run.command("graded")
     if (job === "poketrace-comp") {
       if (!cfg.poketrace.apiKey) { log.error("POKETRACE_API_KEY not set"); process.exit(2); }
       const maxRequests = Number(o.maxRequests) > 0 ? Number(o.maxRequests) : Infinity;
-      const res = await runPoketraceCompIngest({
-        supabase: getSupabase(),
-        client: { apiKey: cfg.poketrace.apiKey, baseUrl: cfg.poketrace.baseUrl },
-        dailyFloor: Number(o.dailyFloor),
-        maxRequests,
-        log,
-      });
-      log.info("poketrace-comp done", { runId: res.runId, covered: res.covered, noMatch: res.noMatch,
-        transient: res.transient, skippedFresh: res.skippedFresh, requests: res.requests, stoppedOnBudget: res.stoppedOnBudget });
+      try {
+        const res = await runPoketraceCompIngest({
+          supabase: getSupabase(),
+          client: { apiKey: cfg.poketrace.apiKey, baseUrl: cfg.poketrace.baseUrl },
+          dailyFloor: Number(o.dailyFloor),
+          maxRequests,
+          log,
+        });
+        log.info("poketrace-comp done", { runId: res.runId, covered: res.covered, noMatch: res.noMatch,
+          transient: res.transient, skippedFresh: res.skippedFresh, requests: res.requests, stoppedOnBudget: res.stoppedOnBudget });
+      } catch (e) {
+        log.error("poketrace-comp failed", { error: String((e as Error).message ?? e) });
+        process.exit(1);
+      }
       return;
     }
     log.error("unknown graded job", { job });
