@@ -23,6 +23,7 @@ export interface AppConfig {
     beckettOpgKey?: string | undefined;
     tagApiKey?: string | undefined;
   };
+  poketrace: { apiKey?: string | undefined; baseUrl: string };
   ebay: { appId?: string | undefined; certId?: string | undefined; devId?: string | undefined; marketplaceInsightsApproved: boolean };
   runtime: { logLevel: "debug" | "info" | "warn" | "error"; userAgent: string };
 }
@@ -52,6 +53,10 @@ export function loadConfig(): AppConfig {
       psaPopSpecIds,
       beckettOpgKey: process.env.BECKETT_OPG_KEY || undefined,
       tagApiKey: process.env.TAG_API_KEY || undefined,
+    },
+    poketrace: {
+      apiKey: process.env.POKETRACE_API_KEY || undefined,
+      baseUrl: process.env.POKETRACE_BASE_URL || "https://api.poketrace.com/v1",
     },
     ebay: {
       appId: process.env.EBAY_APP_ID || undefined,
