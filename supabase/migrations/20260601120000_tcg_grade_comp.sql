@@ -119,3 +119,24 @@ as $$
 $$;
 
 grant execute on function public.get_set_grade_gains(int, text) to anon, authenticated;
+
+-- Candidate products for the backfill: English products with a raw price,
+-- newest set first, carrying any existing comp resolved_at so the worker
+-- can skip fresh ones. service_role only — it's an ingest helper.
+create or replace function public.grade_comp_candidates()
+returns table (product_id int, resolved_at timestamptz)
+language sql
+stable
+as $$
+  select p.product_id, c.resolved_at
+  from public.tcg_products p
+  join public.tcg_groups g on g.group_id = p.group_id
+  join public.tcg_prices pr
+    on pr.product_id = p.product_id and pr.market_price is not null and pr.market_price > 0
+  left join public.tcg_grade_comp c on c.product_id = p.product_id
+  where g.category_id = 3
+  group by p.product_id, c.resolved_at, g.published_on
+  order by g.published_on desc nulls last, p.product_id asc;
+$$;
+
+grant execute on function public.grade_comp_candidates() to service_role;

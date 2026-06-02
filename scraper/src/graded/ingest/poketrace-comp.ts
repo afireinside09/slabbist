@@ -66,3 +66,64 @@ export async function backfillProducts(products: CompProduct[], deps: BackfillDe
   }
   return r;
 }
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Logger } from "@/shared/logger.js";
+import { throwIfError } from "@/shared/db/supabase.js";
+import { searchCardId, fetchPsa10, type PoketraceClient } from "@/graded/sources/poketrace.js";
+
+export interface RunOptions {
+  supabase: SupabaseClient;
+  client: PoketraceClient;
+  dailyFloor: number;
+  maxRequests: number;
+  log: Logger;
+}
+
+/**
+ * Pull English (category 3) products ordered by their group's
+ * published_on DESC, joined to any existing comp row's resolved_at so
+ * the core can skip fresh ones. Oldest-stale-first falls out naturally
+ * because freshly-resolved rows are skipped and re-run picks up where it
+ * stopped.
+ */
+async function loadProducts(supabase: SupabaseClient): Promise<CompProduct[]> {
+  // tcg_products has no published_on; order via the group. A SQL view or
+  // RPC keeps this tidy — but a direct join query is fine here.
+  const { data, error } = await supabase.rpc("grade_comp_candidates");
+  if (error) throw error;
+  return (data ?? []).map((r: { product_id: number; resolved_at: string | null }) => ({
+    productId: r.product_id, resolvedAt: r.resolved_at,
+  }));
+}
+
+export async function runPoketraceCompIngest(opts: RunOptions): Promise<BackfillResult & { runId: string }> {
+  const runId = crypto.randomUUID();
+  await throwIfError(opts.supabase.from("graded_ingest_runs").insert({
+    id: runId, source: "poketrace-comp", status: "running", started_at: new Date().toISOString(), stats: {},
+  }));
+  try {
+    const products = await loadProducts(opts.supabase);
+    const result = await backfillProducts(products, {
+      now: () => Date.now(),
+      dailyFloor: opts.dailyFloor,
+      maxRequests: opts.maxRequests,
+      search: (id) => searchCardId(opts.client, id),
+      detail: (cardId) => fetchPsa10(opts.client, cardId),
+      upsert: async (row) => {
+        await throwIfError(opts.supabase.from("tcg_grade_comp").upsert(row, { onConflict: "product_id" }));
+      },
+    });
+    opts.log.info("grade-comp backfill", { ...result });
+    await throwIfError(opts.supabase.from("graded_ingest_runs").update({
+      status: "completed", finished_at: new Date().toISOString(), stats: result as unknown as Record<string, number>,
+    }).eq("id", runId));
+    return { ...result, runId };
+  } catch (e) {
+    const msg = String((e as Error).message ?? e);
+    await opts.supabase.from("graded_ingest_runs").update({
+      status: "failed", finished_at: new Date().toISOString(), error_message: msg,
+    }).eq("id", runId);
+    throw e;
+  }
+}
