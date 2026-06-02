@@ -18,8 +18,9 @@ nonisolated struct GradeGainDTO: Codable, Sendable, Identifiable, Equatable, Has
 
     var id: Int { productId }
 
-    /// Profit in cents for a given grading fee (cents). Clamped at the
-    /// raw spread — fee only ever reduces it.
+    /// Profit in cents for a given grading fee (cents): the raw→PSA 10
+    /// spread less the fee. Can be negative; the view model filters
+    /// non-positive rows out of `visibleRows`.
     func profitCents(feeCents: Int) -> Int { spreadCents - feeCents }
 
     enum CodingKeys: String, CodingKey {
