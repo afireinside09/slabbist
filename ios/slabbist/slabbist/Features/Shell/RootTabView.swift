@@ -3,25 +3,27 @@ import SwiftUI
 struct RootTabView: View {
     @Environment(SessionStore.self) private var session
     @Environment(OutboxFailureBridge.self) private var failureBridge
+    @Environment(TabRouter.self) private var router
     @State private var showFailuresSheet: Bool = false
 
     var body: some View {
+        @Bindable var router = router
         VStack(spacing: 0) {
             SyncStatusPill(onReviewFailures: { showFailuresSheet = true })
-            TabView {
-                Tab("Lots", systemImage: "square.stack.3d.up") {
+            TabView(selection: $router.selectedTab) {
+                Tab("Lots", systemImage: "square.stack.3d.up", value: TabRouter.Tab.lots) {
                     LotsListView()
                 }
-                Tab("Scan", systemImage: "viewfinder") {
+                Tab("Scan", systemImage: "viewfinder", value: TabRouter.Tab.scan) {
                     ScanShortcutView()
                 }
-                Tab("Pre-grade", systemImage: "checkmark.seal") {
+                Tab("Pre-grade", systemImage: "checkmark.seal", value: TabRouter.Tab.preGrade) {
                     gradeTab
                 }
-                Tab("Movers", systemImage: "chart.line.uptrend.xyaxis") {
+                Tab("Movers", systemImage: "chart.line.uptrend.xyaxis", value: TabRouter.Tab.movers) {
                     MoversListView()
                 }
-                Tab("Grade Gains", systemImage: "arrow.up.forward.square") {
+                Tab("Grade Gains", systemImage: "arrow.up.forward.square", value: TabRouter.Tab.gradeGains) {
                     GradeGainsListView()
                 }
             }

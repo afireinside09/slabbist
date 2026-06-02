@@ -8,6 +8,7 @@ struct SlabbistApp: App {
     @State private var session = SessionStore()
     @State private var hydrator = StoreHydrator()
     @State private var reachability = Reachability()
+    @State private var tabRouter = TabRouter()
     @State private var status: OutboxStatus
     @State private var kicker: OutboxKicker
     private let drainer: OutboxDrainer
@@ -84,6 +85,7 @@ struct SlabbistApp: App {
                 .environment(session)
                 .environment(hydrator)
                 .environment(reachability)
+                .environment(tabRouter)
                 .environment(status)
                 .environment(kicker)
                 .environment(failureBridge)

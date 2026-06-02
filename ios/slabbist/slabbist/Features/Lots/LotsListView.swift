@@ -20,11 +20,11 @@ struct LotsListView: View {
     @Environment(SessionStore.self) private var session
     @Environment(StoreHydrator.self) private var hydrator
     @Environment(OutboxKicker.self) private var kicker
+    @Environment(TabRouter.self) private var router
 
     @State private var showingNewLot = false
     @State private var showingCreateStore = false
     @State private var lots: [Lot] = []
-    @State private var path: [LotsRoute] = []
     @State private var viewModel: LotsViewModel?
     @State private var lotPendingDelete: Lot?
 
@@ -41,7 +41,8 @@ struct LotsListView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        @Bindable var router = router
+        NavigationStack(path: $router.lotsPath) {
             SlabbedRoot {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.xxl) {
@@ -87,7 +88,7 @@ struct LotsListView: View {
                     NewLotSheet { name in
                         let lot = try viewModel.createLot(name: name)
                         refresh()
-                        path = [.lot(lot.id)]
+                        router.lotsPath = [.lot(lot.id)]
                     }
                 }
             }
@@ -97,7 +98,7 @@ struct LotsListView: View {
                 }
             }
             .navigationDestination(for: LotsRoute.self) { route in
-                routeDestination(route)
+                routeDestination(route, path: $router.lotsPath)
             }
             .task(id: session.userId) {
                 await prepare()
@@ -292,13 +293,13 @@ struct LotsListView: View {
     /// from the SwiftData store. Stable across re-renders because routes
     /// carry only `UUID`s, not @Model references that can mutate.
     @ViewBuilder
-    private func routeDestination(_ route: LotsRoute) -> some View {
+    private func routeDestination(_ route: LotsRoute, path: Binding<[LotsRoute]>) -> some View {
         switch route {
         case .lot(let lotId):
             if let lot = try? context.fetch(
                 FetchDescriptor<Lot>(predicate: #Predicate { $0.id == lotId })
             ).first {
-                LotDetailView(lot: lot, path: $path)
+                LotDetailView(lot: lot, path: path)
             } else {
                 missingEntityView(label: "Lot")
             }

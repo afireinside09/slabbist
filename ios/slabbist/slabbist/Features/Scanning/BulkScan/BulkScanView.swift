@@ -220,6 +220,7 @@ struct BulkScanView: View {
     @Environment(SessionStore.self) private var session
     @Environment(OutboxKicker.self) private var kicker
     @Environment(Reachability.self) private var reachability
+    @Environment(TabRouter.self) private var tabRouter
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var cameraSession = CameraSession()
@@ -337,6 +338,19 @@ struct BulkScanView: View {
                 .accessibilityLabel("Manual entry")
                 .accessibilityIdentifier("manual-entry-button")
                 .disabled(controller.viewModel == nil)
+            }
+            // Finish scanning → jump straight to the lot the user just
+            // built (Lots tab → lot detail) instead of making them back
+            // out and navigate there by hand. The lot always exists (it's
+            // passed in), so this is enabled regardless of scan count.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    tabRouter.openLot(lot.id)
+                }
+                .font(SlabFont.sans(size: 16, weight: .semibold))
+                .foregroundStyle(AppColor.gold)
+                .accessibilityLabel("Done scanning")
+                .accessibilityIdentifier("done-scanning-button")
             }
         }
         .sheet(isPresented: $showingManualEntry) {
