@@ -30,5 +30,6 @@ ios/slabbist/Config/Secrets.xcconfig
 # Supabase Edge Functions auto-generated
 supabase/functions/**/deno.lock
 
-.claude
+.claude/*
+!.claude/skills/
 .impeccable.md
