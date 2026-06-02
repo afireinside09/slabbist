@@ -39,7 +39,9 @@ async function get(c: PoketraceClient, path: string): Promise<{ status: number; 
     clearTimeout(timer);
   }
   const dh = resp.headers.get("x-ratelimit-daily-remaining");
-  const daily = dh !== null && Number.isFinite(Number(dh)) ? Number(dh) : null;
+  // Treat an empty/whitespace header as absent — Number("") is 0, which would
+  // otherwise read as "zero budget remaining" and trip a spurious budget stop.
+  const daily = dh !== null && dh.trim() !== "" && Number.isFinite(Number(dh)) ? Number(dh) : null;
   let body: any = null;
   if (resp.headers.get("content-type")?.includes("application/json")) {
     try { body = await resp.json(); } catch { body = null; }

@@ -58,3 +58,21 @@ describe("fetchPsa10", () => {
     expect(r.psa10PriceCents).toBeNull();
   });
 });
+
+describe("daily-remaining header parsing", () => {
+  // A present-but-empty header must read as absent (null), NOT as 0 — otherwise
+  // Number("") === 0 would look like "zero budget left" and trip a spurious stop.
+  it("treats an empty-string x-ratelimit-daily-remaining as null, not 0", async () => {
+    const c: PoketraceClient = {
+      apiKey: "k",
+      baseUrl: "https://x/v1",
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ data: [{ id: "uuid-1" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json", "x-ratelimit-daily-remaining": "" },
+        }),
+    };
+    const r = await searchCardId(c, 12345);
+    expect(r.dailyRemaining).toBeNull();
+  });
+});
