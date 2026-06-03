@@ -223,7 +223,12 @@ struct GradingCaptureView: View {
     private func captureCurrentSide() async {
         guard let stillCapture else { return }
         do {
-            let image = try await stillCapture.capture()
+            let captured = try await stillCapture.capture()
+            // Normalize to an upright pixel space so detection, metrics, and
+            // centering all agree. AVCapture stills are sensor-landscape tagged
+            // .right; analyzing the raw cgImage with Vision `.up` inverts the
+            // card's aspect ratio and fails detection. No-op when already .up.
+            let image = captured.uprightCGImage().map { UIImage(cgImage: $0) } ?? captured
             let detection = try await detector.detect(in: image)
             let metrics = CaptureMetrics.measure(image: image, cardRect: detection?.boundingBox)
             let outcome = gate.evaluate(
