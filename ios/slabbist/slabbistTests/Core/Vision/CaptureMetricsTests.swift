@@ -29,6 +29,21 @@ struct CaptureMetricsTests {
         #expect(m.blurScore < 100)
     }
 
+    @Test("white image glare exceeds the gate's reject threshold")
+    func glareCrossesGateBoundary() {
+        let image = solidImage(size: CGSize(width: 1500, height: 2100), color: .white)
+        let m = CaptureMetrics.measure(image: image, cardRect: nil)
+        #expect(m.glareRatio > CaptureQualityGate.Thresholds().maxGlareRatio)
+    }
+
+    @Test("flat image blur is below the gate's accept threshold")
+    func blurCrossesGateBoundary() {
+        let image = solidImage(size: CGSize(width: 1500, height: 2100),
+                               color: UIColor(white: 0.5, alpha: 1))
+        let m = CaptureMetrics.measure(image: image, cardRect: nil)
+        #expect(m.blurScore < CaptureQualityGate.Thresholds().minBlurScore)
+    }
+
     private func solidImage(size: CGSize, color: UIColor) -> UIImage {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
         return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
