@@ -25,7 +25,12 @@ final class LiveReadinessAnalyzer: @unchecked Sendable {
         lastProcessed = t
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let ci = CIImage(cvPixelBuffer: pixelBuffer)
+        // Back-camera buffers arrive in the sensor's native landscape; the
+        // pre-grade UI is portrait, so upright with `.right` before analysis
+        // (matches BulkScanView). Without this, a portrait card reads as
+        // landscape, fails the detector's aspect window, and the shutter
+        // never enables.
+        let ci = CIImage(cvPixelBuffer: pixelBuffer).oriented(.right)
         guard let cg = ciContext.createCGImage(ci, from: ci.extent),
               let buffer = GrayscaleBuffer(cgImage: cg, maxDimension: 512) else { return }
 
