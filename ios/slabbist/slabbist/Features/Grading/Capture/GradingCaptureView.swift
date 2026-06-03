@@ -15,6 +15,7 @@ struct GradingCaptureView: View {
     /// dismiss the sheet but the background Task would keep running and
     /// possibly call `onComplete` on a dismissed view (P0.2).
     @State private var analysisTask: Task<Void, Never>?
+    @State private var liveAnalyzer: LiveReadinessAnalyzer?
 
     let viewModel: GradingCaptureViewModel
     let onComplete: (UUID) -> Void
@@ -36,11 +37,11 @@ struct GradingCaptureView: View {
         ZStack {
             cameraContent
                 .accessibilityHidden(overlayPhase)
-            CardOutlineOverlay(aligned: qualityMessage == nil)
+            CardOutlineOverlay(aligned: chipMessage == nil)
                 .accessibilityHidden(overlayPhase)
             VStack {
                 Spacer()
-                QualityChip(message: qualityMessage)
+                QualityChip(message: chipMessage)
                     .padding(.bottom, Spacing.s)
                 captureButton
                     .padding(.bottom, Spacing.xxxl)
@@ -87,6 +88,11 @@ struct GradingCaptureView: View {
                 qualityMessage = "Camera unavailable. Close and try again."
             }
             session.start()
+            let analyzer = LiveReadinessAnalyzer { readiness in
+                Task { @MainActor in viewModel.updateLiveReadiness(readiness) }
+            }
+            liveAnalyzer = analyzer
+            session.setOnSampleBuffer { analyzer.handle($0) }
         }
         .onChange(of: overlayPhase) { _, isOverlay in
             // Pause the AV session while the overlay is up; restart
@@ -104,6 +110,8 @@ struct GradingCaptureView: View {
         .onDisappear {
             analysisTask?.cancel()
             analysisTask = nil
+            session.setOnSampleBuffer(nil)
+            liveAnalyzer = nil
             session.stop()
         }
         .sheet(isPresented: $showConsent) {
@@ -201,8 +209,15 @@ struct GradingCaptureView: View {
         .accessibilityLabel(viewModel.phase == .front ? "Capture front" : "Capture back")
     }
 
+    /// Explicit capture/attach errors take precedence over the live readiness
+    /// reason so a "Camera unavailable" message isn't overwritten by "Card not
+    /// detected".
+    private var chipMessage: String? {
+        qualityMessage ?? viewModel.liveReadiness?.message
+    }
+
     private var captureEnabled: Bool {
-        qualityMessage == nil && stillCapture != nil
+        stillCapture != nil && qualityMessage == nil && (viewModel.liveReadiness?.isReady ?? false)
     }
 
     private func captureCurrentSide() async {

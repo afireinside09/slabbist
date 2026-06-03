@@ -22,6 +22,18 @@ final class GradingCaptureViewModel {
     /// offline-class `URLError`s.
     private(set) var lastError: Error?
 
+    /// Latest live capture readiness published by `LiveReadinessAnalyzer`.
+    /// Drives the shutter-enabled state and the QualityChip while framing.
+    private(set) var liveReadiness: CaptureReadiness?
+
+    /// Called from the camera sample queue (hopped to MainActor). Ignored once
+    /// we leave the camera (uploading/analyzing/done/failed) so a late frame
+    /// can't repaint the chip behind the analysis overlay.
+    func updateLiveReadiness(_ readiness: CaptureReadiness) {
+        guard phase == .front || phase == .back else { return }
+        liveReadiness = readiness
+    }
+
     private let repo: any GradeEstimateRepository
     private let uploader: any PhotoUploader
     private let userId: UUID
