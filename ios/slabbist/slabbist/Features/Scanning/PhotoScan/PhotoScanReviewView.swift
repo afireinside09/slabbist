@@ -37,6 +37,7 @@ struct PhotoScanReviewView: View {
     var body: some View {
         SlabbedRoot {
             VStack(alignment: .leading, spacing: Spacing.l) {
+                topBar
                 header
                 if rows.isEmpty {
                     emptyState
@@ -44,17 +45,34 @@ struct PhotoScanReviewView: View {
                     list
                 }
                 Spacer(minLength: 0)
-                PrimaryGoldButton(
-                    title: addButtonTitle,
-                    isEnabled: includedValidCount > 0
-                ) {
-                    onCommit(commitSet)
+                if rows.isEmpty {
+                    PrimaryGoldButton(title: "Retake photo") {
+                        onRetake()
+                    }
+                    .accessibilityIdentifier("photo-scan-retake-button")
+                } else {
+                    PrimaryGoldButton(
+                        title: addButtonTitle,
+                        isEnabled: includedValidCount > 0
+                    ) {
+                        onCommit(commitSet)
+                    }
+                    .accessibilityIdentifier("photo-scan-add-button")
                 }
-                .accessibilityIdentifier("photo-scan-add-button")
             }
             .padding(.horizontal, Spacing.xxl)
             .padding(.top, Spacing.l)
             .padding(.bottom, Spacing.xl)
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            SecondaryIconButton(systemIcon: "chevron.left", accessibilityLabel: "Retake photo") {
+                onRetake()
+            }
+            .accessibilityIdentifier("photo-scan-back-button")
+            Spacer()
         }
     }
 
