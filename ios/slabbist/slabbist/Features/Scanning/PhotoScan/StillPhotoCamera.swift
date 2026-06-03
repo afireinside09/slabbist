@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import OSLog
 import UIKit
 
 /// One-shot still-capture session for the photo-scan flow. Parallel to
@@ -78,9 +79,17 @@ final class StillPhotoCamera: NSObject {
 
     /// Capture one full-res still. Returns `nil` if not configured or capture
     /// fails. Resolves on the AVFoundation delegate callback.
+    ///
+    /// Resolves to `nil` on a capture error; the only non-resolving path is
+    /// the delegate never firing (rare hardware teardown), accepted for v1.
     func capture() async -> UIImage? {
         guard isConfigured else { return nil }
         return await withCheckedContinuation { (cont: CheckedContinuation<UIImage?, Never>) in
+            // Defensive: the UI disables the shutter while a capture is in
+            // flight, so this should already be nil. If somehow not, fail the
+            // stale capture rather than leak its continuation (which would
+            // hang that caller forever).
+            captureContinuation?.resume(returning: nil)
             captureContinuation = cont
             let settings = AVCapturePhotoSettings()
             photoOutput.capturePhoto(with: settings, delegate: self)
@@ -94,9 +103,13 @@ extension StillPhotoCamera: AVCapturePhotoCaptureDelegate {
                                  error: Error?) {
         let image = photo.fileDataRepresentation().flatMap(UIImage.init(data:))
         Task { @MainActor in
-            let cont = self.captureContinuation
+            // `AppLog.camera` is MainActor-isolated, so log inside the hop.
+            if let error {
+                AppLog.camera.error("still capture failed: \(error.localizedDescription, privacy: .public)")
+            }
+            guard let cont = self.captureContinuation else { return }
             self.captureContinuation = nil
-            cont?.resume(returning: image)
+            cont.resume(returning: image)
         }
     }
 }
