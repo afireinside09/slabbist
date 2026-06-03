@@ -48,7 +48,7 @@ struct PhotoScanReviewView: View {
                     title: addButtonTitle,
                     isEnabled: includedValidCount > 0
                 ) {
-                    onCommit(includedValidCerts)
+                    onCommit(commitSet)
                 }
                 .accessibilityIdentifier("photo-scan-add-button")
             }
@@ -80,8 +80,13 @@ struct PhotoScanReviewView: View {
         SlabCard {
             VStack(spacing: 0) {
                 ForEach($rows) { $row in
-                    if row.id != rows.first?.id { SlabCardDivider() }
-                    rowView($row)
+                    // One view per ForEach element (divider folded inside) so
+                    // SwiftUI diffing stays stable on row removal — matches the
+                    // openLotsSection pattern in LotsListView.
+                    VStack(spacing: 0) {
+                        if row.id != rows.first?.id { SlabCardDivider() }
+                        rowView($row)
+                    }
                 }
             }
         }
@@ -137,10 +142,12 @@ struct PhotoScanReviewView: View {
         .padding(.vertical, Spacing.md)
     }
 
-    private var includedValidCerts: [String] {
+    /// Included rows whose edited cert still passes format validation — the
+    /// exact set committed to the lot. Computed once, reused by count + title.
+    private var commitSet: [String] {
         rows.filter { $0.included && validate($0.cert) == nil }.map(\.cert)
     }
-    private var includedValidCount: Int { includedValidCerts.count }
+    private var includedValidCount: Int { commitSet.count }
     private var addButtonTitle: String {
         includedValidCount == 0 ? "Add to lot" : "Add \(includedValidCount) to lot"
     }
