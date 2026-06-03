@@ -610,7 +610,8 @@ private struct MoverRow: View {
 
                 VStack(alignment: .trailing, spacing: Spacing.xxs) {
                     Text(MoversFormat.price(mover.currentPrice))
-                        .slabMetric()
+                        .font(SlabFont.mono(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColor.gold)
                     PercentChip(value: mover.pctChange, direction: direction)
                 }
 
