@@ -34,6 +34,15 @@ struct CardRectangleDetectorTests {
             #expect(ar > 0.6 && ar < 0.85)
         }
     }
+
+    @Test("sync detect returns nil for an image with no card-like rectangle")
+    func syncDetectNoCard() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600), format: format)
+            .image { ctx in UIColor.white.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600)) }
+        let cg = try #require(image.cgImage)
+        #expect(CardRectangleDetector.detect(in: cg) == nil)
+    }
 }
 
 private final class BundleAnchor {}

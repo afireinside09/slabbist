@@ -14,6 +14,12 @@ struct CardRectangleDetector {
 
     func detect(in image: UIImage) async throws -> Result? {
         guard let cgImage = image.cgImage else { return nil }
+        return Self.detect(in: cgImage)
+    }
+
+    /// Synchronous core — safe to call from a background queue. Used by the
+    /// live readiness analyzer; the async method above wraps it.
+    static func detect(in cgImage: CGImage) -> Result? {
         let request = VNDetectRectanglesRequest()
         request.minimumAspectRatio = 0.6
         request.maximumAspectRatio = 0.85
@@ -22,7 +28,11 @@ struct CardRectangleDetector {
         request.maximumObservations = 4
 
         let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
-        try handler.perform([request])
+        do {
+            try handler.perform([request])
+        } catch {
+            return nil
+        }
 
         guard let best = (request.results ?? []).max(by: { $0.confidence < $1.confidence }) else {
             return nil
