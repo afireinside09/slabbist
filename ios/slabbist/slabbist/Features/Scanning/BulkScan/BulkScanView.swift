@@ -231,6 +231,7 @@ struct BulkScanView: View {
     /// can't race the reset back to `false` over the next `true`.
     @State private var flashTask: Task<Void, Never>?
     @State private var showingManualEntry = false
+    @State private var showingPhotoScan = false
     /// Scan whose `ManualPriceSheet` is currently being presented from the
     /// inline `SetPricePill` on a queue row. `.sheet(item:)` drives
     /// presentation so multiple rapid taps land on a stable target.
@@ -330,6 +331,17 @@ struct BulkScanView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    showingPhotoScan = true
+                } label: {
+                    Image(systemName: "text.viewfinder")
+                        .foregroundStyle(AppColor.gold)
+                }
+                .accessibilityLabel("Scan from photo")
+                .accessibilityIdentifier("photo-scan-button")
+                .disabled(controller.viewModel == nil)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     showingManualEntry = true
                 } label: {
                     Image(systemName: "keyboard")
@@ -359,6 +371,24 @@ struct BulkScanView: View {
                 try viewModel.record(candidate: candidate)
                 triggerFlash()
             }
+        }
+        .fullScreenCover(isPresented: $showingPhotoScan, onDismiss: {
+            #if !targetEnvironment(simulator)
+            if cameraSession.authorization == .authorized,
+               cameraSession.isConfigured,
+               !cameraSession.isRunning {
+                cameraSession.start()
+            }
+            #endif
+        }) {
+            if let viewModel = controller.viewModel {
+                PhotoScanView(viewModel: viewModel)
+            }
+        }
+        .onChange(of: showingPhotoScan) { _, isPresented in
+            #if !targetEnvironment(simulator)
+            if isPresented { cameraSession.stop() }
+            #endif
         }
         .sheet(item: $manualPriceTarget) { scan in
             ManualPriceSheet(initialCents: scan.vendorAskCents) { cents in
