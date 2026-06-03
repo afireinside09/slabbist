@@ -85,7 +85,11 @@ struct PhotoScanCaptureView: View {
             }
             .padding(Spacing.xxl)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        default:
+        case .notDetermined:
+            ProgressView()
+                .tint(AppColor.gold)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        @unknown default:
             ProgressView()
                 .tint(AppColor.gold)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

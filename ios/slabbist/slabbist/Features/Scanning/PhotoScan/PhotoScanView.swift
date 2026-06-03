@@ -44,8 +44,12 @@ struct PhotoScanView: View {
             #if !targetEnvironment(simulator)
             await camera.requestAuthorization()
             guard camera.authorization == .authorized else { return }
-            try? camera.configure()
-            camera.start()
+            do {
+                try camera.configure()
+                camera.start()
+            } catch {
+                AppLog.camera.error("photo-scan camera configure failed: \(error.localizedDescription, privacy: .public)")
+            }
             #endif
         }
         .onDisappear { camera.stop() }
@@ -58,6 +62,9 @@ struct PhotoScanView: View {
             let image = await camera.capture()
             let strings: [String]
             if let image {
+                // OCR runs off the MainActor; only the [String] result (Sendable)
+                // crosses back. UIImage is @unchecked Sendable — revisit if the
+                // project adopts Swift 6 strict concurrency.
                 strings = await Task.detached { PhotoTextRecognizer.recognizeText(in: image) }.value
             } else {
                 strings = []
