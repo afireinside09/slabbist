@@ -210,9 +210,13 @@ struct GradingCaptureView: View {
         do {
             let image = try await stillCapture.capture()
             let detection = try await detector.detect(in: image)
-            // Real blur/glare scoring is wired in a follow-up; for now we pass safe defaults
-            // through the gate so it only short-circuits on resolution + card detection.
-            let outcome = gate.evaluate(image: image, cardDetection: detection, blurScore: 200, glareRatio: 0)
+            let metrics = CaptureMetrics.measure(image: image, cardRect: detection?.boundingBox)
+            let outcome = gate.evaluate(
+                image: image,
+                cardDetection: detection,
+                blurScore: metrics.blurScore,
+                glareRatio: metrics.glareRatio
+            )
             if case .rejected(let reason) = outcome {
                 qualityMessage = reason
                 return
