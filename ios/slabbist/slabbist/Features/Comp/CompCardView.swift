@@ -385,11 +385,10 @@ struct CompCardView: View {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
 
-    let history: [PriceHistoryPoint] = (0..<10).map { i in
-        PriceHistoryPoint(
-            ts: Date(timeIntervalSinceNow: TimeInterval(-i * 86_400 * 18)),
-            priceCents: Int64(18_500 - i * 200)
-        )
+    let history: [PriceHistoryPoint] = (0..<10).map { (i: Int) -> PriceHistoryPoint in
+        let secondsAgo = TimeInterval(-i) * 86_400 * 18
+        let cents = Int64(18_500 - i * 200)
+        return PriceHistoryPoint(ts: Date(timeIntervalSinceNow: secondsAgo), priceCents: cents)
     }
     let historyJSON = String(data: (try? encoder.encode(history)) ?? Data(), encoding: .utf8)
 
