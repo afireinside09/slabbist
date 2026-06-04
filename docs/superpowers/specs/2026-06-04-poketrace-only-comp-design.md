@@ -82,13 +82,13 @@ No `ppt_*`, no `reconciled`, no `loose/psa_*_price_cents` ladder fields (the lad
 
 ### B. Database (one new timestamped migration)
 
-> Exact column list to be confirmed by introspecting the live DB before finalizing (per the migration-ledger lesson — schema may have drifted from migration history).
+> Column list reconstructed from full migration history on 2026-06-04. The schema has drifted from any single migration: `headline_price` + the ladder came from the pricecharting era (`20260505120100`), and `graded_market_sales` was **dropped** in `20260505120200`. The executor MUST verify against the live DB (`\d graded_market`, `\d graded_card_identities`) before applying.
 
-- **`graded_market`** — drop: `ppt_tcgplayer_id, ppt_url, psa_7_price, psa_8_price, psa_9_price, psa_9_5_price, price_history`. Keep `pt_*` and base columns (`low_price, median_price, high_price, last_sale_price, last_sale_at, sample_count_30d, sample_count_90d, updated_at`).
+- **`graded_market`** — drop the PPT ladder + identifiers: `ppt_tcgplayer_id, ppt_url, loose_price, psa_7_price, psa_8_price, psa_9_price, psa_9_5_price, psa_10_price, bgs_10_price, cgc_10_price, sgc_10_price`. **Keep** `headline_price` and `price_history` (both written for the Poketrace source too), all `pt_*` columns, `pt_tier_prices_cents`, `source`, `updated_at`.
 - Delete rows `where source = 'pokemonpricetracker'`; set `source` default `'poketrace'`. (Keep `source` in the PK for now; collapsing it is out of scope.)
 - **`graded_card_identities`** — drop `ppt_url`; **rename `ppt_tcgplayer_id` → `tcgplayer_product_id`**; rename index `graded_card_identities_ppt_tcgplayer_idx` → `graded_card_identities_tcgplayer_product_idx`.
-- **`graded_market_sales`** — add `grader text null` and `anomaly_flag text null` (`grade` already exists). Edge function upserts on conflict `(source, source_listing_id)`. `source = 'ebay'`.
-- RLS: any new/changed table access re-verified in `supabase/tests/rls_*.sql`.
+- **Sold listings storage:** **recreate** `graded_market_sales` (dropped in `20260505120200`). Columns: `id bigserial pk, identity_id uuid fk→graded_card_identities on delete cascade, grading_service text check in (PSA,CGC,BGS,SGC,TAG), grade text, source text not null default 'ebay', source_listing_id text not null, sold_price numeric(12,2) not null, sold_at timestamptz not null, title text, url text, grader text, condition text, anomaly_flag text, captured_at timestamptz default now(), unique(source, source_listing_id)`. Indexes on `(identity_id, grading_service, grade)` and `sold_at desc`. Edge upserts on conflict `(source, source_listing_id)`.
+- RLS: `graded_market_sales` gets the `slab_scan_events` pattern (select to `authenticated`; writes via service-role only). Verified in `supabase/tests/rls_graded_market_sales.sql`.
 
 ### C. iOS
 
