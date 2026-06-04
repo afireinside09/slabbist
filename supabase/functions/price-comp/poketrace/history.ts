@@ -1,8 +1,7 @@
 // supabase/functions/price-comp/poketrace/history.ts
 // @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
 import { fetchJson, type FetchResult, type PoketraceClientOptions } from "./client.ts";
-import { parseHistoryResponse } from "./parse.ts";
-import type { PriceHistoryPoint } from "../ppt/parse.ts";
+import { parseHistoryResponse, type PriceHistoryPoint } from "./parse.ts";
 
 export interface FetchPoketraceHistoryOverrides {
   fetchJsonImpl?: <T>(opts: PoketraceClientOptions, path: string) => Promise<FetchResult<T>>;

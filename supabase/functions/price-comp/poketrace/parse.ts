@@ -8,9 +8,21 @@
 //     (integer cents).
 //   * parseHistoryResponse: PriceHistoryResponse → app-shaped
 //     [{ ts, price_cents }].
+//   * scoreSearchCard: score a Poketrace /cards search result against an identity.
+//   * parseListings: map Poketrace /listings response → SoldListingWire[].
+//
+// PriceHistoryPoint lives here (was ppt/parse.ts) so the poketrace layer
+// is self-contained once the ppt/ directory is deleted in Edge-B.
 
-import type { PoketraceTierFields } from "../types.ts";
-import type { PriceHistoryPoint } from "../ppt/parse.ts";
+import type { PoketraceTierFields, SoldListingWire } from "../types.ts";
+
+// ── PriceHistoryPoint (moved from ppt/parse.ts) ───────────────────────────
+export interface PriceHistoryPoint {
+  ts: string;
+  price_cents: number;
+}
+
+// ── Existing tier-price types + helpers ──────────────────────────────────
 
 export interface RawTierPrice {
   avg?: number | null;
@@ -140,6 +152,107 @@ export function parseHistoryResponse(resp: HistoryEnvelope | Record<string, unkn
     // Poketrace returns dates as YYYY-MM-DD; promote to midnight UTC ISO.
     const ts = `${entry.date}T00:00:00Z`;
     out.push({ ts, price_cents: cents });
+  }
+  return out;
+}
+
+// ── Card-search scoring (Task 2.2) ────────────────────────────────────────
+//
+// Pure normalizers ported from ppt/match.ts (deleted in Edge-B) so the
+// poketrace layer has no runtime dependency on the ppt/ directory.
+
+export interface SearchCardLite {
+  id: string;
+  name?: string | null;
+  cardNumber?: string | null;
+  set?: { name?: string | null; slug?: string | null } | null;
+}
+
+export interface IdentityForSearch {
+  card_name: string;
+  card_number: string | null;
+  set_name: string;
+}
+
+const SET_STOPWORDS = new Set([
+  "promo", "promos", "set", "cards", "series", "pokemon", "tcg",
+  "championship", "championships",
+]);
+
+function cleanName(n: string): string {
+  return (n ?? "").replace(/\s*\([^)]*\)\s*/g, " ").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function tokenize(s: string): string[] {
+  return s.toLowerCase()
+    .replace(/['']s\b/g, "")
+    .replace(/['']/g, "")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+}
+
+function distinctiveSetTokens(setName: string): string[] {
+  return tokenize(setName).filter((t) => t.length >= 4 && !SET_STOPWORDS.has(t));
+}
+
+function normalizeCardNumber(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const t = String(raw).trim();
+  if (!t) return null;
+  const lower = t.split("/")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!lower) return null;
+  const stripped = lower.replace(/^0+/, "");
+  return stripped.length > 0 ? stripped : "0";
+}
+
+export function scoreSearchCard(
+  card: SearchCardLite,
+  identity: IdentityForSearch,
+): { score: number; accept: boolean } {
+  const idName = cleanName(identity.card_name);
+  const cardName = cleanName(card.name ?? "");
+  if (!idName || !cardName) return { score: 0, accept: false };
+  if (!(idName.includes(cardName) || cardName.includes(idName))) return { score: 0, accept: false };
+  let score = 2; // name hit
+  let numberExact = false;
+  const idNum = normalizeCardNumber(identity.card_number);
+  const cardNum = normalizeCardNumber(card.cardNumber);
+  if (idNum && cardNum) {
+    if (idNum === cardNum) { score += 3; numberExact = true; }
+    else if (idNum.startsWith(cardNum) || cardNum.startsWith(idNum)) score += 1;
+  }
+  const idSet = new Set(distinctiveSetTokens(identity.set_name));
+  const cardSet = new Set(distinctiveSetTokens(card.set?.name ?? ""));
+  let overlap = 0;
+  for (const t of idSet) if (cardSet.has(t)) overlap += 1;
+  score += overlap;
+  return { score, accept: numberExact || overlap >= 2 };
+}
+
+// ── Sold-listing parsing (Task 2.2) ──────────────────────────────────────
+
+export function parseListings(body: unknown): SoldListingWire[] {
+  const data = (body as { data?: unknown })?.data;
+  if (!Array.isArray(data)) return [];
+  const out: SoldListingWire[] = [];
+  for (const it of data) {
+    if (!it || typeof it !== "object") continue;
+    const r = it as Record<string, unknown>;
+    const id = typeof r.sourceItemId === "string" ? r.sourceItemId : "";
+    const soldAt = typeof r.soldAt === "string" ? r.soldAt : "";
+    if (!id || !soldAt) continue;
+    out.push({
+      source_listing_id: id,
+      title: typeof r.title === "string" ? r.title : null,
+      price_cents: dollarsToCents(r.price),
+      sold_at: soldAt,
+      grader: typeof r.grader === "string" ? r.grader : null,
+      grade: typeof r.grade === "string" ? r.grade : null,
+      condition: typeof r.condition === "string" ? r.condition : null,
+      url: typeof r.listingUrl === "string" ? r.listingUrl : null,
+      anomaly_flag: typeof r.anomalyFlag === "string" ? r.anomalyFlag : null,
+    });
   }
   return out;
 }
