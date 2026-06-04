@@ -20,6 +20,7 @@ struct MoverDetailView: View {
                     statsCard
                     historyCard
                     listingsSection
+                    TCGPlayerLinkButton(productId: viewModel.mover.productId, subId: "mover")
                     Spacer(minLength: Spacing.xxxl)
                 }
                 .padding(.horizontal, Spacing.xxl)
