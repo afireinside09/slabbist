@@ -239,10 +239,9 @@ final class CompFetchService {
         }
     }
 
-    /// Test entry point: persist both PPT and (if present) Poketrace
-    /// snapshots for `scan` from a fully-decoded envelope, and mirror the
-    /// reconciled headline back to the scan. Uses the context bound at
-    /// `init(context:)` time.
+    /// Test entry point: persist a Poketrace snapshot for `scan` from a
+    /// fully-decoded v3 envelope, and mirror the headline back to the scan.
+    /// Uses the context bound at `init(context:)` time.
     func persist(scan: Scan, decoded: CompRepository.Decoded) async throws {
         guard let context = boundContext else {
             preconditionFailure("CompFetchService.persist requires a context-bound init")
@@ -258,9 +257,9 @@ final class CompFetchService {
             scanId: scan.id,
             context: context
         )
-        // `persistSnapshots` mirrors the reconciled headline onto the
-        // originating `scanId` ONLY (see `fetchScan(scanId, in:)` at the
-        // tail of `persistSnapshots`). Sibling scans with the same
+        // `persistSnapshots` mirrors the headline onto the originating
+        // `scanId` ONLY (see `fetchScan(scanId, in:)` at the tail of
+        // `persistSnapshots`). Sibling scans with the same
         // (identity, grader, grade) are intentionally untouched so a
         // refresh on one row can't silently rewrite the hero number on
         // another. Anchored by `refreshDoesNotBroadcastReconciledHeadline`
@@ -269,16 +268,22 @@ final class CompFetchService {
         // This test seam still writes the in-memory `scan` arg explicitly
         // because callers may hold a `Scan` instance that isn't the same
         // object identity as the fetched row in some test contexts.
-        scan.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
-        scan.reconciledSource = decoded.reconciledSource
+        scan.reconciledHeadlinePriceCents = decoded.headlinePriceCents
+        scan.reconciledSource = "poketrace"
         try context.save()
     }
 
-    /// Drops any prior snapshots for `(identityId, service, grade)` regardless
-    /// of source, then inserts one PPT row and (when `decoded.poketrace` is
-    /// present) a second Poketrace row. Mirrors the reconciled headline onto
-    /// the originating scan so list views can render without re-decoding the
-    /// snapshot rows.
+    /// Drops any prior snapshots for `(identityId, service, grade)` then
+    /// inserts a single Poketrace snapshot when data is available.
+    ///
+    /// Snapshot insertion rules:
+    ///   - poketrace != nil → full snapshot with all pt* fields populated.
+    ///   - poketrace == nil but soldListings non-empty → minimal snapshot
+    ///     (pt* all nil, headline nil) so the sold-comps section can render.
+    ///   - Both nil/empty → no snapshot inserted (mirrors 404 behavior).
+    ///
+    /// Mirrors the headline onto the originating scan so list views can
+    /// render without re-decoding the snapshot rows.
     private static func persistSnapshots(
         decoded: CompRepository.Decoded,
         identityId: UUID,
@@ -287,8 +292,7 @@ final class CompFetchService {
         scanId: UUID,
         context: ModelContext
     ) {
-        // Drop existing rows for this slab — both sources — so a refetch
-        // doesn't pile up duplicates.
+        // Drop existing rows for this slab so a refetch doesn't pile up duplicates.
         let existingDescriptor = FetchDescriptor<GradedMarketSnapshot>(
             predicate: #Predicate<GradedMarketSnapshot> { s in
                 s.identityId == identityId &&
@@ -300,32 +304,10 @@ final class CompFetchService {
             for s in existing { context.delete(s) }
         }
 
-        let pptHistoryJSON = encodePriceHistory(decoded.priceHistory)
-        let ppt = GradedMarketSnapshot(
-            identityId: identityId,
-            gradingService: service,
-            grade: grade,
-            source: GradedMarketSnapshot.sourcePPT,
-            headlinePriceCents: decoded.headlinePriceCents,
-            loosePriceCents: decoded.loosePriceCents,
-            psa7PriceCents: decoded.psa7PriceCents,
-            psa8PriceCents: decoded.psa8PriceCents,
-            psa9PriceCents: decoded.psa9PriceCents,
-            psa9_5PriceCents: decoded.psa9_5PriceCents,
-            psa10PriceCents: decoded.psa10PriceCents,
-            bgs10PriceCents: decoded.bgs10PriceCents,
-            cgc10PriceCents: decoded.cgc10PriceCents,
-            sgc10PriceCents: decoded.sgc10PriceCents,
-            pptTCGPlayerId: decoded.pptTCGPlayerId,
-            pptURL: decoded.pptURL,
-            priceHistoryJSON: pptHistoryJSON,
-            fetchedAt: decoded.fetchedAt,
-            cacheHit: decoded.cacheHit,
-            isStaleFallback: decoded.isStaleFallback
-        )
-        context.insert(ppt)
+        let soldListingsJSON = encodeSoldListings(decoded.soldListings)
 
         if let pt = decoded.poketrace {
+            // Full Poketrace snapshot.
             let ptHistoryJSON = encodePriceHistory(pt.priceHistory)
             let ptTierPricesJSON = encodeTierPrices(pt.tierPricesCents)
             let snapshot = GradedMarketSnapshot(
@@ -333,7 +315,7 @@ final class CompFetchService {
                 gradingService: service,
                 grade: grade,
                 source: GradedMarketSnapshot.sourcePoketrace,
-                headlinePriceCents: pt.avgCents,
+                headlinePriceCents: decoded.headlinePriceCents,
                 ptAvgCents: pt.avgCents,
                 ptLowCents: pt.lowCents,
                 ptHighCents: pt.highCents,
@@ -349,21 +331,50 @@ final class CompFetchService {
                 poketraceCardId: pt.cardId,
                 ptTierPricesJSON: ptTierPricesJSON,
                 priceHistoryJSON: ptHistoryJSON,
+                marketplaceURL: decoded.marketplaceURL,
+                soldListingsJSON: soldListingsJSON,
                 fetchedAt: pt.fetchedAt,
-                cacheHit: decoded.cacheHit,
-                isStaleFallback: decoded.isStaleFallback
+                cacheHit: decoded.cacheHit
+            )
+            context.insert(snapshot)
+        } else if !decoded.soldListings.isEmpty {
+            // No tier data, but sold listings available — insert a minimal
+            // snapshot so the sold-comps section can render.
+            let snapshot = GradedMarketSnapshot(
+                identityId: identityId,
+                gradingService: service,
+                grade: grade,
+                source: GradedMarketSnapshot.sourcePoketrace,
+                headlinePriceCents: nil,
+                priceHistoryJSON: nil,
+                marketplaceURL: decoded.marketplaceURL,
+                soldListingsJSON: soldListingsJSON,
+                fetchedAt: decoded.fetchedAt,
+                cacheHit: decoded.cacheHit
             )
             context.insert(snapshot)
         }
+        // Both nil/empty → insert nothing.
 
-        // Mirror the reconciled headline + source onto the originating scan.
-        // The `flipMatching` call site below also touches `compFetch*`, but
+        // Mirror the headline + source onto the originating scan.
+        // The `flipMatching` call site also touches `compFetch*`, but
         // the hero number and its caption live independently so we update
         // them here next to the snapshot writes that produced them.
         if let target = fetchScan(scanId, in: context) {
-            target.reconciledHeadlinePriceCents = decoded.reconciledHeadlineCents
-            target.reconciledSource = decoded.reconciledSource
+            target.reconciledHeadlinePriceCents = decoded.headlinePriceCents
+            target.reconciledSource = "poketrace"
         }
+    }
+
+    /// Encodes a `[SoldListing]` array as the JSON blob persisted on
+    /// `GradedMarketSnapshot.soldListingsJSON`. Returns `nil` for an empty
+    /// list so consumers can short-circuit on `soldListingsJSON == nil`.
+    private static func encodeSoldListings(_ listings: [SoldListing]) -> String? {
+        guard !listings.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(listings) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     /// Encodes a `[PriceHistoryPoint]` array as the JSON blob persisted on
@@ -405,15 +416,13 @@ final class CompFetchService {
         if let typed = error as? CompRepository.Error {
             switch typed {
             case .noMarketData:
-                return (.noData, "Pokemon Price Tracker has no comp for this slab yet.")
+                return (.noData, "Poketrace has no comp for this slab yet.")
             case .productNotResolved:
-                return (.noData, "We couldn't find this card on Pokemon Price Tracker.")
+                return (.noData, "We couldn't find this card on Poketrace.")
             case .upstreamUnavailable:
-                return (.failed, "Pokemon Price Tracker lookup unavailable — try again.")
+                return (.failed, "Poketrace lookup unavailable — try again.")
             case .identityNotFound:
                 return (.failed, "Card identity not on file — re-scan to refresh the cert.")
-            case .authInvalid:
-                return (.failed, "Comp lookup misconfigured — contact support.")
             case .httpStatus(let code):
                 return (.failed, "Lookup failed (HTTP \(code)).")
             case .decoding(let detail):
