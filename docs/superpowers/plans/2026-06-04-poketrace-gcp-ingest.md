@@ -97,16 +97,16 @@ git commit -m "build(scraper): add .dockerignore for the poketrace-comp image"
 Create `scraper/Dockerfile` with exactly:
 ```dockerfile
 # syntax=docker/dockerfile:1
-# Runs the existing poketrace-comp ingest CLI. Mirrors CI: Bun installs from the
-# frozen lockfile, the CLI executes via tsx (devDependency) which resolves the
-# @/* tsconfig path alias. Config is supplied at runtime via env vars
+# Runs the existing poketrace-comp ingest CLI directly under Bun. Bun executes
+# the TypeScript entry natively and resolves the @/* tsconfig path alias, so no
+# tsx/transpile step is needed at runtime. Config is supplied via env vars
 # (Secret Manager on Cloud Run); no secrets are baked in.
 FROM oven/bun:1
 
 WORKDIR /app
 
-# Install dependencies first for layer caching. devDependencies are required
-# at runtime (tsx executes the TypeScript CLI), so do NOT use --production.
+# Install dependencies first for layer caching. Runtime deps (commander,
+# @supabase/supabase-js, dotenv, etc.) come from the frozen lockfile.
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
@@ -116,7 +116,9 @@ COPY src ./src
 
 # ENTRYPOINT is the fixed command; CMD holds the cap/floor so they can be
 # overridden at the Cloud Run Job level (--args) without rebuilding the image.
-ENTRYPOINT ["bun", "run", "cli", "run", "graded", "poketrace-comp"]
+# NOTE: invoke bun directly, NOT `bun run cli` — the npm `cli` script shells out
+# to tsx, and bun->tsx->esbuild fails at runtime (Cannot find module cjs/index.cjs).
+ENTRYPOINT ["bun", "src/cli.ts", "run", "graded", "poketrace-comp"]
 CMD ["--max-requests", "9000", "--daily-floor", "200"]
 ```
 
