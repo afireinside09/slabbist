@@ -3,12 +3,6 @@ import Supabase
 
 /// Reads the movers RPCs.
 ///
-///   - `topMovers(language:direction:limit:priceTier:)`
-///       → `get_top_movers(category_id, direction, limit, price_tier)`
-///       Category-wide top-N for a language + tier. Reserved for
-///       future "all sets" surfaces; the iOS Movers tab doesn't call
-///       this today (it always picks a specific set).
-///
 ///   - `sets(language:)`
 ///       → `get_movers_sets(category_id)`
 ///       Every set with at least one mover, regardless of tier or
@@ -28,13 +22,6 @@ import Supabase
 ///       *does* take a sub-type because the detail screen is scoped
 ///       to one (product, variant) pair.
 protocol MoversRepository: Sendable {
-    func topMovers(
-        language: MoversLanguage,
-        direction: MoversDirection,
-        limit: Int,
-        priceTier: MoversPriceTier
-    ) async throws -> [MoverDTO]
-
     func sets(
         language: MoversLanguage
     ) async throws -> [MoversSetDTO]
@@ -98,28 +85,6 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
 
     init(client: SupabaseClient = AppSupabase.shared.client) {
         self.client = client
-    }
-
-    func topMovers(
-        language: MoversLanguage,
-        direction: MoversDirection,
-        limit: Int,
-        priceTier: MoversPriceTier
-    ) async throws -> [MoverDTO] {
-        do {
-            let response = try await client.rpc(
-                "get_top_movers",
-                params: TopParams(
-                    p_category_id: language.rawValue,
-                    p_direction: direction.rawValue,
-                    p_limit: limit,
-                    p_price_tier: priceTier.rawValue
-                )
-            ).execute()
-            return try JSONCoders.decoder.decode([MoverDTO].self, from: response.data)
-        } catch {
-            throw SupabaseError.map(error)
-        }
     }
 
     func sets(
@@ -313,13 +278,6 @@ nonisolated struct SupabaseMoversRepository: MoversRepository, Sendable {
                 self.published_on = nil
             }
         }
-    }
-
-    private struct TopParams: Encodable, Sendable {
-        let p_category_id: Int
-        let p_direction: String
-        let p_limit: Int
-        let p_price_tier: String
     }
 
     private struct SetsParams: Encodable, Sendable {

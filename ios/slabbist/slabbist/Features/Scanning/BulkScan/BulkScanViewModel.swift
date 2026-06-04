@@ -84,18 +84,7 @@ final class BulkScanViewModel {
             created_at: ISO8601DateFormatter.shared.string(from: scan.createdAt),
             updated_at: ISO8601DateFormatter.shared.string(from: scan.updatedAt)
         )
-        let encoded = try JSONEncoder().encode(dto)
-
-        let outboxItem = OutboxItem(
-            id: UUID(),
-            kind: .insertScan,
-            payload: encoded,
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(outboxItem)
+        context.insert(try OutboxItem.pending(.insertScan, dto, now: now))
 
         try context.save()
         kicker.kick()
@@ -217,19 +206,19 @@ final class BulkScanViewModel {
                         status: ScanStatus.validated.rawValue,
                         updated_at: ISO8601DateFormatter.shared.string(from: now)
                     )
-                    if let payload = try? JSONEncoder().encode(patch) {
-                        let outboxItem = OutboxItem(
-                            id: UUID(),
-                            kind: .updateScan,
-                            payload: payload,
-                            status: .pending,
-                            attempts: 0,
-                            createdAt: now,
-                            nextAttemptAt: now
-                        )
-                        ctx.insert(outboxItem)
+                    // Encode + enqueue + save as one unit. Previously the
+                    // enqueue was gated on a swallowed `try?` while the save
+                    // ran unconditionally, so an encode failure persisted the
+                    // validated grade locally but never queued the server
+                    // patch — silent local/server divergence with no retry.
+                    // Fail loud instead: if we can't queue the sync, don't
+                    // half-persist a grade that will never reach the server.
+                    do {
+                        ctx.insert(try OutboxItem.pending(.updateScan, patch, now: now))
+                        try ctx.save()
+                    } catch {
+                        AppLog.scans.error("cert-lookup: failed to persist validated-scan patch for \(target.id, privacy: .public): \(String(describing: error), privacy: .public) — grade not synced")
                     }
-                    try? ctx.save()
                     kicker.kick()
                     self.refreshRecent()
                     self.triggerCompFetch(for: target)
@@ -357,19 +346,15 @@ final class BulkScanViewModel {
             status: ScanStatus.validationFailed.rawValue,
             updated_at: ISO8601DateFormatter.shared.string(from: now)
         )
-        if let payload = try? JSONEncoder().encode(patch) {
-            let outboxItem = OutboxItem(
-                id: UUID(),
-                kind: .updateScan,
-                payload: payload,
-                status: .pending,
-                attempts: 0,
-                createdAt: now,
-                nextAttemptAt: now
-            )
-            context.insert(outboxItem)
+        // Fail loud rather than silently skipping the enqueue on an encode
+        // failure (the old `if let try?` + unconditional save) — see the
+        // matching note on the validated-scan path.
+        do {
+            context.insert(try OutboxItem.pending(.updateScan, patch, now: now))
+            try context.save()
+        } catch {
+            AppLog.scans.error("markValidationFailed: failed to persist scan patch for \(target.id, privacy: .public): \(String(describing: error), privacy: .public) — status not synced")
         }
-        try? context.save()
         kicker.kick()
         refreshRecent()
     }

@@ -120,3 +120,21 @@ nonisolated enum SupabaseError: Error, CustomStringConvertible {
         }
     }
 }
+
+extension SupabaseError: LocalizedError {
+    /// User-facing copy. Without `LocalizedError`, `error.localizedDescription`
+    /// at call sites (e.g. `AuthViewModel.errorMessage`) fell back to the
+    /// opaque Foundation default ("The operation couldn't be completed.
+    /// (slabbist.SupabaseError error N.)"). For `.transport`/`.forbidden` we
+    /// surface the underlying SDK message directly — e.g. a wrong password
+    /// reads "Invalid login credentials", not "Transport error: …" — while
+    /// `description` keeps the debug prefix for logs.
+    var errorDescription: String? {
+        switch self {
+        case let .transport(underlying), let .forbidden(underlying):
+            return underlying.localizedDescription
+        default:
+            return description
+        }
+    }
+}

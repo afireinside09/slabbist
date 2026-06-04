@@ -139,12 +139,12 @@ struct TransactionDetailView: View {
     }
 
     private func submitVoid() {
-        let repo = OfferRepository(
-            context: context, kicker: kicker,
-            currentStoreId: transaction.storeId,
-            currentUserId: session.userId ?? UUID()
-        )
         do {
+            let repo = OfferUseCase(
+                context: context, kicker: kicker,
+                currentStoreId: transaction.storeId,
+                currentUserId: try session.requireUserId()
+            )
             try repo.voidTransaction(transaction, reason: voidReason)
             showingVoidSheet = false
         } catch { voidError = error.localizedDescription }
@@ -169,9 +169,7 @@ struct TransactionDetailView: View {
     }
 
     private func formatCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "USD"
-        return f.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSD(cents: cents)
     }
     private func formatDate(_ d: Date) -> String {
         let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .short

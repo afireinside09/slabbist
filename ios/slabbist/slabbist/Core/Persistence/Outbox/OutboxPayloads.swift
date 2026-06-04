@@ -81,18 +81,6 @@ nonisolated extension OutboxPayloads {
         let deleted_at: String
     }
 
-    /// Patch payload for an existing lot. Only the fields that change are
-    /// populated; everything else stays untouched on the server. No producer
-    /// emits this in v1 — added so the outbox drainer's dispatch table is
-    /// exhaustive without a `default:` branch hiding future bugs.
-    struct UpdateLot: Codable {
-        let id: String
-        let name: String?
-        let notes: String?
-        let status: String?
-        let updated_at: String
-    }
-
     /// Full upsert payload for a vendor row. Used both on create and edit —
     /// the outbox worker UPSERTs against the `id` primary key. `archived_at`
     /// is `nil` for active vendors; the dedicated `ArchiveVendor` payload

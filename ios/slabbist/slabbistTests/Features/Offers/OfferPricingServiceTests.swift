@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import slabbist
 
-/// Round-trip tests for the pure pricing math. `OfferRepository`'s tests
+/// Round-trip tests for the pure pricing math. `OfferUseCase`'s tests
 /// (Task 8) cover the SwiftData + outbox side of the world; this suite
 /// pins down the formula itself so the auto-derive can never drift away
 /// from the server-side recompute without a failing test.

@@ -6,6 +6,7 @@ import SwiftUI
 /// root, kicker + serif title, `SlabCard` row groups — so the tab
 /// feels like part of the same app.
 struct MoversListView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel = MoversViewModel()
     @State private var selectedMover: MoverDTO?
     @State private var selectedEbayProduct: EbayProductGroup?
@@ -33,6 +34,14 @@ struct MoversListView: View {
 
                         setRail
 
+                        // Gated on movers-mode too: only the gainers/losers
+                        // path is cached, and this keeps a stale flag left from
+                        // a movers restore from flashing on the eBay tab during
+                        // the render between a tab switch and the reload task.
+                        if viewModel.isStale, viewModel.tab.isMovers {
+                            staleBanner
+                        }
+
                         tabBody
 
                         Spacer(minLength: Spacing.xxxl)
@@ -52,6 +61,7 @@ struct MoversListView: View {
             // off exactly one reload. Caches in the view-model make
             // repeat visits to the same combo a synchronous no-op.
             .task(id: filterFingerprint) {
+                viewModel.attach(modelContext)
                 await viewModel.loadIfNeeded()
             }
             .navigationDestination(item: $selectedMover) { mover in
@@ -94,6 +104,34 @@ struct MoversListView: View {
                 .font(SlabFont.mono(size: 13))
                 .foregroundStyle(AppColor.muted)
         }
+        .padding(.horizontal, Spacing.xxl)
+    }
+
+    /// Shown when the live fetch failed and the movers sections are showing
+    /// the persisted last-known-good rows. The cached rows may be from a
+    /// different set/tier than the picker, so the label names the context.
+    private var staleBanner: some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "wifi.slash")
+                .font(SlabFont.sans(size: 13, weight: .regular))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline — showing last saved data")
+                    .font(SlabFont.sans(size: 13, weight: .semibold))
+                if let stamp = viewModel.lastUpdatedAt {
+                    Text("\(viewModel.staleContextLabel ?? "") · as of \(stamp.formatted(date: .abbreviated, time: .shortened))")
+                        .font(SlabFont.mono(size: 11))
+                        .foregroundStyle(AppColor.dim)
+                }
+            }
+            Spacer()
+        }
+        .foregroundStyle(AppColor.muted)
+        .padding(Spacing.m)
+        .background(AppColor.elev, in: RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                .stroke(AppColor.hairline, lineWidth: 1)
+        )
         .padding(.horizontal, Spacing.xxl)
     }
 

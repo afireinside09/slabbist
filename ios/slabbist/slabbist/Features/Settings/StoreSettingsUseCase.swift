@@ -3,11 +3,11 @@ import SwiftData
 
 /// Mutation surface for per-store configuration that lives on the
 /// `stores` row (the per-store margin ladder today; room for future
-/// settings later). Mirrors `VendorsRepository` / `OfferRepository`:
+/// settings later). Mirrors `VendorsUseCase` / `OfferUseCase`:
 /// every write mutates SwiftData, enqueues an outbox patch, saves the
 /// context, and kicks the drainer.
 @MainActor
-final class StoreSettingsRepository {
+final class StoreSettingsUseCase {
     private let context: ModelContext
     private let kicker: OutboxKicker
     let currentStoreId: UUID
@@ -45,17 +45,7 @@ final class StoreSettingsRepository {
             id: store.id.uuidString,
             margin_ladder_json: jsonString
         )
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .updateStoreMargin,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.updateStoreMargin, payload))
         try context.save()
         kicker.kick()
     }

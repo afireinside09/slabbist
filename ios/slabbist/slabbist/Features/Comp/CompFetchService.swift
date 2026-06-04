@@ -150,7 +150,7 @@ final class CompFetchService {
                    let lot = Self.fetchLot(target.lotId, in: context) {
                     let state = LotOfferState(rawValue: lot.lotOfferState) ?? .drafting
                     if state == .drafting || state == .priced {
-                        let repo = OfferRepository(
+                        let repo = OfferUseCase(
                             context: context,
                             kicker: kicker,
                             currentStoreId: target.storeId,

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import OSLog
+import SwiftData
 
 @MainActor
 @Observable
@@ -78,6 +79,15 @@ final class MoversViewModel {
     /// (tab, set, tier) combo.
     var lastUpdatedAt: Date?
 
+    /// True when the movers sections are showing the persisted
+    /// last-known-good rows because the live fetch failed (offline).
+    /// `lastUpdatedAt` carries the cached timestamp in that case; this
+    /// flag + `staleContextLabel` drive the "offline" banner. Only the
+    /// movers-mode (gainers/losers) path is cached — eBay browse stays
+    /// network-only.
+    private(set) var isStale = false
+    private(set) var staleContextLabel: String?
+
     // MARK: - eBay browse state
 
     /// Set rail source while `tab == .ebayListings`. Different RPC
@@ -154,12 +164,21 @@ final class MoversViewModel {
     /// as a dict key in older Swift versions and this is simpler.
     private var ebayTierCountsCache: [Int: [MoversPriceTier: Int]] = [:]
 
+    /// SwiftData context for the offline cache, injected by the view
+    /// (`attach(_:)`). Nil in unit tests → caching no-ops.
+    private var modelContext: ModelContext?
+
     init(
         repository: MoversRepository = SupabaseMoversRepository(),
         limit: Int = 10
     ) {
         self.repository = repository
         self.limit = limit
+    }
+
+    /// Wire the SwiftData context used for the offline cache. Idempotent.
+    func attach(_ context: ModelContext) {
+        if modelContext == nil { modelContext = context }
     }
 
     // MARK: - Tab switching
@@ -233,8 +252,10 @@ final class MoversViewModel {
                 setFilter = first
                 return
             }
-            // No sets in this language at all — flip to an explicit
-            // empty state.
+            // No sets available. If the sets fetch failed (offline) and we
+            // have a cached result, show it stale rather than a blank empty;
+            // otherwise it's a genuine "no sets" empty.
+            if setsLoadError != nil, restoreMoversSnapshot() { return }
             gainers = .loaded([])
             losers  = .loaded([])
             return
@@ -261,6 +282,7 @@ final class MoversViewModel {
         let key = SetKey(language: lang, groupId: groupId, priceTier: tier)
         if !force, let cached = setCache[key] {
             applySetRows(cached)
+            isStale = false   // setCache only holds successful fetches
             return
         }
 
@@ -275,11 +297,18 @@ final class MoversViewModel {
         case let .success(rows):
             setCache[key] = rows
             applySetRows(rows)
+            isStale = false
             stampUpdatedIfAnyLoaded()
+            saveMoversSnapshot(rows: rows, groupId: groupId)
         case let .failure(err):
-            let msg = err.localizedDescription
-            gainers = .error(msg)
-            losers  = .error(msg)
+            // Live fetch failed (offline / server error). Fall back to the
+            // persisted last-known-good rows if we have them, labeled stale;
+            // otherwise surface the error.
+            if !restoreMoversSnapshot() {
+                let msg = err.localizedDescription
+                gainers = .error(msg)
+                losers  = .error(msg)
+            }
         }
 
         if inflightFingerprint == fp { inflightFingerprint = nil }
@@ -344,6 +373,11 @@ final class MoversViewModel {
     // MARK: - eBay browse mode
 
     private func loadEbayIfNeeded() async {
+        // eBay browse isn't part of the last-known-good cache; clear any
+        // stale flag left over from a movers-mode offline restore so the
+        // banner doesn't bleed onto this tab.
+        isStale = false
+
         // Step 1 — sets list. Drives both the rail and the bootstrap
         // pick below.
         await ensureEbaySetsLoaded(force: false)
@@ -471,5 +505,52 @@ final class MoversViewModel {
         case .ebayListings:
             if case .loaded = ebayListingsState { lastUpdatedAt = Date() }
         }
+    }
+
+    // MARK: - Last-known-good cache (movers mode only)
+
+    /// Persist the latest successful movers-mode result as the single
+    /// last-known-good row. eBay browse is intentionally not cached.
+    private func saveMoversSnapshot(rows: [MoverDTO], groupId: Int) {
+        guard
+            let context = modelContext,
+            let payload = try? JSONCoders.encoder.encode(rows)
+        else { return }
+        let label = moversContextLabel(groupId: groupId)
+        if let existing = try? context.fetch(moverSnapshotDescriptor()).first {
+            existing.payload = payload
+            existing.contextLabel = label
+            existing.fetchedAt = Date()
+        } else {
+            context.insert(MoverSnapshot(payload: payload, contextLabel: label, fetchedAt: Date()))
+        }
+        try? context.save()
+    }
+
+    /// Show the persisted rows labeled stale. Returns false (caller falls
+    /// back to `.error`/empty) when there's nothing cached.
+    private func restoreMoversSnapshot() -> Bool {
+        guard
+            let context = modelContext,
+            let snap = try? context.fetch(moverSnapshotDescriptor()).first,
+            let rows = try? JSONCoders.decoder.decode([MoverDTO].self, from: snap.payload)
+        else { return false }
+        applySetRows(rows)
+        isStale = true
+        lastUpdatedAt = snap.fetchedAt
+        staleContextLabel = snap.contextLabel
+        return true
+    }
+
+    private func moverSnapshotDescriptor() -> FetchDescriptor<MoverSnapshot> {
+        let id = MoverSnapshot.singletonID
+        var d = FetchDescriptor<MoverSnapshot>(predicate: #Predicate { $0.id == id })
+        d.fetchLimit = 1
+        return d
+    }
+
+    private func moversContextLabel(groupId: Int) -> String {
+        let setName = setsByLanguage[language]?.first { $0.groupId == groupId }?.groupName ?? "Set \(groupId)"
+        return "\(language.displayName) · \(setName) · \(priceTier.displayName)"
     }
 }

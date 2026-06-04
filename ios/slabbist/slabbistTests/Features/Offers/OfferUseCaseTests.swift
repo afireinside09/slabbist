@@ -8,14 +8,14 @@ import Testing
 /// transition whitelist. Pairs with `OfferPricingServiceTests` (pure math)
 /// so the SwiftData + state-machine side has its own coverage.
 @MainActor
-struct OfferRepositoryTests {
-    private func makeContext() -> (OfferRepository, ModelContext, Lot, Scan) {
+struct OfferUseCaseTests {
+    private func makeContext() -> (OfferUseCase, ModelContext, Lot, Scan) {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)
         let storeId = UUID()
         let userId = UUID()
         let kicker = OutboxKicker { /* no-op for tests */ }
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: storeId,
@@ -131,15 +131,15 @@ struct OfferRepositoryTests {
     }
 
     @Test func acceptedCanDropBackToPresented() throws {
-        #expect(OfferRepository.canTransition(from: .accepted, to: .presented) == true)
-        #expect(OfferRepository.canTransition(from: .accepted, to: .declined) == true)
-        #expect(OfferRepository.canTransition(from: .accepted, to: .paid) == true)
+        #expect(OfferUseCase.canTransition(from: .accepted, to: .presented) == true)
+        #expect(OfferUseCase.canTransition(from: .accepted, to: .declined) == true)
+        #expect(OfferUseCase.canTransition(from: .accepted, to: .paid) == true)
     }
 
     @Test func sendToOfferRejectsDrafting() throws {
         let (repo, _, lot, _) = makeContext()
         // drafting can't transition directly to presented (requires priced first)
-        #expect(throws: OfferRepository.InvalidTransition.self) {
+        #expect(throws: OfferUseCase.InvalidTransition.self) {
             try repo.sendToOffer(lot)
         }
     }
@@ -170,7 +170,7 @@ struct OfferRepositoryTests {
     @Test func setBuyPriceRejectedOnTerminalLotState() throws {
         let (repo, _, lot, scan) = makeContext()
         lot.lotOfferState = LotOfferState.paid.rawValue
-        #expect(throws: OfferRepository.InvalidTransition.self) {
+        #expect(throws: OfferUseCase.InvalidTransition.self) {
             try repo.setBuyPrice(500, scan: scan, overridden: true)
         }
         // Scan value must not have shifted under the failed write.

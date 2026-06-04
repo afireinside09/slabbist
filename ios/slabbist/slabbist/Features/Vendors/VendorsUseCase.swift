@@ -12,7 +12,7 @@ import SwiftData
 /// reaches the server directly; the outbox worker (Plan 2) drains the
 /// enqueued items and PATCHes Postgres.
 @MainActor
-final class VendorsRepository {
+final class VendorsUseCase {
     private let context: ModelContext
     private let kicker: OutboxKicker
     let currentStoreId: UUID
@@ -80,16 +80,7 @@ final class VendorsRepository {
             id: vendor.id.uuidString,
             archived_at: ISO8601DateFormatter.shared.string(from: now)
         )
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .archiveVendor,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.archiveVendor, payload, now: now))
         try context.save()
         kicker.kick()
     }
@@ -142,15 +133,6 @@ final class VendorsRepository {
             created_at: ISO8601DateFormatter.shared.string(from: v.createdAt),
             updated_at: ISO8601DateFormatter.shared.string(from: v.updatedAt)
         )
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .upsertVendor,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.upsertVendor, payload, now: now))
     }
 }

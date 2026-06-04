@@ -86,7 +86,7 @@ final class LotsViewModel {
         // Leave `marginPctSnapshot` nil so the per-store margin ladder
         // applies on a per-scan basis as comps land. The user can still
         // pin a single percentage to the whole lot via `MarginPickerSheet`
-        // — `OfferRepository.setLotMargin` writes the snapshot and that
+        // — `OfferUseCase.setLotMargin` writes the snapshot and that
         // value then takes precedence over the ladder.
 
         let dto = OutboxPayloads.InsertLot(
@@ -99,18 +99,7 @@ final class LotsViewModel {
             created_at: ISO8601DateFormatter.shared.string(from: lot.createdAt),
             updated_at: ISO8601DateFormatter.shared.string(from: lot.updatedAt)
         )
-        let encoded = try JSONEncoder().encode(dto)
-
-        let outboxItem = OutboxItem(
-            id: UUID(),
-            kind: .insertLot,
-            payload: encoded,
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(outboxItem)
+        context.insert(try OutboxItem.pending(.insertLot, dto, now: now))
 
         try context.save()
         kicker.kick()
@@ -131,16 +120,7 @@ final class LotsViewModel {
             vendor_ask_cents: cents,
             updated_at: ISO8601DateFormatter.shared.string(from: now)
         )
-        let encoded = try JSONEncoder().encode(dto)
-        context.insert(OutboxItem(
-            id: UUID(),
-            kind: .updateScanOffer,
-            payload: encoded,
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        ))
+        context.insert(try OutboxItem.pending(.updateScanOffer, dto, now: now))
         try context.save()
         kicker.kick()
     }
@@ -161,18 +141,7 @@ final class LotsViewModel {
             id: scanId.uuidString,
             deleted_at: ISO8601DateFormatter.shared.string(from: now)
         )
-        let encoded = try JSONEncoder().encode(dto)
-
-        let outboxItem = OutboxItem(
-            id: UUID(),
-            kind: .deleteScan,
-            payload: encoded,
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(outboxItem)
+        context.insert(try OutboxItem.pending(.deleteScan, dto, now: now))
         try context.save()
         kicker.kick()
     }
@@ -199,16 +168,7 @@ final class LotsViewModel {
                 id: scan.id.uuidString,
                 deleted_at: ISO8601DateFormatter.shared.string(from: now)
             )
-            let encoded = try JSONEncoder().encode(dto)
-            context.insert(OutboxItem(
-                id: UUID(),
-                kind: .deleteScan,
-                payload: encoded,
-                status: .pending,
-                attempts: 0,
-                createdAt: now,
-                nextAttemptAt: now
-            ))
+            context.insert(try OutboxItem.pending(.deleteScan, dto, now: now))
             context.delete(scan)
         }
 
@@ -216,16 +176,7 @@ final class LotsViewModel {
             id: lotId.uuidString,
             deleted_at: ISO8601DateFormatter.shared.string(from: now)
         )
-        let encoded = try JSONEncoder().encode(lotDto)
-        context.insert(OutboxItem(
-            id: UUID(),
-            kind: .deleteLot,
-            payload: encoded,
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        ))
+        context.insert(try OutboxItem.pending(.deleteLot, lotDto, now: now))
         context.delete(lot)
 
         try context.save()

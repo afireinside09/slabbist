@@ -20,10 +20,10 @@ final class AuthViewModel {
     /// swaps to the "check your email" screen while this is non-nil.
     var pendingConfirmationEmail: String?
 
-    private let client: SupabaseClient
+    private let auth: AuthService
 
-    init(client: SupabaseClient = AppSupabase.shared.client) {
-        self.client = client
+    init(auth: AuthService = AuthService()) {
+        self.auth = auth
     }
 
     /// Result of a single submit() call. `establishedSession` means Supabase
@@ -47,16 +47,16 @@ final class AuthViewModel {
         do {
             switch mode {
             case .signIn:
-                _ = try await client.auth.signIn(email: email, password: password)
+                _ = try await auth.signIn(email: email, password: password)
                 return .establishedSession
             case .signUp:
                 let metadata: [String: AnyJSON] = storeName.isEmpty
                     ? [:]
                     : ["store_name": .string(storeName)]
-                let response = try await client.auth.signUp(
+                let response = try await auth.signUp(
                     email: email,
                     password: password,
-                    data: metadata
+                    metadata: metadata
                 )
                 // No session means the project requires email confirmation.
                 // SessionStore will auto-redirect once the user confirms and

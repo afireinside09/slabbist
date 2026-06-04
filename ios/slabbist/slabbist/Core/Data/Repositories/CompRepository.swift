@@ -116,6 +116,13 @@ final class CompRepository {
     private let baseURL: URL
     private let authTokenProvider: () async -> String?
 
+    /// Uses the fail-fast `URLSession.shared` ON PURPOSE — NOT
+    /// `SupabaseHTTP.shared`. That tuned session sets
+    /// `waitsForConnectivity = true`, which is right for the background
+    /// outbox (queue through a wifi blip, retry invisibly) but wrong for
+    /// this foreground read: offline it would spin up to 60s behind a
+    /// "Pulling listings…" spinner instead of failing in ~1s so the UI can
+    /// show its offline/retry affordance. Tests inject their own session.
     init(urlSession: URLSession = .shared, baseURL: URL, authTokenProvider: @escaping () async -> String?) {
         self.urlSession = urlSession
         self.baseURL = baseURL

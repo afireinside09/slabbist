@@ -7,8 +7,8 @@ import Supabase
 ///
 /// Design notes:
 /// - Every list query is paged by default — no unbounded fetches slip
-///   in. Callers opt into full-scan semantics explicitly by passing
-///   `Page.large` or composing `.next()` themselves.
+///   in. Callers opt into wider pages explicitly (e.g. `Page.first(n)`)
+///   or compose `.next()` themselves.
 /// - Callers can pass an explicit `columns` projection on reads to
 ///   avoid pulling heavy fields (jsonb, ocr text, photo URLs) when
 ///   they won't render them.
@@ -130,24 +130,6 @@ nonisolated struct SupabaseRepository<Row: Codable & Sendable>: Sendable {
         )
     }
 
-    /// Exact row count, optionally filtered by one column equality.
-    /// Cheap when there's a supporting index; expensive on large
-    /// tables without one — check `EXPLAIN` before wiring into a hot
-    /// path.
-    func count(where column: String? = nil, equals value: String? = nil) async throws -> Int {
-        try await execute {
-            let selected = client.from(tableName).select("id", head: true, count: .exact)
-            let filtered: PostgrestFilterBuilder
-            if let column, let value {
-                filtered = selected.eq(column, value: value)
-            } else {
-                filtered = selected
-            }
-            let response = try await filtered.execute()
-            return response.count ?? 0
-        }
-    }
-
     // MARK: - Writes (minimal-return default)
 
     /// Insert without asking the server to echo the row back.
@@ -213,8 +195,8 @@ nonisolated struct SupabaseRepository<Row: Codable & Sendable>: Sendable {
     }
 
     /// Partial update — sends only the fields you specify. Required by
-    /// the outbox drainer for `updateScan` / `updateScanOffer` / `updateLot`
-    /// kinds whose payloads are intentionally partial (only changed columns).
+    /// the outbox drainer for `updateScan` / `updateScanOffer` kinds whose
+    /// payloads are intentionally partial (only changed columns).
     func patch(id: UUID, fields: [String: AnyJSON]) async throws {
         guard !fields.isEmpty else { return }
         try await execute {
@@ -230,15 +212,6 @@ nonisolated struct SupabaseRepository<Row: Codable & Sendable>: Sendable {
             _ = try await client.from(tableName)
                 .delete(returning: .minimal)
                 .eq("id", value: id.uuidString)
-                .execute()
-        }
-    }
-
-    func deleteWhere(column: String, equals value: String) async throws {
-        try await execute {
-            _ = try await client.from(tableName)
-                .delete(returning: .minimal)
-                .eq(column, value: value)
                 .execute()
         }
     }

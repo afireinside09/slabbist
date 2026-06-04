@@ -4,7 +4,7 @@ import Supabase
 /// Invokes the `/transaction-commit` + `/transaction-void` Edge Functions.
 /// There is no plain CRUD surface on `transactions` — the table is
 /// append-only and only the Edge Functions hold the snapshot + lot-state
-/// invariants. Reads happen through `TransactionsRepository` (Plan 3 /
+/// invariants. Reads happen through `TransactionsUseCase` (Plan 3 /
 /// Task 10) once it lands.
 ///
 /// Errors flow through `SupabaseError.map` so the outbox classifier can

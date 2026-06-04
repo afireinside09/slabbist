@@ -1,10 +1,51 @@
 import Foundation
 import Testing
+import SwiftData
 @testable import slabbist
 
 @Suite("MoversViewModel")
 @MainActor
 struct MoversViewModelTests {
+
+    // A successful movers fetch persists the result; a later fetch that fails
+    // (offline) must restore those cached gainers/losers labeled stale rather
+    // than going to an error/blank state.
+    @Test("offline movers fetch restores cached rows labeled stale")
+    func offlineRestoresStaleMovers() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: MoverSnapshot.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            )
+        )
+        let rows = [
+            Self.row(id: 11, name: "Charizard", pct: 18, direction: "gainers"),
+            Self.row(id: 12, name: "Pikachu",   pct: -9, direction: "losers"),
+        ]
+        let okRepo = StubMoversRepository(
+            setsByLanguage: [3: [MoversSetDTO(groupId: 1, groupName: "Base", moversCount: 2)]],
+            setMoversByGroupTier: [.init(groupId: 1, tier: "under_5"): rows]
+        )
+        let warm = MoversViewModel(repository: okRepo)
+        warm.attach(context)
+        await warm.loadIfNeeded()   // bootstrap → setFilter = 1
+        await warm.loadIfNeeded()   // fetch → success, snapshot saved
+        #expect(warm.isStale == false)
+        #expect(warm.gainers.rows.map(\.productId) == [11])
+
+        // A fresh VM sharing the store whose setMovers now throws (nil payload).
+        let failRepo = StubMoversRepository(
+            setsByLanguage: [3: [MoversSetDTO(groupId: 1, groupName: "Base", moversCount: 2)]],
+            setMoversByGroupTier: [.init(groupId: 1, tier: "under_5"): nil]
+        )
+        let offline = MoversViewModel(repository: failRepo)
+        offline.attach(context)
+        await offline.loadIfNeeded()  // bootstrap → setFilter = 1
+        await offline.loadIfNeeded()  // fetch fails → restore from snapshot
+        #expect(offline.isStale == true)
+        #expect(offline.gainers.rows.map(\.productId) == [11], "restored cached gainers")
+        #expect(offline.losers.rows.map(\.productId) == [12], "restored cached losers")
+    }
     @Test("first load picks the newest set and fetches its tier slate")
     func bootstrapsToNewestSet() async {
         let setRows = [
@@ -309,18 +350,6 @@ final class StubMoversRepository: MoversRepository, @unchecked Sendable {
         self.setMoversByGroupTier = setMoversByGroupTier
         self.ebaySets = ebaySets
         self.ebayTierCounts = ebayTierCounts
-    }
-
-    func topMovers(
-        language: MoversLanguage,
-        direction: MoversDirection,
-        limit: Int,
-        priceTier: MoversPriceTier
-    ) async throws -> [MoverDTO] {
-        // Production view-model no longer calls topMovers; tests
-        // shouldn't exercise it either.
-        Issue.record("topMovers should not be called in the per-set flow")
-        return []
     }
 
     func sets(

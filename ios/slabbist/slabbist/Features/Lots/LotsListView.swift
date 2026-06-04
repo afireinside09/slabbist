@@ -376,8 +376,7 @@ struct LotsListView: View {
     }
 
     private func formatCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        return Currency.usdFormatter.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSD(cents: cents)
     }
 
     private func missingEntityView(label: String) -> some View {

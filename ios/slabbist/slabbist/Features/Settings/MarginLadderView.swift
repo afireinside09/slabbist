@@ -5,7 +5,7 @@ import SwiftData
 /// reconciled-comp threshold (in cents, edited in dollars) to the offer
 /// percentage applied to slabs at or above that threshold.
 ///
-/// Persists via `StoreSettingsRepository.updateMarginLadder` — local
+/// Persists via `StoreSettingsUseCase.updateMarginLadder` — local
 /// SwiftData write + outbox patch + drainer kick — so the new ladder is
 /// visible to the next auto-derived buy price even before the network
 /// round-trip completes. Reset reverts the working copy to the canonical
@@ -198,7 +198,7 @@ struct MarginLadderView: View {
             error = "Store not ready yet — try again in a moment."
             return
         }
-        let repo = StoreSettingsRepository(
+        let repo = StoreSettingsUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: storeId

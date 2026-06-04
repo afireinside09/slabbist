@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import OSLog
 
 @Model
 final class Store {
@@ -34,14 +35,22 @@ final class Store {
 
     /// Decoded view of `marginLadderJSON`. Falls back to the canonical
     /// default ladder when the JSON is nil or malformed so the pricing
-    /// surface always has something to read.
+    /// surface always has something to read. A nil ladder is the normal
+    /// "not set" case; a ladder that's PRESENT but fails to decode is
+    /// logged loudly — it means the server's ladder schema drifted from
+    /// the app's `MarginTier`, which would otherwise show up only as
+    /// "everyone's silently on the default margin."
     var marginLadder: [MarginTier] {
         guard let json = marginLadderJSON,
               let data = json.data(using: .utf8) else {
             return .defaultMarginLadder
         }
-        return (try? JSONDecoder().decode([MarginTier].self, from: data))
-            ?? .defaultMarginLadder
+        do {
+            return try JSONDecoder().decode([MarginTier].self, from: data)
+        } catch {
+            AppLog.app.error("Store.marginLadder: stored ladder JSON failed to decode (\(String(describing: error), privacy: .public)) — using default; server ladder schema may have drifted")
+            return .defaultMarginLadder
+        }
     }
 
     /// Persists a new ladder. Canonicalizes (sort + clamp) so the stored

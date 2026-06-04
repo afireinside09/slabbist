@@ -169,15 +169,20 @@ struct GradeReportView: View {
     }
 }
 
-/// Loads a photo from the `grade-photos` Supabase bucket. Shows a
-/// placeholder while loading or after the 30-day purge.
+/// Loads a photo from the `grade-photos` Supabase bucket. Photos are
+/// purged after 30 days, so an older report legitimately can't load them —
+/// the view says so instead of showing a bare placeholder that reads as a
+/// loading failure.
 struct AsyncGradePhoto: View {
     let path: String
-    @State private var image: UIImage?
+
+    private enum Phase: Equatable { case loading, loaded(UIImage), unavailable }
+    @State private var phase: Phase = .loading
 
     var body: some View {
         Group {
-            if let image {
+            switch phase {
+            case let .loaded(image):
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
@@ -186,31 +191,51 @@ struct AsyncGradePhoto: View {
                         RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                             .stroke(AppColor.hairline, lineWidth: 1)
                     )
-            } else {
-                RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                    .fill(AppColor.elev)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                            .stroke(AppColor.hairline, lineWidth: 1)
-                    )
-                    .overlay(
+            case .loading:
+                placeholder { ProgressView() }
+            case .unavailable:
+                placeholder {
+                    VStack(spacing: Spacing.xs) {
                         Image(systemName: "photo")
                             .font(SlabFont.sans(size: 22, weight: .regular))
                             .foregroundStyle(AppColor.dim)
-                    )
+                        Text("Photo unavailable")
+                            .font(SlabFont.sans(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(Spacing.s)
+                }
             }
         }
         .task(id: path) { await load() }
     }
 
+    private func placeholder<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+            .fill(AppColor.elev)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                    .stroke(AppColor.hairline, lineWidth: 1)
+            )
+            .overlay(content())
+    }
+
     private func load() async {
+        phase = .loading
         do {
             let data = try await AppSupabase.shared.client.storage
                 .from("grade-photos")
                 .download(path: path)
-            image = UIImage(data: data)
+            if let image = UIImage(data: data) {
+                phase = .loaded(image)
+            } else {
+                phase = .unavailable
+            }
         } catch {
-            // Leave placeholder in place — purged or unauthorized.
+            // Purged after 30 days, offline, or unauthorized — all read the
+            // same to the user: the photo can't be shown right now.
+            phase = .unavailable
         }
     }
 }

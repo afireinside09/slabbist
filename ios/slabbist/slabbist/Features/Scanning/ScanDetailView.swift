@@ -1,8 +1,6 @@
 import SwiftUI
 import SwiftData
 import OSLog
-import Supabase
-import Auth
 
 struct ScanDetailView: View {
     let scan: Scan
@@ -14,6 +12,8 @@ struct ScanDetailView: View {
     @Query private var identities: [GradedCardIdentity]
     @State private var showingManualPrice = false
     @State private var showingBuyPriceSheet = false
+    /// Surfaced when a buy-price action throws so a tap can't silently no-op.
+    @State private var actionError: String?
 
     init(scan: Scan) {
         self.scan = scan
@@ -82,6 +82,15 @@ struct ScanDetailView: View {
                 try offerRepository().setBuyPrice(cents, scan: scan, overridden: cents != nil)
             }
         }
+        .alert(
+            "Couldn't complete that",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            ),
+            actions: { Button("OK", role: .cancel) { actionError = nil } },
+            message: { Text(actionError ?? "") }
+        )
         // Recovery hatch for two real-world stuck states:
         //   1. The scan was validated in a prior session and never had a
         //      comp fetched (state = nil) — bulk scan exited too soon.
@@ -315,13 +324,13 @@ struct ScanDetailView: View {
     /// gets the generic transient copy instead of the clean
     /// "Offline — will retry when connected" message.
     private func retryCertLookup() {
-        let functionsBaseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
-        let tokenProvider: () async -> String? = {
-            try? await AppSupabase.shared.client.auth.session.accessToken
-        }
-        let cert = CertLookupRepository(baseURL: functionsBaseURL, authTokenProvider: tokenProvider)
+        let cert = CertLookupRepository.live()
         guard let lot = lookupLot() else {
             AppLog.scans.error("retry cert lookup: parent lot missing")
+            return
+        }
+        guard let userId = session.userId else {
+            AppLog.scans.error("retry cert lookup: signed out")
             return
         }
         let reach = self.reachability
@@ -329,7 +338,7 @@ struct ScanDetailView: View {
             context: context,
             kicker: kicker,
             lot: lot,
-            currentUserId: session.userId ?? UUID(),
+            currentUserId: userId,
             compRepository: nil,
             certLookupRepository: cert,
             reachabilityStatus: { reach.status }
@@ -394,7 +403,11 @@ struct ScanDetailView: View {
                                 .accessibilityIdentifier("buy-price-edit")
                             if scan.buyPriceOverridden {
                                 Button("Reset to auto") {
-                                    try? offerRepository().setBuyPrice(nil, scan: scan, overridden: false)
+                                    do {
+                                        try offerRepository().setBuyPrice(nil, scan: scan, overridden: false)
+                                    } catch {
+                                        actionError = error.localizedDescription
+                                    }
                                 }
                                 .buttonStyle(.plain)
                                 .font(SlabFont.sans(size: 13, weight: .semibold))
@@ -443,15 +456,15 @@ struct ScanDetailView: View {
         return "Auto · ladder × comp"
     }
 
-    /// Builds an `OfferRepository` scoped to this scan's store. Constructed
+    /// Builds an `OfferUseCase` scoped to this scan's store. Constructed
     /// fresh on each call so SwiftData context + session UUIDs always reflect
     /// "now". The type is cheap to construct.
-    private func offerRepository() -> OfferRepository {
-        OfferRepository(
+    private func offerRepository() throws -> OfferUseCase {
+        OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: scan.storeId,
-            currentUserId: session.userId ?? UUID()
+            currentUserId: try session.requireUserId()
         )
     }
 
@@ -467,7 +480,7 @@ struct ScanDetailView: View {
     }
 
     /// True when the parent lot is in a state where the per-scan buy price
-    /// can still be edited. Mirrors the guard in `OfferRepository.setBuyPrice`
+    /// can still be edited. Mirrors the guard in `OfferUseCase.setBuyPrice`
     /// (which would throw on terminal states); hiding the buttons here makes
     /// the constraint visible instead of producing a silent no-op tap.
     private var lotIsPricingEditable: Bool {
@@ -546,12 +559,7 @@ struct ScanDetailView: View {
     }
 
     private func formattedCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-        fmt.currencyCode = "USD"
-        fmt.maximumFractionDigits = cents % 100 == 0 ? 0 : 2
-        return fmt.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSDCompact(cents: cents)
     }
 
     private func setOfferCents(_ cents: Int64?) throws {

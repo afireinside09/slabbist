@@ -28,7 +28,7 @@ struct OutboxErrorClassifierTests {
         let err = SupabaseError.uniqueViolation(message: "dup", underlying: NSError(domain: "x", code: 0))
         let nonInsertKinds: [OutboxKind] = [
             .updateScan, .updateScanOffer, .deleteScan,
-            .updateLot, .deleteLot,
+            .updateLotOffer, .deleteLot,
             .certLookupJob, .priceCompJob
         ]
         for kind in nonInsertKinds {

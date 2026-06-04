@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Sheet for editing the store's buy price on a single slab. Mirrors
 /// `ManualPriceSheet` in shape and parsing semantics but writes to
-/// `Scan.buyPriceCents` via `OfferRepository.setBuyPrice(... overridden: true)`.
+/// `Scan.buyPriceCents` via `OfferUseCase.setBuyPrice(... overridden: true)`.
 /// Numeric-only entry, "12.34" normalizes to 1234 cents on submit. Clearing
 /// hands `nil` to the caller so the auto-derived value can take over again
 /// the next time the comp lands or the lot margin changes.

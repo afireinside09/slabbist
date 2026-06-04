@@ -14,11 +14,11 @@ import SwiftData
 ///      rejecting illegal transitions at the boundary instead of pushing a
 ///      bad payload to the outbox.
 ///
-/// Mirrors `VendorsRepository` in shape: every mutation writes SwiftData,
+/// Mirrors `VendorsUseCase` in shape: every mutation writes SwiftData,
 /// enqueues an `OutboxItem`, calls `context.save()`, then `kicker.kick()`s
 /// the drainer.
 @MainActor
-final class OfferRepository {
+final class OfferUseCase {
     private let context: ModelContext
     private let kicker: OutboxKicker
     let currentStoreId: UUID
@@ -37,7 +37,17 @@ final class OfferRepository {
     /// e.g. accept an offer that was never presented. Carrying both ends
     /// of the bad transition makes the message specific without forcing
     /// the call site to read `lot.lotOfferState` again itself.
-    enum InvalidTransition: Error { case notAllowed(from: LotOfferState, to: LotOfferState) }
+    enum InvalidTransition: LocalizedError {
+        case notAllowed(from: LotOfferState, to: LotOfferState)
+
+        /// User-facing copy. Conforms to `LocalizedError` so a surfaced
+        /// `error.localizedDescription` reads as a sentence rather than the
+        /// opaque "(error N.)" Foundation fallback. The offer's states are
+        /// internal vocabulary, so the message stays generic on purpose.
+        var errorDescription: String? {
+            "That action isn't available for the offer's current state."
+        }
+    }
 
     /// Whitelist of legal `LotOfferState` transitions. Idempotent
     /// self-transitions (`from == to`) are also allowed so callers can
@@ -71,7 +81,7 @@ final class OfferRepository {
         lot.lotOfferState = next.rawValue
         lot.lotOfferStateUpdatedAt = Date()
         lot.updatedAt = Date()
-        enqueueLotPatch(lot)
+        try enqueueLotPatch(lot)
     }
 
     /// Mirrors server-side `computeNewState`: when scans now total > 0 and the lot
@@ -92,7 +102,7 @@ final class OfferRepository {
             lot.lotOfferState = next.rawValue
             lot.lotOfferStateUpdatedAt = Date()
             lot.updatedAt = Date()
-            enqueueLotPatch(lot)
+            try enqueueLotPatch(lot)
         }
     }
 
@@ -106,7 +116,7 @@ final class OfferRepository {
         guard lot.marginPctSnapshot == nil else { return }
         lot.marginPctSnapshot = store.defaultMarginPct
         lot.updatedAt = Date()
-        enqueueLotPatch(lot)
+        try enqueueLotPatch(lot)
         try context.save()
         kicker.kick()
     }
@@ -133,7 +143,7 @@ final class OfferRepository {
         scan.buyPriceCents = cents
         scan.buyPriceOverridden = overridden
         scan.updatedAt = Date()
-        enqueueScanBuyPricePatch(scan)
+        try enqueueScanBuyPricePatch(scan)
         // Keep local lot state in sync with the buy total so the action bar
         // surfaces "Send to offer" without waiting for the server recompute.
         if let lot {
@@ -167,7 +177,7 @@ final class OfferRepository {
         )
         scan.buyPriceCents = auto
         scan.updatedAt = Date()
-        enqueueScanBuyPricePatch(scan)
+        try enqueueScanBuyPricePatch(scan)
         // Mirror the server-side state recompute locally so the lot's offer
         // state flips drafting→priced (or back) without waiting on the outbox.
         try reconcileDraftingOrPriced(lot)
@@ -205,7 +215,7 @@ final class OfferRepository {
     func setLotMargin(_ pct: Double, on lot: Lot) throws {
         lot.marginPctSnapshot = pct
         lot.updatedAt = Date()
-        enqueueLotPatch(lot)
+        try enqueueLotPatch(lot)
 
         let lotId = lot.id
         let descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.lotId == lotId })
@@ -217,7 +227,7 @@ final class OfferRepository {
             )
             scan.buyPriceCents = auto
             scan.updatedAt = Date()
-            enqueueScanBuyPricePatch(scan)
+            try enqueueScanBuyPricePatch(scan)
         }
         try recompute(lot: lot.id)
         try context.save()
@@ -231,7 +241,7 @@ final class OfferRepository {
     func clearLotMargin(on lot: Lot) throws {
         lot.marginPctSnapshot = nil
         lot.updatedAt = Date()
-        enqueueLotPatch(lot)
+        try enqueueLotPatch(lot)
 
         let lotId = lot.id
         let descriptor = FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.lotId == lotId })
@@ -243,7 +253,7 @@ final class OfferRepository {
             )
             scan.buyPriceCents = auto
             scan.updatedAt = Date()
-            enqueueScanBuyPricePatch(scan)
+            try enqueueScanBuyPricePatch(scan)
         }
         try recompute(lot: lot.id)
         try context.save()
@@ -257,7 +267,7 @@ final class OfferRepository {
         lot.vendorId = vendor?.id
         lot.vendorNameSnapshot = vendor?.displayName
         lot.updatedAt = Date()
-        enqueueLotPatch(lot)
+        try enqueueLotPatch(lot)
         try context.save()
         kicker.kick()
     }
@@ -336,17 +346,7 @@ final class OfferRepository {
             vendor_id: lot.vendorId?.uuidString,
             vendor_name_override: nil
         )
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .commitTransaction,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.commitTransaction, payload))
         try context.save()
         kicker.kick()
     }
@@ -358,24 +358,14 @@ final class OfferRepository {
             transaction_id: txn.id.uuidString,
             reason: reason
         )
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .voidTransaction,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.voidTransaction, payload))
         try context.save()
         kicker.kick()
     }
 
     // MARK: - Outbox plumbing
 
-    private func enqueueLotPatch(_ lot: Lot) {
+    private func enqueueLotPatch(_ lot: Lot) throws {
         let payload = OutboxPayloads.UpdateLotOffer(
             id: lot.id.uuidString,
             vendor_id: lot.vendorId?.uuidString,
@@ -385,51 +375,21 @@ final class OfferRepository {
             lot_offer_state_updated_at: lot.lotOfferStateUpdatedAt.map { ISO8601DateFormatter.shared.string(from: $0) },
             updated_at: ISO8601DateFormatter.shared.string(from: lot.updatedAt)
         )
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .updateLotOffer,
-            payload: (try? JSONEncoder().encode(payload)) ?? Data(),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.updateLotOffer, payload))
     }
 
-    private func enqueueScanBuyPricePatch(_ scan: Scan) {
+    private func enqueueScanBuyPricePatch(_ scan: Scan) throws {
         let payload = OutboxPayloads.UpdateScanBuyPrice(
             id: scan.id.uuidString,
             buy_price_cents: scan.buyPriceCents,
             buy_price_overridden: scan.buyPriceOverridden,
             updated_at: ISO8601DateFormatter.shared.string(from: scan.updatedAt)
         )
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .updateScanBuyPrice,
-            payload: (try? JSONEncoder().encode(payload)) ?? Data(),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.updateScanBuyPrice, payload))
     }
 
     private func recompute(lot lotId: UUID) throws {
         let payload = OutboxPayloads.RecomputeLotOffer(lot_id: lotId.uuidString)
-        let now = Date()
-        let item = OutboxItem(
-            id: UUID(),
-            kind: .recomputeLotOffer,
-            payload: try JSONEncoder().encode(payload),
-            status: .pending,
-            attempts: 0,
-            createdAt: now,
-            nextAttemptAt: now
-        )
-        context.insert(item)
+        context.insert(try OutboxItem.pending(.recomputeLotOffer, payload))
     }
 }

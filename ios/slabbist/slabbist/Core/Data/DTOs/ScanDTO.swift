@@ -15,7 +15,7 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
     var capturedPhotoURL: String?
     var vendorAskCents: Int64?
     /// Per-scan buy price (cents) — the store-side counterpart to
-    /// `vendorAskCents`. Set by `OfferRepository` (auto-derived or override).
+    /// `vendorAskCents`. Set by `OfferUseCase` (auto-derived or override).
     /// Nullable on the wire because a fresh scan has no buy price yet.
     var buyPriceCents: Int64?
     /// `true` when the user manually overrode the auto-derived `buyPriceCents`.

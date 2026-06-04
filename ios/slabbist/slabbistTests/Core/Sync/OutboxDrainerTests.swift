@@ -108,20 +108,6 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
-    @Test("dispatches updateLot with patch fields")
-    @MainActor
-    func dispatchesUpdateLot() async throws {
-        let h = Harness()
-        let lotId = UUID()
-        try await h.enqueueUpdateLot(id: lotId, name: "Renamed")
-        await h.drainer.kickAndWait()
-        await h.waitForIdle()
-        #expect(h.fakeLots.patchCalls.count == 1)
-        #expect(h.fakeLots.patchCalls[0].id == lotId)
-        let count = await h.outboxCount()
-        #expect(count == 0)
-    }
-
     @Test("dispatches upsertVendor with full DTO")
     @MainActor
     func dispatchesUpsertVendor() async throws {
@@ -194,12 +180,16 @@ struct OutboxDrainerTests {
         #expect(count == 0)
     }
 
-    @Test("updateLotOffer omits nil optional fields from the wire patch")
+    @Test("updateLotOffer sends null for locally-cleared vendor/margin so a detach reaches the server")
     @MainActor
-    func updateLotOfferOmitsNilFields() async throws {
+    func updateLotOfferClearsFieldsWithNull() async throws {
         let h = Harness()
         let lotId = UUID()
-        // Only `lot_offer_state` changes; vendor / margin stay untouched.
+        // Vendor and margin are nil locally (e.g. the operator detached the
+        // vendor or reverted the lot to ladder pricing). The patch MUST carry
+        // them as explicit null — the lot is the offline-first authority, so
+        // omitting them would leave the server's stale vendor/margin in place
+        // and the two sides would diverge silently and forever.
         try await h.enqueueUpdateLotOffer(
             id: lotId,
             lotOfferState: "completed"
@@ -211,10 +201,12 @@ struct OutboxDrainerTests {
         let f = h.fakeLots.patchCalls[0].fields
         #expect(f["lot_offer_state"] == .string("completed"))
         #expect(f["updated_at"] != nil)
-        // None of these were set — must not be present in the patch.
-        #expect(f["vendor_id"] == nil)
-        #expect(f["vendor_name_snapshot"] == nil)
-        #expect(f["margin_pct_snapshot"] == nil)
+        // Cleared fields are sent as null, not dropped from the patch.
+        #expect(f["vendor_id"] == .null)
+        #expect(f["vendor_name_snapshot"] == .null)
+        #expect(f["margin_pct_snapshot"] == .null)
+        // `lot_offer_state_updated_at` stays conditionally omitted — it's a
+        // change-stamp, not lot state the server must mirror.
         #expect(f["lot_offer_state_updated_at"] == nil)
     }
 
@@ -703,7 +695,7 @@ struct OutboxDrainerTests {
 
     // MARK: - 7.4 ordering + dedupe tests
 
-    @Test("ordering: deleteScan precedes insertLot precedes updateLot")
+    @Test("ordering: deleteScan precedes insertLot precedes updateLotOffer")
     @MainActor
     func priorityOrdering() async throws {
         let h = Harness()
@@ -711,11 +703,11 @@ struct OutboxDrainerTests {
         let now = h.clock.current()
         // All three items share `nextAttemptAt == now` so the drainer's
         // `nextAttemptAt <= now` fetch predicate picks up the whole batch.
-        // Priority is what's being tested — kind priority (50/15/5), not
+        // Priority is what's being tested — kind priority (50/15/7), not
         // chronological order — so a staggered `createdAt` would actually
         // filter rows out under TestClock (which doesn't advance) and the
         // drainer would never see the lower-priority items.
-        try await h.enqueueUpdateLot(id: lotIdB, name: "Renamed", createdAt: now)
+        try await h.enqueueUpdateLotOffer(id: lotIdB, lotOfferState: "presented", createdAt: now)
         try await h.enqueueInsertLot(id: lotIdA, createdAt: now)
         try await h.enqueueDeleteScan(id: scanId, createdAt: now)
 
@@ -728,7 +720,7 @@ struct OutboxDrainerTests {
 
         // Recorders preserve call order — assert the chronological dispatch
         // sequence reflects priority, not enqueue order:
-        //   deleteScan (50) → insertLot (15) → updateLot (5)
+        //   deleteScan (50) → insertLot (15) → updateLotOffer (7)
         #expect(h.fakeScans.deletedIds == [scanId])
         #expect(h.fakeLots.insertedIds == [lotIdA])
         #expect(h.fakeLots.patchCalls.map(\.id) == [lotIdB])

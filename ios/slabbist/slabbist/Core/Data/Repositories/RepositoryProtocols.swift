@@ -13,7 +13,6 @@ import Supabase
 nonisolated protocol StoreRepository: Sendable {
     func listForCurrentUser(page: Page) async throws -> [StoreDTO]
     func find(id: UUID) async throws -> StoreDTO?
-    func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO]
     func upsert(_ store: StoreDTO) async throws
     @discardableResult func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO
     func patch(id: UUID, fields: [String: AnyJSON]) async throws
@@ -185,6 +184,45 @@ nonisolated protocol GradeEstimateRepository: Sendable {
     ) async throws -> GradeEstimateDTO
 }
 
+/// # Repository layer — two deliberate tiers
+///
+/// All Supabase access lives under `Core/Data/Repositories/`. There are
+/// two kinds of repository here, on purpose:
+///
+/// 1. **Table repositories** (`Supabase*Repository`, bundled in
+///    `AppRepositories`): nonisolated, `Sendable`, protocol-fronted CRUD
+///    over a shared `SupabaseClient`. Edge Functions that return typed
+///    payloads (`recomputeOffer`, `commit`, `requestEstimate`) hang off
+///    these via `client.functions.invoke`.
+///
+/// 2. **Edge-Function clients** (`CompRepository`, `CertLookupRepository`):
+///    `@MainActor` classes that POST to `price-comp` / `cert-lookup`
+///    directly over the tuned `SupabaseHTTP.shared` session. They use raw
+///    `URLSession` rather than `client.functions.invoke` because they map
+///    specific HTTP status + error-body codes (404 NO_MARKET_DATA, 415
+///    NOT_POKEMON, …) to typed cases — semantics the SDK's invoke path
+///    doesn't surface. They are NOT in `AppRepositories` (different
+///    construction: base URL + token closure, via `.live()`), and that
+///    separation is intentional, not drift.
+///
+/// Naming: a `*Repository` is a Supabase boundary. Local SwiftData+outbox
+/// write facades are `*UseCase` (e.g. `OfferUseCase`); types that apply an
+/// Edge-Function response back onto SwiftData are `*Hydrator`.
+///
+/// Known, deliberately-deferred consistency gaps (not drift — recorded so a
+/// future reader knows they were a choice, not an oversight):
+///   - The `*Hydrator` family is consistent in role but mixed in shape
+///     (`StoreHydrator` is an `@Observable` class; `TransactionsHydrator` /
+///     `LotOfferRecomputeHydrator` are stateless enums), and `CompFetchService`
+///     does hydrator-like work under a different name plus in-flight de-dup
+///     and pricing. Unifying them under one `*Reconciler` shape was scoped
+///     and then deferred: it is surgery on the comp recovery flow that works
+///     today, for naming/shape parity with little behavioral payoff.
+///   - `LotDetailView` / `ScanDetailView` still build their `*UseCase`
+///     facades inline rather than through an extracted detail view-model.
+///     Error surfacing was added at those call sites (visible alerts instead
+///     of `try?` swallows); the full view-model extraction was deferred.
+///
 /// Convenience bundle — one repository per table, sharing a single
 /// `SupabaseClient`. View models take `AppRepositories` (or the
 /// individual protocols) via initializer injection; tests pass a

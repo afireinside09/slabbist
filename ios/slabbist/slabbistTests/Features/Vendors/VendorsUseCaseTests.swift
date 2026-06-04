@@ -3,19 +3,19 @@ import SwiftData
 import Testing
 @testable import slabbist
 
-@Suite("VendorsRepository")
+@Suite("VendorsUseCase")
 @MainActor
-struct VendorsRepositoryTests {
+struct VendorsUseCaseTests {
     /// No-op kicker — tests don't exercise the drainer hop.
     private static func noopKicker() -> OutboxKicker {
         OutboxKicker { }
     }
 
-    private func makeRepo() -> (VendorsRepository, ModelContext, UUID) {
+    private func makeRepo() -> (VendorsUseCase, ModelContext, UUID) {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)
         let storeId = UUID()
-        let repo = VendorsRepository(context: context, kicker: Self.noopKicker(), currentStoreId: storeId)
+        let repo = VendorsUseCase(context: context, kicker: Self.noopKicker(), currentStoreId: storeId)
         return (repo, context, storeId)
     }
 

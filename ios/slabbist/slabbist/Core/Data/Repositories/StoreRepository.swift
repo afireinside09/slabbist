@@ -23,12 +23,6 @@ nonisolated struct SupabaseStoreRepository: StoreRepository, Sendable {
         try await base.find(id: id)
     }
 
-    /// Stores the given user owns (independent of membership RLS —
-    /// primarily for admin / debugging flows).
-    func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO] {
-        try await base.findWhere(column: "owner_user_id", equals: userId, page: page)
-    }
-
     @discardableResult
     func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO {
         try await base.upsertAndReturn(store)

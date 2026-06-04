@@ -44,6 +44,9 @@ struct GradingCaptureViewModelTests {
         } else {
             Issue.record("expected .done phase")
         }
+        // The full estimate is held so the host can present the report
+        // in-flow without re-fetching what we just computed.
+        #expect(vm.result?.id == repo.lastReturnedID)
     }
 
     // MARK: - C3 — failure overlay + retry path

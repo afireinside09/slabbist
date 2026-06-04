@@ -9,10 +9,10 @@ import SwiftData
 /// - `linesFor` hydrates the line items for the transaction detail screen.
 ///
 /// The repository deliberately stays read-only. Writes for commit/void flow
-/// through `OfferRepository` and `TransactionsHydrator` so the outbox stays
+/// through `OfferUseCase` and `TransactionsHydrator` so the outbox stays
 /// the single producer of server-mutating effects.
 @MainActor
-final class TransactionsRepository {
+final class TransactionsUseCase {
     private let context: ModelContext
     private let kicker: OutboxKicker
     let currentStoreId: UUID

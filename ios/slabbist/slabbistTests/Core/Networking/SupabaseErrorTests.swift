@@ -167,4 +167,26 @@ struct SupabaseErrorTests {
         #expect(table == "lots")
         #expect(id == "abc")
     }
+
+    // MARK: - User-facing copy (LocalizedError)
+
+    /// Routing auth through AuthService rethrows `SupabaseError`. Without
+    /// `LocalizedError`, `error.localizedDescription` showed the opaque
+    /// "(slabbist.SupabaseError error N.)" fallback instead of the real
+    /// message — this pins that a `.transport`-wrapped SDK error surfaces
+    /// the underlying copy (e.g. "Invalid login credentials"), not jargon.
+    @Test("transport error surfaces the underlying message, not the opaque fallback")
+    func transportLocalizedDescription() {
+        struct Credentials: LocalizedError {
+            var errorDescription: String? { "Invalid login credentials" }
+        }
+        let mapped = SupabaseError.transport(underlying: Credentials())
+        #expect(mapped.localizedDescription == "Invalid login credentials")
+        #expect(!mapped.localizedDescription.contains("slabbist.SupabaseError error"))
+    }
+
+    @Test("unauthorized renders its own user-facing copy")
+    func unauthorizedLocalizedDescription() {
+        #expect(SupabaseError.unauthorized.localizedDescription == "Unauthorized — no active Supabase session")
+    }
 }

@@ -23,6 +23,10 @@ struct LotDetailView: View {
     /// `SetPricePill` on a slab row. `.sheet(item:)` so taps land on a
     /// stable target even if the row re-orders between tap and present.
     @State private var manualPriceTarget: Scan?
+    /// Surfaced when an offer-state action throws (illegal transition, an
+    /// expired session, or a failed local write) so a tap can't silently
+    /// no-op — the user sees what happened instead of a dead button.
+    @State private var actionError: String?
     @Binding private var path: [LotsRoute]
 
     init(lot: Lot, path: Binding<[LotsRoute]>) {
@@ -82,11 +86,20 @@ struct LotDetailView: View {
         .toolbarBackground(AppColor.ink, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .alert(
+            "Couldn't complete that",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            ),
+            actions: { Button("OK", role: .cancel) { actionError = nil } },
+            message: { Text(actionError ?? "") }
+        )
         .sheet(isPresented: $showingVendorPicker) {
             VendorPicker(
                 storeId: lot.storeId,
                 onPick: { vendor in
-                    try? offerRepository().attachVendor(vendor, to: lot)
+                    runAction { try offerRepository().attachVendor(vendor, to: lot) }
                 },
                 onCreate: { id, name, method, value, notes in
                     try vendorsRepository().upsert(id: id, displayName: name, contactMethod: method, contactValue: value, notes: notes)
@@ -99,10 +112,10 @@ struct LotDetailView: View {
                 usesLadder: lot.marginPctSnapshot == nil,
                 storeId: lot.storeId,
                 onSelectLotMargin: { pct in
-                    try? offerRepository().setLotMargin(pct, on: lot)
+                    runAction { try offerRepository().setLotMargin(pct, on: lot) }
                 },
                 onSelectLadder: {
-                    try? offerRepository().clearLotMargin(on: lot)
+                    runAction { try offerRepository().clearLotMargin(on: lot) }
                 }
             )
         }
@@ -166,21 +179,28 @@ struct LotDetailView: View {
 
     // MARK: - Repository helpers
 
-    /// Builds an `OfferRepository` scoped to this lot's store + the current
+    /// Runs an offer-state mutation and surfaces any throw to the user via
+    /// the action-error alert, replacing the old `try?` swallows that turned
+    /// an illegal transition or expired session into a silent dead tap.
+    private func runAction(_ work: () throws -> Void) {
+        do { try work() } catch { actionError = error.localizedDescription }
+    }
+
+    /// Builds an `OfferUseCase` scoped to this lot's store + the current
     /// signed-in user. Built lazily on every call rather than cached so
     /// the SwiftData context and session UUIDs always reflect "now"; the
     /// type is cheap to construct.
-    private func offerRepository() -> OfferRepository {
-        OfferRepository(
+    private func offerRepository() throws -> OfferUseCase {
+        OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,
-            currentUserId: session.userId ?? UUID()
+            currentUserId: try session.requireUserId()
         )
     }
 
-    private func vendorsRepository() -> VendorsRepository {
-        VendorsRepository(context: context, kicker: kicker, currentStoreId: lot.storeId)
+    private func vendorsRepository() -> VendorsUseCase {
+        VendorsUseCase(context: context, kicker: kicker, currentStoreId: lot.storeId)
     }
 
     /// Fallback when the lot has a `vendorId` but no name-snapshot yet —
@@ -283,7 +303,7 @@ struct LotDetailView: View {
     }
 
     /// Margin display + adjust affordance. The snapshot here is the value
-    /// `OfferRepository.setLotMargin` writes; the store-default seeded onto
+    /// `OfferUseCase.setLotMargin` writes; the store-default seeded onto
     /// a fresh lot via `snapshotDefaultMargin` shows here too until the user
     /// adjusts it manually.
     private var marginRow: some View {
@@ -360,7 +380,7 @@ struct LotDetailView: View {
 
     /// Bottom action row driven entirely by `LotOfferState`. Each case maps
     /// to exactly one button (or no button), so the state machine in
-    /// `OfferRepository` stays the single source of truth — this view just
+    /// `OfferUseCase` stays the single source of truth — this view just
     /// renders the legal next move.
     @ViewBuilder
     private var actionBar: some View {
@@ -370,8 +390,12 @@ struct LotDetailView: View {
             EmptyView()
         case .priced:
             PrimaryGoldButton(title: "Create Offer") {
-                guard (try? offerRepository().sendToOffer(lot)) != nil else { return }
-                path.append(LotsRoute.offerReview(lot.id))
+                do {
+                    try offerRepository().sendToOffer(lot)
+                    path.append(LotsRoute.offerReview(lot.id))
+                } catch {
+                    actionError = error.localizedDescription
+                }
             }
             .accessibilityIdentifier("create-offer")
         case .presented, .accepted:
@@ -381,8 +405,10 @@ struct LotDetailView: View {
             .buttonStyle(SecondaryButtonStyle())
             .accessibilityIdentifier("resume-offer")
         case .declined:
-            Button("Re-open as new offer") { try? offerRepository().reopenDeclined(lot) }
-                .accessibilityIdentifier("reopen-declined")
+            Button("Re-open as new offer") {
+                runAction { try offerRepository().reopenDeclined(lot) }
+            }
+            .accessibilityIdentifier("reopen-declined")
         case .paid:
             // Terminal — surface the receipt link in place of an actionable
             // CTA. `frozenBanner` already mirrors this affordance at the top
@@ -415,7 +441,7 @@ struct LotDetailView: View {
                     .accessibilityIdentifier("view-receipt-action")
                 }
                 Button("Re-open lot as new offer") {
-                    try? offerRepository().reopenVoided(lot)
+                    runAction { try offerRepository().reopenVoided(lot) }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppColor.muted)
@@ -717,12 +743,7 @@ struct LotDetailView: View {
     }
 
     private func formattedCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-        fmt.currencyCode = "USD"
-        fmt.maximumFractionDigits = cents % 100 == 0 ? 0 : 2
-        return fmt.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSDCompact(cents: cents)
     }
 
     private static let relative: RelativeDateTimeFormatter = {

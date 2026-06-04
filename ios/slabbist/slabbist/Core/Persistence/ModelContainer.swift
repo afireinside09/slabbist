@@ -11,20 +11,29 @@ enum AppModelContainer {
     /// the user's writes silently.
     static let recoverySidecarFilename = "slabbist.outbox-recovery.json"
 
+    /// The single source of truth for the SwiftData schema. Both the
+    /// file-backed `shared` container and the in-memory test/preview
+    /// container build their `Schema` from this, so the two can't drift
+    /// (a drift here previously left the new snapshot models out of the
+    /// test container, trapping on insert under XCUITests).
+    static let allModels: [any PersistentModel.Type] = [
+        Store.self,
+        StoreMember.self,
+        Lot.self,
+        Scan.self,
+        Vendor.self,
+        OutboxItem.self,
+        GradedCardIdentity.self,
+        GradedMarketSnapshot.self,
+        StoreTransaction.self,
+        TransactionLine.self,
+        MoverSnapshot.self,
+        GradeGainSnapshot.self
+        // Plan 2 adds: GradedCard
+    ]
+
     static let shared: ModelContainer = {
-        let schema = Schema([
-            Store.self,
-            StoreMember.self,
-            Lot.self,
-            Scan.self,
-            Vendor.self,
-            OutboxItem.self,
-            GradedCardIdentity.self,
-            GradedMarketSnapshot.self,
-            StoreTransaction.self,
-            TransactionLine.self
-            // Plan 2 adds: GradedCard
-        ])
+        let schema = Schema(allModels)
         let configurationName = "slabbist"
         let config = ModelConfiguration(configurationName, schema: schema, isStoredInMemoryOnly: false)
         let appSupport = URL.applicationSupportDirectory
@@ -155,13 +164,7 @@ enum AppModelContainer {
 
     /// In-memory container for tests and previews.
     static func inMemory() -> ModelContainer {
-        let schema = Schema([
-            Store.self, StoreMember.self, Lot.self,
-            Scan.self, Vendor.self, OutboxItem.self,
-            GradedCardIdentity.self,
-            GradedMarketSnapshot.self,
-            StoreTransaction.self, TransactionLine.self
-        ])
+        let schema = Schema(allModels)
         let config = ModelConfiguration("slabbist-tests", schema: schema, isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
     }

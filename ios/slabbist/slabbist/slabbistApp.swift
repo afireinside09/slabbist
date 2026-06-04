@@ -12,6 +12,9 @@ struct SlabbistApp: App {
     @State private var status: OutboxStatus
     @State private var kicker: OutboxKicker
     private let drainer: OutboxDrainer
+    /// Long-lived consumer that applies drainer status updates to
+    /// `OutboxStatus` in strict emission order. Held for the app's lifetime.
+    private let statusApplyTask: Task<Void, Never>
     /// A2: failures-sheet bridge built once at app init and injected via
     /// environment so `SyncStatusPill` can present the review sheet
     /// without importing the drainer directly.
@@ -37,29 +40,40 @@ struct SlabbistApp: App {
         let repos = AppRepositories.live()
         let statusBox = OutboxStatus()
 
+        // The drainer (an actor) emits status updates in order, but the old
+        // sink spawned a fresh unordered `Task { @MainActor }` per update —
+        // MainActor doesn't guarantee those run in creation order, so a later
+        // "0 pending, idle" could apply before an earlier "5 pending,
+        // draining", leaving the sync pill stuck showing stale counts or
+        // "draining" forever. Funnel every update through one AsyncStream
+        // drained by a single consumer so they apply strictly in order.
+        let (statusStream, statusContinuation) =
+            AsyncStream<OutboxDrainer.StatusUpdate>.makeStream()
+
         let drainer = OutboxDrainer(
             modelContainer: container,
             repositories: repos,
             clock: SystemClock(),
-            statusSink: { update in
-                Task { @MainActor in
-                    statusBox.update(
-                        pendingCount: update.pendingCount,
-                        failedCount: update.failedCount,
-                        isDraining: update.isDraining
-                    )
-                    if let isPaused = update.isPaused {
-                        statusBox.setPaused(
-                            isPaused,
-                            reason: update.lastError,
-                            authState: update.authState
-                        )
-                    }
-                }
-            }
+            statusSink: { update in statusContinuation.yield(update) }
         )
         self.drainer = drainer
         self._status = State(initialValue: statusBox)
+        self.statusApplyTask = Task { @MainActor in
+            for await update in statusStream {
+                statusBox.update(
+                    pendingCount: update.pendingCount,
+                    failedCount: update.failedCount,
+                    isDraining: update.isDraining
+                )
+                if let isPaused = update.isPaused {
+                    statusBox.setPaused(
+                        isPaused,
+                        reason: update.lastError,
+                        authState: update.authState
+                    )
+                }
+            }
+        }
         // A4: `kick()` itself sets `kickPending` when it lands during a
         // drain pass — see `OutboxDrainer.drainOnce`. The kicker just
         // forwards; the drainer owns the coalesce semantics.

@@ -4,13 +4,13 @@ import Testing
 @testable import slabbist
 
 @MainActor
-struct TransactionsRepositoryTests {
-    private func seed() -> (TransactionsRepository, ModelContext, UUID) {
+struct TransactionsUseCaseTests {
+    private func seed() -> (TransactionsUseCase, ModelContext, UUID) {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)
         let storeId = UUID()
         let kicker = OutboxKicker { /* no-op */ }
-        let repo = TransactionsRepository(context: context, kicker: kicker, currentStoreId: storeId)
+        let repo = TransactionsUseCase(context: context, kicker: kicker, currentStoreId: storeId)
         return (repo, context, storeId)
     }
 

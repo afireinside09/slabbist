@@ -5,7 +5,7 @@ import Supabase
 
 /// Background actor that drains the outbox.
 ///
-/// Group A complete (insertScan, insertLot, updateLot, deleteLot,
+/// Group A complete (insertScan, insertLot, deleteLot,
 /// updateScan, updateScanOffer, deleteScan, upsertVendor, archiveVendor).
 /// Group B kinds (certLookupJob, priceCompJob) throw
 /// `OutboxBridgeError.malformedPayload` — the classifier (added in 7.3)
@@ -304,16 +304,21 @@ actor OutboxDrainer: ModelActor {
         // assume the local outbox stays modest (< a few thousand rows
         // in the worst case) and predicate-pushdown isn't worth a
         // brittle macro dance.
-        var d = FetchDescriptor<OutboxItem>(
+        let d = FetchDescriptor<OutboxItem>(
             predicate: #Predicate<OutboxItem> { item in
                 item.nextAttemptAt <= now
             },
             sortBy: [SortDescriptor(\OutboxItem.nextAttemptAt, order: .forward)]
         )
-        // Intentionally no fetchLimit here — see the comment above. The
-        // in-memory `.pending` filter + post-sort `.prefix(50)` give the
-        // same wire-effort cap without the starvation pathology.
-        d.fetchLimit = 1000
+        // Intentionally NO fetchLimit. A `fetchLimit` here caps the SQL slice
+        // BEFORE the in-memory `.pending` filter runs, so a fat backlog of
+        // `.failed` rows (which also satisfy `nextAttemptAt <= now`) could
+        // fill the slice and starve the pending lane forever — the exact
+        // pathology the comment above warns about, which a stray
+        // `fetchLimit = 1000` had quietly reintroduced. The `.pending`
+        // filter + post-sort `.prefix(50)` cap wire effort instead, and
+        // `refreshStatusCache` already scans the full table each pass, so
+        // this adds no new worst-case fetch cost.
         let allRows = (try? context.fetch(d)) ?? []
         let rows = Array(allRows.lazy.filter { $0.status == .pending }.prefix(50))
         // Sort by priority desc, then createdAt asc. Doing this in-memory
@@ -354,6 +359,16 @@ actor OutboxDrainer: ModelActor {
         // is the second safety net for cases where the save *succeeded*
         // but we crash before completing dispatch.
         item.status = .inFlight
+        // Stamp the in-flight start time onto `nextAttemptAt`. Recovery
+        // (`recoverStrandedInFlight`) treats `nextAttemptAt <= now -
+        // threshold` as "stranded", so this field has to mean "in-flight
+        // since" while a row is `.inFlight`. Previously it kept the prior
+        // backoff value, which for a retried row sits in the future — so a
+        // crash mid-dispatch left the row `.inFlight` with a future
+        // `nextAttemptAt` that the recovery predicate could never match,
+        // stranding the write permanently. A transient failure in `handle`
+        // overwrites this with a fresh backoff; a success deletes the row.
+        item.nextAttemptAt = clock.current()
         if !tryPersist(reason: "mark inFlight (\(item.kind))") {
             item.status = .pending
             // Don't propagate — caller is the drain loop and the row
@@ -605,17 +620,6 @@ actor OutboxDrainer: ModelActor {
             let p = try decode(OutboxPayloads.InsertLot.self, payload)
             try await repositories.lots.insert(try LotDTO(from: p))
 
-        case .updateLot:
-            let p = try decode(OutboxPayloads.UpdateLot.self, payload)
-            guard let id = UUID(uuidString: p.id) else {
-                throw OutboxBridgeError.malformedPayload(reason: "UpdateLot: invalid UUID")
-            }
-            var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
-            if let v = p.name   { fields["name"]   = .string(v) }
-            if let v = p.notes  { fields["notes"]  = .string(v) }
-            if let v = p.status { fields["status"] = .string(v) }
-            try await repositories.lots.patch(id: id, fields: fields)
-
         case .deleteLot:
             let p = try decode(OutboxPayloads.DeleteLot.self, payload)
             guard let id = UUID(uuidString: p.id) else {
@@ -676,10 +680,18 @@ actor OutboxDrainer: ModelActor {
             guard let id = UUID(uuidString: p.id) else {
                 throw OutboxBridgeError.malformedPayload(reason: "UpdateLotOffer: invalid UUID")
             }
-            var fields: [String: AnyJSON] = ["updated_at": .string(p.updated_at)]
-            if let v = p.vendor_id                 { fields["vendor_id"]                  = .string(v) }
-            if let v = p.vendor_name_snapshot      { fields["vendor_name_snapshot"]       = .string(v) }
-            if let v = p.margin_pct_snapshot       { fields["margin_pct_snapshot"]        = .double(v) }
+            // These fields are sent unconditionally (null when locally
+            // cleared) because the local lot is the offline-first authority
+            // for the offer. The previous `if let` guards dropped nil fields
+            // from the patch, so detaching a vendor or reverting the lot
+            // margin to the ladder mutated SwiftData but never reached the
+            // server — the two sides diverged silently and forever.
+            var fields: [String: AnyJSON] = [
+                "updated_at":           .string(p.updated_at),
+                "vendor_id":            p.vendor_id.map(AnyJSON.string) ?? .null,
+                "vendor_name_snapshot": p.vendor_name_snapshot.map(AnyJSON.string) ?? .null,
+                "margin_pct_snapshot":  p.margin_pct_snapshot.map(AnyJSON.double) ?? .null
+            ]
             if let v = p.lot_offer_state           { fields["lot_offer_state"]            = .string(v) }
             if let v = p.lot_offer_state_updated_at {
                 fields["lot_offer_state_updated_at"] = .string(v)

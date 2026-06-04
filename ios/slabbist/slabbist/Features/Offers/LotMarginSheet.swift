@@ -243,7 +243,7 @@ struct LotMarginSheet: View {
             ladderError = "Add at least one tier."
             return
         }
-        let repo = StoreSettingsRepository(context: context, kicker: kicker, currentStoreId: storeId)
+        let repo = StoreSettingsUseCase(context: context, kicker: kicker, currentStoreId: storeId)
         do {
             try repo.updateMarginLadder(materialized)
             initialTiers = materialized.canonicalized()

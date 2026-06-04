@@ -65,7 +65,7 @@ struct VendorDetailView: View {
         }
     }
 
-    /// Vendor purchase history — backed by `TransactionsRepository`. Lights up
+    /// Vendor purchase history — backed by `TransactionsUseCase`. Lights up
     /// after the vendor's first paid transaction; until then a soft empty state
     /// inside a SlabCard keeps the visual rhythm of the rest of the screen.
     private var purchaseHistory: some View {
@@ -139,7 +139,7 @@ struct VendorDetailView: View {
     }
 
     private func loadHistory() {
-        let repo = TransactionsRepository(
+        let repo = TransactionsUseCase(
             context: context, kicker: kicker,
             currentStoreId: vendor.storeId
         )

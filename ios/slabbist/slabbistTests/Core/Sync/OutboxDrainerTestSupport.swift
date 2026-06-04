@@ -213,25 +213,6 @@ final class Harness {
         )
     }
 
-    func enqueueUpdateLot(id: UUID, name: String?, createdAt: Date? = nil) async throws {
-        let stamp = createdAt ?? clock.current()
-        let dto = OutboxPayloads.UpdateLot(
-            id: id.uuidString,
-            name: name,
-            notes: nil,
-            status: nil,
-            updated_at: ISO8601DateFormatter().string(from: stamp)
-        )
-        let payload = try JSONEncoder().encode(dto)
-        try await drainer._testEnqueue(
-            id: UUID(),
-            kind: .updateLot,
-            payload: payload,
-            createdAt: stamp,
-            nextAttemptAt: stamp
-        )
-    }
-
     func enqueueUpsertVendor(
         id: UUID,
         storeId: UUID = UUID(),
@@ -730,7 +711,6 @@ final class FakeTransactionRepository: TransactionRepository, @unchecked Sendabl
 struct NullStoreRepo: StoreRepository {
     func listForCurrentUser(page: Page) async throws -> [StoreDTO] { [] }
     func find(id: UUID) async throws -> StoreDTO? { nil }
-    func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO] { [] }
     func upsert(_ store: StoreDTO) async throws {}
     func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO { store }
     func patch(id: UUID, fields: [String: AnyJSON]) async throws {}

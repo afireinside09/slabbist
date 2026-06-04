@@ -5,7 +5,7 @@ import Testing
 
 /// State-machine coverage for `OfferReviewView`'s commit flow. These tests
 /// pin the bug fix from C4: before the rewrite, a synchronous throw from
-/// `OfferRepository.commit` left `isCommitting = true` while `commitError`
+/// `OfferUseCase.commit` left `isCommitting = true` while `commitError`
 /// was set, so the CTA stayed locked on "Committing…" forever. With the
 /// `CommitState` enum, `.error` and `.committing` are mutually exclusive —
 /// these tests prove that contract is enforced.
@@ -20,7 +20,7 @@ struct OfferReviewViewStateTests {
         let context = ModelContext(container)
         let kicker = OutboxKicker { /* no-op */ }
         // `.drafting` cannot transition to `.accepted` (the recordAcceptance
-        // path) — so OfferRepository will throw `InvalidTransition`. That's
+        // path) — so OfferUseCase will throw `InvalidTransition`. That's
         // our synchronous-throw scenario.
         let lot = Lot(
             id: UUID(),
@@ -33,7 +33,7 @@ struct OfferReviewViewStateTests {
         lot.lotOfferState = LotOfferState.drafting.rawValue
         context.insert(lot)
         try context.save()
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,
@@ -41,13 +41,13 @@ struct OfferReviewViewStateTests {
         )
 
         // Belt-and-braces: also exercise the underlying repo directly to pin
-        // which throw type lands here. If `OfferRepository` changes its
+        // which throw type lands here. If `OfferUseCase` changes its
         // acceptance rules and `.drafting -> .accepted` becomes legal, this
         // upstream guard will fail loudly before the view-state assertion
         // misleads us with a passing `.error` that came from a different
         // path. The new contract — synchronous throw -> `.error` — depends
         // on `recordAcceptance` actually throwing here.
-        #expect(throws: OfferRepository.InvalidTransition.self) {
+        #expect(throws: OfferUseCase.InvalidTransition.self) {
             try repo.recordAcceptance(lot)
         }
 
@@ -61,15 +61,15 @@ struct OfferReviewViewStateTests {
 
         switch next {
         case .error(let msg):
-            // The default `localizedDescription` for an enum case without a
-            // custom LocalizedError conformance contains the enum name —
-            // pinning the substring stops a future repo refactor (e.g.
-            // adopting LocalizedError with a friendlier message) from
-            // silently passing this test with the wrong throw type.
-            #expect(
-                msg.contains("InvalidTransition") || msg.contains("notAllowed"),
-                "expected the InvalidTransition error to surface in the .error payload, got: \(msg)"
-            )
+            // The throw TYPE is pinned above (`#expect(throws:
+            // InvalidTransition.self)`). Here we pin the user-facing intent:
+            // a synchronous throw must surface as the friendly
+            // `LocalizedError` copy in the `.error` payload — not strand the
+            // CTA in `.committing`, and not leak the opaque
+            // "(slabbist…error N.)" Foundation fallback the old assertion
+            // relied on (InvalidTransition now conforms to LocalizedError).
+            #expect(msg == OfferUseCase.InvalidTransition.notAllowed(from: .priced, to: .accepted).localizedDescription)
+            #expect(!msg.isEmpty)
         default:
             Issue.record("expected .error, got \(next)")
         }
@@ -93,7 +93,7 @@ struct OfferReviewViewStateTests {
         lot.lotOfferState = LotOfferState.accepted.rawValue
         context.insert(lot)
         try context.save()
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,

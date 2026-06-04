@@ -1,4 +1,6 @@
 import Foundation
+import Supabase
+import Auth
 
 /// Resolves a `(grader, certNumber)` pair to a `GradedCardIdentity` + grade by
 /// calling the `cert-lookup` Supabase Edge Function. The edge function is the
@@ -51,10 +53,26 @@ final class CertLookupRepository {
     private let baseURL: URL
     private let authTokenProvider: () async -> String?
 
+    /// Uses the fail-fast `URLSession.shared` ON PURPOSE — see the matching
+    /// note on `CompRepository.init`. A foreground cert lookup must fail fast
+    /// offline so `BulkScanViewModel` can surface "Offline — will retry when
+    /// connected", not queue behind `SupabaseHTTP.shared`'s connectivity wait.
+    /// Tests inject their own session via this parameter.
     init(urlSession: URLSession = .shared, baseURL: URL, authTokenProvider: @escaping () async -> String?) {
         self.urlSession = urlSession
         self.baseURL = baseURL
         self.authTokenProvider = authTokenProvider
+    }
+
+    /// Single source of the Edge-Function base URL + auth-token closure, so
+    /// inline construction across scan surfaces can't drift (mirrors
+    /// `CompRepository.live()`; CLAUDE.md Rule 3).
+    static func live() -> CertLookupRepository {
+        let baseURL = AppEnvironment.supabaseURL.appendingPathComponent("/functions/v1")
+        return CertLookupRepository(
+            baseURL: baseURL,
+            authTokenProvider: { try? await AppSupabase.shared.client.auth.session.accessToken }
+        )
     }
 
     nonisolated static func decode(data: Data) throws -> Decoded {

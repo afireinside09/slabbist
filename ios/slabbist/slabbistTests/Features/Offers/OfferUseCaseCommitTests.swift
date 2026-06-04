@@ -3,11 +3,11 @@ import SwiftData
 import Testing
 @testable import slabbist
 
-/// Coverage for the Plan 3 commit/void surface on `OfferRepository`:
+/// Coverage for the Plan 3 commit/void surface on `OfferUseCase`:
 /// enqueueing the right outbox kinds, refusing to commit non-accepted lots,
 /// and keeping the lot in `.accepted` until the drainer + hydrator confirm.
 @MainActor
-struct OfferRepositoryCommitTests {
+struct OfferUseCaseCommitTests {
     @Test func commitEnqueuesOutboxItemAndKeepsLotAccepted() throws {
         let container = AppModelContainer.inMemory()
         let context = ModelContext(container)
@@ -24,7 +24,7 @@ struct OfferRepositoryCommitTests {
         context.insert(lot)
         try context.save()
 
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,
@@ -52,13 +52,13 @@ struct OfferRepositoryCommitTests {
         lot.lotOfferState = LotOfferState.priced.rawValue
         context.insert(lot)
         try context.save()
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,
             currentUserId: UUID()
         )
-        #expect(throws: OfferRepository.InvalidTransition.self) {
+        #expect(throws: OfferUseCase.InvalidTransition.self) {
             try repo.commit(lot: lot, paymentMethod: "cash", paymentReference: nil)
         }
     }
@@ -78,7 +78,7 @@ struct OfferRepositoryCommitTests {
         lot.lotOfferState = LotOfferState.voided.rawValue
         context.insert(lot)
         try context.save()
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: lot.storeId,
@@ -107,7 +107,7 @@ struct OfferRepositoryCommitTests {
         )
         context.insert(txn)
         try context.save()
-        let repo = OfferRepository(
+        let repo = OfferUseCase(
             context: context,
             kicker: kicker,
             currentStoreId: txn.storeId,

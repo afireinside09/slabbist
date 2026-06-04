@@ -16,9 +16,17 @@ struct GradingCaptureView: View {
     /// possibly call `onComplete` on a dismissed view (P0.2).
     @State private var analysisTask: Task<Void, Never>?
     @State private var liveAnalyzer: LiveReadinessAnalyzer?
+    /// One-shot guard so `onComplete` fires exactly once per produced
+    /// estimate — `onChange(of:phase)` can observe `.done` more than once
+    /// (e.g. a retry that re-enters analysis), and a double-fire would
+    /// re-present the report.
+    @State private var didComplete = false
 
     let viewModel: GradingCaptureViewModel
-    let onComplete: (UUID) -> Void
+    /// Delivers the finished estimate so the host can show the report
+    /// in-flow. Carries the whole DTO (the VM already has it) rather than
+    /// just an id, so the host doesn't re-fetch what we just computed.
+    let onComplete: (GradeEstimateDTO) -> Void
 
     private let detector = CardRectangleDetector()
     private let gate = CaptureQualityGate()
@@ -122,8 +130,9 @@ struct GradingCaptureView: View {
             .interactiveDismissDisabled(true)
         }
         .onChange(of: viewModel.phase) { _, phase in
-            if case let .done(id) = phase {
-                onComplete(id)
+            if case .done = phase, !didComplete, let result = viewModel.result {
+                didComplete = true
+                onComplete(result)
             }
         }
     }

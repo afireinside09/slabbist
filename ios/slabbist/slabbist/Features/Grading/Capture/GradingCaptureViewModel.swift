@@ -15,6 +15,12 @@ final class GradingCaptureViewModel {
     }
 
     private(set) var phase: Phase = .front
+
+    /// The estimate the analysis just produced. Held so the host can show
+    /// the full grade report in-flow the moment capture completes — the
+    /// result the user earned is presented immediately, not buried in the
+    /// history list for them to hunt down. Set alongside `.done`.
+    private(set) var result: GradeEstimateDTO?
     /// Last error thrown by `runAnalysis` — lives on the view-model
     /// (single source of truth alongside `phase`) rather than in the
     /// view, so a detached retry Task doesn't drop the write when the
@@ -103,6 +109,7 @@ final class GradingCaptureViewModel {
                 includeOtherGraders: includeOtherGraders
             )
             try Task.checkCancellation()
+            result = row
             phase = .done(estimateId: row.id)
         } catch is CancellationError {
             // Cancellation surfaced from `requestEstimate` or the

@@ -31,4 +31,29 @@ final class OutboxItem {
         self.createdAt = createdAt
         self.nextAttemptAt = nextAttemptAt
     }
+
+    /// Build a fresh `.pending` row for `payload`, eligible immediately.
+    ///
+    /// Every write surface enqueues the same way: encode the payload, stamp
+    /// `createdAt == nextAttemptAt == now`, status `.pending`, zero attempts.
+    /// This funnels that into one place so producers can't drift — and,
+    /// critically, `encode` THROWS rather than the old `(try? encode) ??
+    /// Data()` pattern that silently queued an empty payload the drainer
+    /// could never decode (permanent silent write loss). Callers `try` it
+    /// inside their existing throwing enqueue path.
+    static func pending<P: Encodable>(
+        _ kind: OutboxKind,
+        _ payload: P,
+        now: Date = Date()
+    ) throws -> OutboxItem {
+        OutboxItem(
+            id: UUID(),
+            kind: kind,
+            payload: try JSONEncoder().encode(payload),
+            status: .pending,
+            attempts: 0,
+            createdAt: now,
+            nextAttemptAt: now
+        )
+    }
 }

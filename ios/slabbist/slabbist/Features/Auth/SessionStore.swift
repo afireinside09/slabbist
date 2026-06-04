@@ -29,7 +29,7 @@ final class SessionStore {
     /// scope for F1. See P2.12 in the Wave 2B review.
     private(set) var lastSignOutReason: SignOutReason
 
-    private let client: SupabaseClient
+    private let auth: AuthService
     private var authTask: Task<Void, Never>?
     /// Set true when `signOut()` is invoked and consumed by the auth-changes
     /// loop on the next `.signedOut` event so we don't misclassify a
@@ -38,8 +38,8 @@ final class SessionStore {
 
     private static let signOutReasonDefaultsKey = "slabbist.signOutReason.v1"
 
-    init(client: SupabaseClient = AppSupabase.shared.client) {
-        self.client = client
+    init(auth: AuthService = AuthService()) {
+        self.auth = auth
         // Read persisted reason BEFORE bootstrap subscribes so a banner that
         // was set on the prior run is visible on the first AuthView render.
         self.lastSignOutReason = Self.loadPersistedReason()
@@ -47,14 +47,14 @@ final class SessionStore {
 
     func bootstrap() {
         authTask?.cancel()
-        let client = self.client
+        let auth = self.auth
         authTask = Task { [weak self] in
             // `emitLocalSessionAsInitialSession` means the stream fires
             // `.initialSession` with the persisted session on subscribe, so
-            // we don't need a separate `client.auth.session` read to seed
-            // `userId`. Auto-refresh follows up with `.tokenRefreshed` /
-            // `.signedOut` if the initial session was expired.
-            for await change in client.auth.authStateChanges {
+            // we don't need a separate session read to seed `userId`.
+            // Auto-refresh follows up with `.tokenRefreshed` / `.signedOut`
+            // if the initial session was expired.
+            for await change in auth.stateChanges {
                 if change.event == .initialSession,
                    change.session?.isExpired == true {
                     continue
@@ -106,9 +106,8 @@ final class SessionStore {
     /// No-op (still returns cleanly) when the caller is already signed out.
     func signOut() async {
         userInitiatedSignOut = true
-        let client = self.client
         do {
-            try await client.auth.signOut()
+            try await auth.signOut()
         } catch {
             AppLog.auth.warning("Supabase signOut failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -124,6 +123,27 @@ final class SessionStore {
     }
 
     var isSignedIn: Bool { userId != nil }
+
+    /// The signed-in user id, or throw if the session has expired mid-action.
+    ///
+    /// Write paths build store-scoped writers keyed on the current user id.
+    /// The old `session.userId ?? UUID()` fallback fabricated a random
+    /// identity when the session dropped between view-appear and the tap,
+    /// enqueuing a row attributed to a nonexistent user — which RLS then
+    /// silently rejects (permanent `.failed`, lost write) or, worse, lands
+    /// a corrupt audit row. Resolving through this guard means an expired
+    /// session refuses the action instead of forging an identity.
+    func requireUserId() throws -> UUID {
+        guard let userId else { throw SessionError.signedOut }
+        return userId
+    }
+
+    /// Raised when an action that needs a signed-in identity runs after the
+    /// session expired. Surfaced to the user as "sign in to continue" copy.
+    enum SessionError: LocalizedError {
+        case signedOut
+        var errorDescription: String? { "You're signed out. Sign in to continue." }
+    }
 
     /// Called by `AuthViewModel.submit()` immediately after a successful
     /// sign-in/sign-up so the banner clears even before the auth-changes

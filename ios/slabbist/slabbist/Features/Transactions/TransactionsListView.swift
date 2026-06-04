@@ -66,9 +66,7 @@ struct TransactionsListView: View {
     }
 
     private func formatCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "USD"
-        return f.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSD(cents: cents)
     }
 
     private func relativeDate(_ date: Date) -> String {

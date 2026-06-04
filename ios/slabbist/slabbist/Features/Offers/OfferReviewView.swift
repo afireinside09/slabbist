@@ -390,16 +390,26 @@ struct OfferReviewView: View {
     }
 
     private func commit() {
+        let repo: OfferUseCase
+        do {
+            repo = try offerRepository()
+        } catch {
+            // Session expired between opening the sheet and tapping commit.
+            // Reset to a pressable CTA carrying the "sign in" message instead
+            // of forging an identity for the transaction row.
+            commitState = .error(error.localizedDescription)
+            return
+        }
         commitState = Self.runCommit(
             lot: lot,
-            repo: offerRepository(),
+            repo: repo,
             paymentMethod: paymentMethod,
             paymentReference: paymentReference.isEmpty ? nil : paymentReference,
             now: Date()
         )
     }
 
-    /// Runs the actual commit through `OfferRepository`, returning the next
+    /// Runs the actual commit through `OfferUseCase`, returning the next
     /// `CommitState` to apply. Pulled out as a static so tests can drive the
     /// synchronous-throw path (the original bug — state stranded in
     /// `.committing` while the error sat below) without standing up a SwiftUI
@@ -408,7 +418,7 @@ struct OfferReviewView: View {
     /// assignment so a future reader can see the whole transition at a glance.
     static func runCommit(
         lot: Lot,
-        repo: OfferRepository,
+        repo: OfferUseCase,
         paymentMethod: String,
         paymentReference: String?,
         now: Date
@@ -434,16 +444,15 @@ struct OfferReviewView: View {
         scans.compactMap(\.buyPriceCents).reduce(0, +)
     }
 
-    private func offerRepository() -> OfferRepository {
-        OfferRepository(
+    private func offerRepository() throws -> OfferUseCase {
+        OfferUseCase(
             context: context, kicker: kicker,
             currentStoreId: lot.storeId,
-            currentUserId: session.userId ?? UUID()
+            currentUserId: try session.requireUserId()
         )
     }
 
     private func formattedCents(_ cents: Int64) -> String {
-        let dollars = Double(cents) / 100
-        return Currency.usdFormatter.string(from: dollars as NSNumber) ?? "$\(dollars)"
+        Currency.displayUSD(cents: cents)
     }
 }

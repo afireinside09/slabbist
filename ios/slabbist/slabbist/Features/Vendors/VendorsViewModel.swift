@@ -2,17 +2,17 @@ import Foundation
 import SwiftData
 
 /// View model that hosts the active and archived vendor lists for the
-/// current store. Mutations go through `VendorsRepository`, which writes
+/// current store. Mutations go through `VendorsUseCase`, which writes
 /// SwiftData and the outbox in one transaction; this type just refreshes
 /// its published lists afterward so the views observe the change.
 @MainActor
 @Observable
 final class VendorsViewModel {
-    private let repo: VendorsRepository
+    private let repo: VendorsUseCase
     private(set) var active: [Vendor] = []
     private(set) var archived: [Vendor] = []
 
-    init(repo: VendorsRepository) {
+    init(repo: VendorsUseCase) {
         self.repo = repo
     }
 
@@ -29,7 +29,7 @@ final class VendorsViewModel {
         )
         descriptor.fetchLimit = 1
         guard let store = try? context.fetch(descriptor).first else { return nil }
-        let repo = VendorsRepository(context: context, kicker: kicker, currentStoreId: store.id)
+        let repo = VendorsUseCase(context: context, kicker: kicker, currentStoreId: store.id)
         return VendorsViewModel(repo: repo)
     }
 

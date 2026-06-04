@@ -12,7 +12,6 @@ nonisolated struct Page: Sendable, Equatable {
 
     static let `default` = Page(limit: 50, offset: 0)
     static let small = Page(limit: 20, offset: 0)
-    static let large = Page(limit: 200, offset: 0)
 
     static func first(_ limit: Int) -> Page {
         Page(limit: limit, offset: 0)

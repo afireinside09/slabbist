@@ -129,7 +129,6 @@ private final class StubStoreRepository: StoreRepository, @unchecked Sendable {
     }
 
     func find(id: UUID) async throws -> StoreDTO? { nil }
-    func listOwnedBy(userId: UUID, page: Page) async throws -> [StoreDTO] { [] }
     func upsert(_ store: StoreDTO) async throws {}
     @discardableResult
     func upsertAndReturn(_ store: StoreDTO) async throws -> StoreDTO { store }

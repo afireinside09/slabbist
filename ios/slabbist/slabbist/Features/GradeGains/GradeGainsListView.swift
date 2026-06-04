@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Grade Gains screen. A single ranked list of raw → PSA 10 upside
 /// opportunities for one set + price tier, filtered server-side to
@@ -7,6 +8,7 @@ import SwiftUI
 /// `SlabCard` row groups — minus the gainers/losers split. Adds a
 /// header grading-fee stepper that recomputes profit live.
 struct GradeGainsListView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel = GradeGainViewModel()
     @State private var selectedGain: GradeGainDTO?
     @State private var setSearchQuery: String = ""
@@ -32,6 +34,10 @@ struct GradeGainsListView: View {
 
                         setRail
 
+                        if viewModel.isStale {
+                            staleBanner
+                        }
+
                         listBody
 
                         Spacer(minLength: Spacing.xxxl)
@@ -49,6 +55,7 @@ struct GradeGainsListView: View {
             // Keying on set + tier means any picker change kicks off
             // exactly one reload. The view-model dedupes inflight fetches.
             .task(id: "\(viewModel.selectedSet ?? -1)|\(viewModel.priceTier.rawValue)") {
+                viewModel.attach(modelContext)
                 await viewModel.load()
             }
             .navigationDestination(item: $selectedGain) { gain in
@@ -67,6 +74,34 @@ struct GradeGainsListView: View {
                 .font(SlabFont.mono(size: 13))
                 .foregroundStyle(AppColor.muted)
         }
+        .padding(.horizontal, Spacing.xxl)
+    }
+
+    /// Shown when the live fetch failed and the screen is displaying the
+    /// persisted last-known-good rows, so the operator knows the data is
+    /// stale (and from which filter) rather than mistaking it for fresh.
+    private var staleBanner: some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "wifi.slash")
+                .font(SlabFont.sans(size: 13, weight: .regular))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline — showing last saved data")
+                    .font(SlabFont.sans(size: 13, weight: .semibold))
+                if let stamp = viewModel.staleFetchedAt {
+                    Text("\(viewModel.staleContextLabel ?? "") · as of \(stamp.formatted(date: .abbreviated, time: .shortened))")
+                        .font(SlabFont.mono(size: 11))
+                        .foregroundStyle(AppColor.dim)
+                }
+            }
+            Spacer()
+        }
+        .foregroundStyle(AppColor.muted)
+        .padding(Spacing.m)
+        .background(AppColor.elev, in: RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                .stroke(AppColor.hairline, lineWidth: 1)
+        )
         .padding(.horizontal, Spacing.xxl)
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// One row from the `public.get_top_movers` RPC. Each row represents a
+/// One row from the `public.get_set_movers` RPC. Each row represents a
 /// single (product, sub_type) whose latest price differs from its prior
 /// snapshot.
 ///
@@ -20,10 +20,10 @@ nonisolated struct MoverDTO: Codable, Sendable, Identifiable, Equatable, Hashabl
     let pctChange: Double
     let capturedAt: Date
     let previousCapturedAt: Date
-    /// Populated only by the per-set RPC (`get_set_movers`) which
-    /// returns gainers + losers in one payload. Nil when fetched via
-    /// the per-direction RPC (`get_top_movers`), where direction is
-    /// implicit from the call.
+    /// Direction bucket ("gainers"/"losers") from `get_set_movers`, which
+    /// returns both in one payload. Optional for historical wire-shape
+    /// tolerance; consumers (`applySetRows`) fall back to the sign of
+    /// `pctChange` when it's absent.
     let direction: String?
 
     var id: String {

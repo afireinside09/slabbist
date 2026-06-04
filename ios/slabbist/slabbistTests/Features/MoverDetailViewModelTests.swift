@@ -170,14 +170,6 @@ final class StubDetailRepo: MoversRepository, @unchecked Sendable {
         self.listings = listings
     }
 
-    func topMovers(
-        language: MoversLanguage, direction: MoversDirection,
-        limit: Int, priceTier: MoversPriceTier
-    ) async throws -> [MoverDTO] {
-        Issue.record("topMovers should not be called from detail flow")
-        return []
-    }
-
     func sets(
         language: MoversLanguage
     ) async throws -> [MoversSetDTO] {

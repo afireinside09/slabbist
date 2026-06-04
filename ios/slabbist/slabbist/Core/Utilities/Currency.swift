@@ -16,6 +16,29 @@ enum Currency {
         return usdFormatter.string(from: divided as NSDecimalNumber) ?? "—"
     }
 
+    /// Whole-dollar currency formatter — no fraction digits. Paired with
+    /// `usdFormatter` by `displayUSDCompact`.
+    static let usdWholeFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = "USD"
+        f.locale = Locale(identifier: "en_US")
+        f.maximumFractionDigits = 0
+        return f
+    }()
+
+    /// Drops the cents when the amount is a whole number of dollars
+    /// ("$1,200" rather than "$1,200.00"), otherwise shows two digits. Used
+    /// by the lot/scan buy-price heros where round numbers read cleaner.
+    /// Picks between two cached formatters so nothing is allocated or
+    /// mutated per render.
+    static func displayUSDCompact(cents: Int64?) -> String {
+        guard let cents else { return "—" }
+        let formatter = cents % 100 == 0 ? usdWholeFormatter : usdFormatter
+        let divided = Decimal(cents) / Decimal(100)
+        return formatter.string(from: divided as NSDecimalNumber) ?? "—"
+    }
+
     /// Parses a US-locale dollar amount into cents. Comma is treated as the
     /// thousands separator (not the decimal mark) so "1,500" → 150000, not
     /// 150 — the bug `Manual/BuyPriceSheet.parseCents` used to ship.

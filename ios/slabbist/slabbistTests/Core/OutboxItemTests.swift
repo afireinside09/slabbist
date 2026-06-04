@@ -44,7 +44,7 @@ struct OutboxItemTests {
     func vendorKindsExistWithExpectedPriorities() {
         #expect(OutboxKind.upsertVendor.priority < OutboxKind.insertScan.priority)
         #expect(OutboxKind.archiveVendor.priority == OutboxKind.upsertVendor.priority)
-        #expect(OutboxKind.upsertVendor.priority > OutboxKind.updateLot.priority)
+        #expect(OutboxKind.upsertVendor.priority > OutboxKind.updateStoreMargin.priority)
     }
 
     @Test("UpsertVendor payload encodes snake_case keys and round-trips created_at")
@@ -90,23 +90,6 @@ struct OutboxItemTests {
         let json = String(data: data, encoding: .utf8) ?? ""
         #expect(json.contains("\"id\":\"44444444-4444-4444-4444-444444444444\""))
         #expect(json.contains("\"archived_at\":\"2026-05-08T12:00:00Z\""))
-    }
-
-    @Test("UpdateLot payload encodes optional fields as nulls and snake_case keys")
-    func updateLotPayloadEncoding() throws {
-        let payload = OutboxPayloads.UpdateLot(
-            id: "11111111-1111-1111-1111-111111111111",
-            name: "Renamed Lot",
-            notes: nil,
-            status: nil,
-            updated_at: "2026-05-07T12:00:00Z"
-        )
-        let data = try JSONEncoder().encode(payload)
-        let json = String(data: data, encoding: .utf8) ?? ""
-        #expect(json.contains("\"id\":\"11111111-1111-1111-1111-111111111111\""))
-        #expect(json.contains("\"name\":\"Renamed Lot\""))
-        #expect(json.contains("\"notes\":null"))
-        #expect(json.contains("\"updated_at\":\"2026-05-07T12:00:00Z\""))
     }
 
     @Test("UpdateLotOffer payload encodes snake_case keys and round-trips margin_pct")
