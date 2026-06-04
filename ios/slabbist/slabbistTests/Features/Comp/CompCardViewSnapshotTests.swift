@@ -4,68 +4,57 @@ import SwiftData
 import SnapshotTesting
 @testable import slabbist
 
-/// Snapshot tests for `CompCardView`.
+/// Snapshot tests for `CompCardView` (Poketrace-only, post-PPT-removal).
 ///
-/// Recommended simulator: **iPhone 17 / iOS 26.x**. The card uses
-/// `Spacing.l` padding and a custom serif font (`SlabFont`) that loads
-/// from the host app bundle, so font availability + scaling depend on
-/// the simulator. `precision: 0.99` absorbs minor antialiasing drift.
+/// **Simulator:** iPhone 17 / iOS 26.x. Fixed 380×640 frame (taller than
+/// the prior 560 to accommodate the sold-listings section).
 ///
-/// Each case is rendered at a fixed 380x560 frame (close to an iPhone
-/// 17's content width minus the page padding; taller than the prior
-/// 480 because the side-by-side sources strip + sparkline toggle
-/// together stretch the card vertically) and snapshotted in both light
-/// and dark color schemes — that's the SnapshotTesting trait hook.
-/// `.serialized` because `assertSnapshot` writes a single
-/// reference-image directory and parallel runs would race it.
+/// Each test case captures light + dark, `precision: 0.99`.
+/// `.serialized` because `assertSnapshot` shares a reference-image
+/// directory.
 ///
-/// **Two snapshots per slab.** Since Task 12, a single
-/// `(identityId, service, grade)` can have up to two snapshot rows —
-/// one with `source == "pokemonpricetracker"` and one with `source == "poketrace"`.
-/// `CompCardView` now takes both as separate optionals (plus the
-/// originating `Scan` for the reconciled headline) so we build a
-/// matched pair of fixtures in each test, mirroring how
-/// `ScanDetailView` partitions its `@Query` results in production.
-///
-/// **SwiftData note:** `GradedMarketSnapshot` is `@Model`. Constructing
-/// an instance ad-hoc (without inserting into a `ModelContext`) works
-/// for read-only rendering but the `priceHistoryJSON → priceHistory`
-/// derived property still decodes JSON via the model's accessor. We
-/// build each fixture inside an in-memory `ModelContainer` (via
-/// `InMemoryModelContainer.make()`) so that the `@Model` lifecycle
-/// matches production usage and no observation wiring is missing.
+/// **Snapshot cases:**
+///   1. `poketraceWithSoldListings_psa10`  — Poketrace ladder + aggregates + sold-comps section
+///   2. `poketraceNoSoldListings_psa9`     — Poketrace data, empty sold-listings (non-Scale degrade)
+///   3. `bgs10Headline`                    — BGS 10 gold border on BGS cell
+///   4. `rawOnlyNoGraded`                  — only "loose" tier in the map, no grade tiers
+///   5. `noSnapshot`                       — nil snapshot, hero = "—"
 @Suite("CompCardView snapshots", .serialized)
 @MainActor
 struct CompCardViewSnapshotTests {
 
     // MARK: - Container
 
-    /// Fresh in-memory container per case, so model state can't leak
-    /// between snapshots.
     private static func makeContainer() throws -> ModelContainer {
         try InMemoryModelContainer.make(for: [Scan.self, GradedMarketSnapshot.self])
     }
 
-    /// Encodes a `[PriceHistoryPoint]` into the on-disk JSON shape that
-    /// `GradedMarketSnapshot.priceHistoryJSON` uses (ISO-8601 dates,
-    /// snake_case keys via `PriceHistoryPoint.CodingKeys`).
+    // MARK: - Encoding helpers
+
     private static func encodeHistory(_ history: [PriceHistoryPoint]) -> String {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return String(data: (try? encoder.encode(history)) ?? Data(), encoding: .utf8) ?? "[]"
     }
 
-    /// Anchor date for deterministic price-history timestamps. Pinned
-    /// to a constant reference-time so the sparkline path is stable.
+    private static func encodeTierPrices(_ prices: [String: Int64]) -> String {
+        String(data: (try? JSONEncoder().encode(prices)) ?? Data(), encoding: .utf8) ?? "{}"
+    }
+
+    private static func encodeSoldListings(_ listings: [SoldListing]) -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(data: (try? encoder.encode(listings)) ?? Data(), encoding: .utf8) ?? "[]"
+    }
+
+    /// Anchor date for deterministic price-history timestamps.
     private static let baseDate = Date(timeIntervalSinceReferenceDate: 700_000_000)
 
     /// Stable identity UUID so every fixture references the same slab.
     private static let identityId = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
-    /// Builds a synthetic `Scan` with deterministic fields. The scan's
-    /// `reconciledHeadlinePriceCents` is the hero number — we set it
-    /// explicitly so the test asserts the rendered hero, not whatever
-    /// the production reconciliation logic happens to compute.
+    // MARK: - Fixture builders
+
     private static func makeScan(
         grader: Grader = .PSA,
         grade: String = "10",
@@ -90,70 +79,26 @@ struct CompCardViewSnapshotTests {
         return scan
     }
 
-    /// Builds a PPT-shaped snapshot. Defaults match the prior single-
-    /// source fixture so existing-feel assertions stay close to the
-    /// shipped baseline.
-    private static func makePPT(
-        gradingService: String = "PSA",
-        grade: String = "10",
-        headlinePriceCents: Int64? = 18_500,
-        loosePriceCents: Int64? = 400,
-        psa7: Int64? = 2_400,
-        psa8: Int64? = 3_400,
-        psa9: Int64? = 6_800,
-        psa9_5: Int64? = 11_200,
-        psa10: Int64? = 18_500,
-        bgs10: Int64? = 21_500,
-        cgc10: Int64? = 16_800,
-        sgc10: Int64? = 16_500,
-        priceHistory: [PriceHistoryPoint]? = nil,
-        isStaleFallback: Bool = false,
-        pptURL: URL? = URL(string: "https://www.pokemonpricetracker.com/card/charizard-base-set"),
-        in context: ModelContext
-    ) -> GradedMarketSnapshot {
-        let json = priceHistory.map { encodeHistory($0) }
-        let snap = GradedMarketSnapshot(
-            identityId: identityId,
-            gradingService: gradingService,
-            grade: grade,
-            source: GradedMarketSnapshot.sourcePPT,
-            headlinePriceCents: headlinePriceCents,
-            loosePriceCents: loosePriceCents,
-            psa7PriceCents: psa7,
-            psa8PriceCents: psa8,
-            psa9PriceCents: psa9,
-            psa9_5PriceCents: psa9_5,
-            psa10PriceCents: psa10,
-            bgs10PriceCents: bgs10,
-            cgc10PriceCents: cgc10,
-            sgc10PriceCents: sgc10,
-            pptTCGPlayerId: "243172",
-            pptURL: pptURL,
-            priceHistoryJSON: json,
-            fetchedAt: baseDate,
-            cacheHit: false,
-            isStaleFallback: isStaleFallback
-        )
-        context.insert(snap)
-        return snap
-    }
-
-    /// Builds a Poketrace-shaped snapshot. `ptAvgCents` mirrors
-    /// `headlinePriceCents` to mirror the production
-    /// `CompFetchService.persistSnapshots` write path.
+    /// Builds a Poketrace-shaped snapshot with optional tier prices,
+    /// price history, and sold listings.
     private static func makePoketrace(
         gradingService: String = "PSA",
         grade: String = "10",
-        avgCents: Int64? = 19_000,
+        avgCents: Int64? = 18_750,
         lowCents: Int64? = 17_500,
         highCents: Int64? = 21_000,
         trend: String? = "up",
         confidence: String? = "high",
         saleCount: Int? = 14,
+        tierPrices: [String: Int64]? = nil,
         priceHistory: [PriceHistoryPoint]? = nil,
+        soldListings: [SoldListing]? = nil,
+        marketplaceURL: URL? = nil,
         in context: ModelContext
     ) -> GradedMarketSnapshot {
-        let json = priceHistory.map { encodeHistory($0) }
+        let historyJSON = priceHistory.map { encodeHistory($0) }
+        let tierJSON = tierPrices.map { encodeTierPrices($0) }
+        let soldJSON = soldListings.map { encodeSoldListings($0) }
         let snap = GradedMarketSnapshot(
             identityId: identityId,
             gradingService: gradingService,
@@ -167,29 +112,26 @@ struct CompCardViewSnapshotTests {
             ptConfidence: confidence,
             ptSaleCount: saleCount,
             poketraceCardId: "pt-card-id-placeholder",
-            priceHistoryJSON: json,
+            ptTierPricesJSON: tierJSON,
+            priceHistoryJSON: historyJSON,
+            marketplaceURL: marketplaceURL,
+            soldListingsJSON: soldJSON,
             fetchedAt: baseDate,
-            cacheHit: false,
-            isStaleFallback: false
+            cacheHit: false
         )
         context.insert(snap)
         return snap
     }
 
-    /// Wraps `CompCardView` in a deterministic-size container with
-    /// the app's dark background so layout doesn't bleed.
-    private static func host(
-        scan: Scan,
-        ppt: GradedMarketSnapshot?,
-        poketrace: GradedMarketSnapshot?
-    ) -> some View {
-        CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: poketrace)
+    /// Wraps `CompCardView` in a deterministic container.
+    private static func host(scan: Scan, snapshot: GradedMarketSnapshot?) -> some View {
+        CompCardView(scan: scan, snapshot: snapshot)
             .padding(Spacing.l)
             .background(AppColor.ink)
     }
 
-    /// Common snapshot configuration: a 380x560 fixed frame, both
-    /// light and dark color schemes, 0.99 precision tolerance.
+    /// Common snapshot configuration: fixed 380×640 frame, light + dark,
+    /// 0.99 precision.
     private static func assertLightDark(
         _ view: some View,
         named name: String,
@@ -199,7 +141,7 @@ struct CompCardViewSnapshotTests {
         line: UInt = #line,
         column: UInt = #column
     ) {
-        let layout: SwiftUISnapshotLayout = .fixed(width: 380, height: 560)
+        let layout: SwiftUISnapshotLayout = .fixed(width: 380, height: 640)
         assertSnapshot(
             of: view,
             as: .image(
@@ -232,9 +174,6 @@ struct CompCardViewSnapshotTests {
 
     // MARK: - Stable history series
 
-    /// Synthesised price history used in cases that exercise the
-    /// sparkline. Pinned to `baseDate` so the rendered chart path is
-    /// byte-stable across runs.
     private static func sampleHistory(start cents: Int64) -> [PriceHistoryPoint] {
         (0..<12).map { i in
             let ts = baseDate.addingTimeInterval(Double(i) * 86_400 * 14)
@@ -243,58 +182,63 @@ struct CompCardViewSnapshotTests {
         }
     }
 
-    // MARK: - 1. Both sources populated (avg of 2 sources)
+    // MARK: - Stable sold listings
 
-    @Test("both sources — PPT + Poketrace side-by-side, 'avg of 2 sources' caption")
-    func bothSources_psa10() throws {
+    private static let sampleSoldListings: [SoldListing] = [
+        SoldListing(
+            sourceListingId: "e1",
+            title: "Charizard Base Set PSA 10 Gem Mint",
+            priceCents: 18_200,
+            soldAt: Date(timeIntervalSince1970: 700_000_000 - 86_400 * 2),
+            grader: "PSA", grade: "10", condition: "Graded",
+            url: URL(string: "https://www.ebay.com/itm/111"),
+            anomalyFlag: nil
+        ),
+        SoldListing(
+            sourceListingId: "e2",
+            title: "Pokemon Charizard WOTC PSA 10",
+            priceCents: 19_800,
+            soldAt: Date(timeIntervalSince1970: 700_000_000 - 86_400 * 5),
+            grader: "PSA", grade: "10", condition: "Graded",
+            url: URL(string: "https://www.ebay.com/itm/222"),
+            anomalyFlag: "outlier_high"
+        ),
+    ]
+
+    // MARK: - 1. Poketrace with sold listings (PSA 10)
+
+    @Test("Poketrace PSA 10 — ladder + aggregates + sold listings section")
+    func poketraceWithSoldListings_psa10() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)
         let scan = Self.makeScan(
             grader: .PSA, grade: "10",
-            reconciledHeadlinePriceCents: 18_750, // (18_500 + 19_000) / 2
+            reconciledHeadlinePriceCents: 18_750,
             in: context
         )
-        let ppt = Self.makePPT(
-            priceHistory: Self.sampleHistory(start: 15_500),
-            in: context
-        )
+        let tierPrices: [String: Int64] = [
+            "loose": 400, "psa_7": 2_400, "psa_8": 3_400, "psa_9": 6_800,
+            "psa_9_5": 11_200, "psa_10": 18_500, "bgs_10": 21_500,
+            "cgc_10": 16_800, "sgc_10": 16_500,
+        ]
         let pt = Self.makePoketrace(
-            priceHistory: Self.sampleHistory(start: 16_200),
-            in: context
-        )
-        try context.save()
-        Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: pt),
-            named: "both-sources-psa10"
-        )
-    }
-
-    // MARK: - 2. PPT only (Poketrace cell shows "no data", caption "PPT only")
-
-    @Test("PPT only — Poketrace cell shows 'no data', caption 'PPT only'")
-    func pptOnly_psa10() throws {
-        let container = try Self.makeContainer()
-        let context = ModelContext(container)
-        let scan = Self.makeScan(
-            grader: .PSA, grade: "10",
-            reconciledHeadlinePriceCents: 18_500,
-            in: context
-        )
-        let ppt = Self.makePPT(
+            tierPrices: tierPrices,
             priceHistory: Self.sampleHistory(start: 15_500),
+            soldListings: Self.sampleSoldListings,
+            marketplaceURL: URL(string: "https://www.ebay.com/sch/i.html?_nkw=charizard+psa+10"),
             in: context
         )
         try context.save()
         Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
-            named: "ppt-only-psa10"
+            Self.host(scan: scan, snapshot: pt),
+            named: "poketrace-with-sold-listings-psa10"
         )
     }
 
-    // MARK: - 3. Poketrace only (PPT cell shows "no data", caption "Poketrace only")
+    // MARK: - 2. Poketrace, no sold listings (non-Scale plan degrade)
 
-    @Test("Poketrace only — PPT cell shows 'no data', caption 'Poketrace only'")
-    func poketraceOnly_psa9() throws {
+    @Test("Poketrace PSA 9 — no sold listings — compact empty state")
+    func poketraceNoSoldListings_psa9() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)
         let scan = Self.makeScan(
@@ -302,6 +246,9 @@ struct CompCardViewSnapshotTests {
             reconciledHeadlinePriceCents: 6_800,
             in: context
         )
+        let tierPrices: [String: Int64] = [
+            "loose": 350, "psa_7": 1_800, "psa_8": 2_900, "psa_9": 6_800,
+        ]
         let pt = Self.makePoketrace(
             grade: "9",
             avgCents: 6_800,
@@ -310,17 +257,20 @@ struct CompCardViewSnapshotTests {
             trend: "stable",
             confidence: "medium",
             saleCount: 6,
+            tierPrices: tierPrices,
             priceHistory: Self.sampleHistory(start: 6_200),
+            soldListings: [],  // empty — non-Scale degrade path
+            marketplaceURL: URL(string: "https://www.ebay.com/sch/i.html?_nkw=charizard+psa+9"),
             in: context
         )
         try context.save()
         Self.assertLightDark(
-            Self.host(scan: scan, ppt: nil, poketrace: pt),
-            named: "poketrace-only-psa9"
+            Self.host(scan: scan, snapshot: pt),
+            named: "poketrace-no-sold-listings-psa9"
         )
     }
 
-    // MARK: - 4. BGS 10 headline (gold border on BGS cell)
+    // MARK: - 3. BGS 10 headline (gold border on BGS cell)
 
     @Test("BGS 10 — gold border lands on BGS cell, not PSA")
     func bgs10Headline() throws {
@@ -331,22 +281,31 @@ struct CompCardViewSnapshotTests {
             reconciledHeadlinePriceCents: 21_500,
             in: context
         )
-        let ppt = Self.makePPT(
+        let tierPrices: [String: Int64] = [
+            "loose": 400, "psa_10": 18_500, "bgs_10": 21_500, "cgc_10": 16_800,
+        ]
+        let pt = Self.makePoketrace(
             gradingService: "BGS", grade: "10",
-            headlinePriceCents: 21_500,
+            avgCents: 21_500,
+            lowCents: 20_000,
+            highCents: 23_000,
+            trend: nil,
+            confidence: "medium",
+            saleCount: 4,
+            tierPrices: tierPrices,
             in: context
         )
         try context.save()
         Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
+            Self.host(scan: scan, snapshot: pt),
             named: "bgs10"
         )
     }
 
-    // MARK: - 5. JP card (raw only, every tier nil)
+    // MARK: - 4. Raw-only (loose tier only, no grade tiers)
 
-    @Test("JP card — raw only, all PSA/BGS/CGC/SGC tiers nil")
-    func japaneseRawOnly() throws {
+    @Test("Raw only — only 'loose' tier in the map, all grade tiers absent")
+    func rawOnlyNoGraded() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)
         let scan = Self.makeScan(
@@ -354,73 +313,27 @@ struct CompCardViewSnapshotTests {
             reconciledHeadlinePriceCents: nil,
             in: context
         )
-        let ppt = Self.makePPT(
-            gradingService: "PSA", grade: "10",
-            headlinePriceCents: nil,
-            loosePriceCents: 350,
-            psa7: nil, psa8: nil, psa9: nil, psa9_5: nil, psa10: nil,
-            bgs10: nil, cgc10: nil, sgc10: nil,
+        let pt = Self.makePoketrace(
+            avgCents: nil,
+            lowCents: nil,
+            highCents: nil,
+            trend: nil,
+            confidence: nil,
+            saleCount: nil,
+            tierPrices: ["loose": 350],
             in: context
         )
         try context.save()
         Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
-            named: "jp-raw-only"
+            Self.host(scan: scan, snapshot: pt),
+            named: "raw-only"
         )
     }
 
-    // MARK: - 6. Stale fallback (caveat row visible)
+    // MARK: - 5. No snapshot
 
-    @Test("stale fallback — caveat row with offline chip")
-    func staleFallback() throws {
-        let container = try Self.makeContainer()
-        let context = ModelContext(container)
-        let scan = Self.makeScan(
-            grader: .PSA, grade: "10",
-            reconciledHeadlinePriceCents: 18_500,
-            in: context
-        )
-        let ppt = Self.makePPT(
-            priceHistory: Self.sampleHistory(start: 14_500),
-            isStaleFallback: true,
-            in: context
-        )
-        try context.save()
-        Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
-            named: "stale-fallback"
-        )
-    }
-
-    // MARK: - 7. Unsupported tier (TAG 10)
-
-    @Test("unsupported tier — TAG 10 with caveat copy")
-    func unsupportedTagTier() throws {
-        let container = try Self.makeContainer()
-        let context = ModelContext(container)
-        let scan = Self.makeScan(
-            grader: .TAG, grade: "10",
-            reconciledHeadlinePriceCents: nil,
-            in: context
-        )
-        let ppt = Self.makePPT(
-            gradingService: "TAG", grade: "10",
-            headlinePriceCents: nil,
-            psa10: 18_500,
-            bgs10: nil, cgc10: nil, sgc10: nil,
-            in: context
-        )
-        try context.save()
-        Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
-            named: "tag10-unsupported"
-        )
-    }
-
-    // MARK: - 8. Empty state (no snapshots, no history, no URL)
-
-    @Test("empty state — every tier nil, no history")
-    func emptyState() throws {
+    @Test("No snapshot — hero shows '—', sold listings shows empty state")
+    func noSnapshot() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)
         let scan = Self.makeScan(
@@ -428,19 +341,10 @@ struct CompCardViewSnapshotTests {
             reconciledHeadlinePriceCents: nil,
             in: context
         )
-        let ppt = Self.makePPT(
-            gradingService: "PSA", grade: "10",
-            headlinePriceCents: nil,
-            loosePriceCents: nil,
-            psa7: nil, psa8: nil, psa9: nil, psa9_5: nil, psa10: nil,
-            bgs10: nil, cgc10: nil, sgc10: nil,
-            pptURL: nil,
-            in: context
-        )
         try context.save()
         Self.assertLightDark(
-            Self.host(scan: scan, ppt: ppt, poketrace: nil),
-            named: "empty"
+            Self.host(scan: scan, snapshot: nil),
+            named: "no-snapshot"
         )
     }
 }

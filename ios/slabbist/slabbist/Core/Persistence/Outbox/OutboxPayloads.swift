@@ -51,10 +51,10 @@ nonisolated extension OutboxPayloads {
     }
 
     /// Patch payload for the vendor's manual asking price on a scan. Used when
-    /// Pokemon Price Tracker has no comp and the vendor records what they
-    /// want to be paid for the slab. `vendor_ask_cents == nil` clears the
-    /// manual price (e.g. user reverts to PPT comp). The struct name keeps
-    /// its historical `UpdateScanOffer` form because the outbox kind /
+    /// Poketrace has no comp and the vendor records what they want to be paid
+    /// for the slab. `vendor_ask_cents == nil` clears the manual price
+    /// (e.g. user reverts to the auto-derived Poketrace comp). The struct name
+    /// keeps its historical `UpdateScanOffer` form because the outbox kind /
     /// dispatch table refer to it; the wire field name follows the Postgres
     /// column rename to `scans.vendor_ask_cents` so the worker can patch the
     /// column directly without remapping.

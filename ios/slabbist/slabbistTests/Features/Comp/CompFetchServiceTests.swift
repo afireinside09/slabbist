@@ -11,11 +11,11 @@ struct CompFetchServicePersistTests {
     static let lotId = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
     static let userId = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
 
-    /// Builds a `Decoded` populated with both PPT ladder data and a
-    /// Poketrace block, using the same numbers as the v2-both-sources
-    /// fixture in `CompRepositoryTests.decodesV2BothSources`. PPT headline
-    /// is 18500, Poketrace avg is 19500, reconciled headline is 19000.
-    static func makeBothSourcesDecoded() -> CompRepository.Decoded {
+    /// Builds a `Decoded` populated with a Poketrace block and two sold
+    /// listings. Poketrace avg is 19500, headline is 19500. Mirrors the
+    /// v3-full fixture in `CompRepositoryTests`.
+    static func makeDecodedWithPoketraceAndListings() -> CompRepository.Decoded {
+        let now = ISO8601DateFormatter().date(from: "2026-05-07T22:14:03Z")!
         let pt = CompRepository.Decoded.SourceComp(
             cardId: "22222222-2222-2222-2222-222222222222",
             tier: "PSA_10",
@@ -32,38 +32,61 @@ struct CompFetchServicePersistTests {
             confidence: "high",
             saleCount: 24,
             tierPricesCents: [
-                "loose": 400, "psa_8": 3400, "psa_9": 6800, "psa_9_5": 11200,
-                "psa_10": 19500, "bgs_10": 22000, "cgc_10": 17000,
+                "psa_9": 6800, "psa_10": 19500, "bgs_10": 22000,
             ],
             priceHistory: [
                 PriceHistoryPoint(ts: ISO8601DateFormatter().date(from: "2026-04-30T00:00:00Z")!, priceCents: 19200),
             ],
-            fetchedAt: ISO8601DateFormatter().date(from: "2026-05-07T22:14:03Z")!
+            fetchedAt: now
         )
+        let soldListings = [
+            SoldListing(
+                sourceListingId: "ebay-001",
+                title: "Charizard PSA 10",
+                priceCents: 19500,
+                soldAt: ISO8601DateFormatter().date(from: "2026-04-28T10:00:00Z")!,
+                grader: "PSA",
+                grade: "10",
+                condition: "Graded",
+                url: URL(string: "https://www.ebay.com/itm/001"),
+                anomalyFlag: nil
+            ),
+            SoldListing(
+                sourceListingId: "ebay-002",
+                title: "Charizard PSA 10 Base",
+                priceCents: 20000,
+                soldAt: ISO8601DateFormatter().date(from: "2026-04-25T14:00:00Z")!,
+                grader: "PSA",
+                grade: "10",
+                condition: "Graded",
+                url: URL(string: "https://www.ebay.com/itm/002"),
+                anomalyFlag: nil
+            ),
+        ]
         return CompRepository.Decoded(
-            headlinePriceCents: 18500,
             gradingService: "PSA",
             grade: "10",
-            loosePriceCents: 400,
-            psa7PriceCents: 2400,
-            psa8PriceCents: 3400,
-            psa9PriceCents: 6800,
-            psa9_5PriceCents: 11200,
-            psa10PriceCents: 18500,
-            bgs10PriceCents: 21500,
-            cgc10PriceCents: 16800,
-            sgc10PriceCents: 16500,
-            priceHistory: [
-                PriceHistoryPoint(ts: ISO8601DateFormatter().date(from: "2025-11-08T00:00:00Z")!, priceCents: 16200),
-            ],
-            pptTCGPlayerId: "243172",
-            pptURL: URL(string: "https://www.pokemonpricetracker.com/card/charizard"),
-            fetchedAt: ISO8601DateFormatter().date(from: "2026-05-07T22:14:03Z")!,
-            cacheHit: false,
-            isStaleFallback: false,
+            headlinePriceCents: 19500,
             poketrace: pt,
-            reconciledHeadlineCents: 19000,
-            reconciledSource: "avg"
+            soldListings: soldListings,
+            marketplaceURL: URL(string: "https://www.ebay.com/sch/i.html?_nkw=charizard+psa+10"),
+            fetchedAt: now,
+            cacheHit: false
+        )
+    }
+
+    /// A `Decoded` with poketrace nil and empty sold listings.
+    static func makeDecodedEmpty() -> CompRepository.Decoded {
+        let now = ISO8601DateFormatter().date(from: "2026-05-07T22:14:03Z")!
+        return CompRepository.Decoded(
+            gradingService: "PSA",
+            grade: "10",
+            headlinePriceCents: nil,
+            poketrace: nil,
+            soldListings: [],
+            marketplaceURL: nil,
+            fetchedAt: now,
+            cacheHit: false
         )
     }
 
@@ -87,12 +110,12 @@ struct CompFetchServicePersistTests {
         )
     }
 
-    @Test("persists two snapshots — PPT and Poketrace — when both are present")
-    func persistsBothSnapshots() async throws {
+    @Test("persists a single poketrace snapshot with soldListingsJSON when both are present")
+    func persistsSinglePoketraceSnapshot() async throws {
         let container = try InMemoryModelContainer.make()
         let context = ModelContext(container)
         let service = CompFetchService(context: context)
-        let decoded = Self.makeBothSourcesDecoded()
+        let decoded = Self.makeDecodedWithPoketraceAndListings()
         let scan = Self.makeScan()
         context.insert(scan)
         try context.save()
@@ -100,20 +123,110 @@ struct CompFetchServicePersistTests {
         try await service.persist(scan: scan, decoded: decoded)
 
         let fetched: [GradedMarketSnapshot] = try context.fetch(FetchDescriptor<GradedMarketSnapshot>())
-        #expect(fetched.count == 2)
-        #expect(fetched.contains { $0.source == GradedMarketSnapshot.sourcePPT && $0.psa10PriceCents == 18500 })
-        #expect(fetched.contains { $0.source == GradedMarketSnapshot.sourcePoketrace && $0.ptAvgCents == 19500 })
-        #expect(scan.reconciledHeadlinePriceCents == 19000)
+        // Single snapshot only — no PPT row.
+        #expect(fetched.count == 1)
+        let snap = try #require(fetched.first)
+        #expect(snap.source == GradedMarketSnapshot.sourcePoketrace)
+        #expect(snap.ptAvgCents == 19500)
+        #expect(snap.headlinePriceCents == 19500)
+        #expect(snap.poketraceCardId == "22222222-2222-2222-2222-222222222222")
+        #expect(snap.cacheHit == false)
+        // Sold listings persisted as JSON blob and round-trip correctly.
+        #expect(snap.soldListingsJSON != nil)
+        #expect(snap.soldListings.count == 2)
+        #expect(snap.soldListings[0].sourceListingId == "ebay-001")
+        // Marketplace URL
+        #expect(snap.marketplaceURL != nil)
+        // Scan headline mirrored.
+        #expect(scan.reconciledHeadlinePriceCents == 19500)
+        #expect(scan.reconciledSource == "poketrace")
+    }
+
+    @Test("persists minimal snapshot when poketrace is nil but soldListings non-empty")
+    func persistsMinimalSnapshotForSoldListingsOnly() async throws {
+        let container = try InMemoryModelContainer.make()
+        let context = ModelContext(container)
+        let service = CompFetchService(context: context)
+        let now = ISO8601DateFormatter().date(from: "2026-05-07T22:14:03Z")!
+        let decoded = CompRepository.Decoded(
+            gradingService: "PSA",
+            grade: "10",
+            headlinePriceCents: nil,
+            poketrace: nil,
+            soldListings: [
+                SoldListing(
+                    sourceListingId: "ebay-003",
+                    title: "Sold only",
+                    priceCents: 15000,
+                    soldAt: now,
+                    grader: "PSA",
+                    grade: "10",
+                    condition: nil,
+                    url: nil,
+                    anomalyFlag: nil
+                )
+            ],
+            marketplaceURL: nil,
+            fetchedAt: now,
+            cacheHit: false
+        )
+        let scan = Self.makeScan()
+        context.insert(scan)
+        try context.save()
+
+        try await service.persist(scan: scan, decoded: decoded)
+
+        let fetched: [GradedMarketSnapshot] = try context.fetch(FetchDescriptor<GradedMarketSnapshot>())
+        #expect(fetched.count == 1)
+        let snap = try #require(fetched.first)
+        #expect(snap.ptAvgCents == nil)
+        #expect(snap.headlinePriceCents == nil)
+        #expect(snap.soldListings.count == 1)
+        #expect(snap.soldListings[0].sourceListingId == "ebay-003")
+    }
+
+    @Test("inserts no snapshot when both poketrace and soldListings are absent")
+    func insertsNoSnapshotWhenBothAbsent() async throws {
+        let container = try InMemoryModelContainer.make()
+        let context = ModelContext(container)
+        let service = CompFetchService(context: context)
+        let decoded = Self.makeDecodedEmpty()
+        let scan = Self.makeScan()
+        context.insert(scan)
+        try context.save()
+
+        try await service.persist(scan: scan, decoded: decoded)
+
+        let fetched: [GradedMarketSnapshot] = try context.fetch(FetchDescriptor<GradedMarketSnapshot>())
+        #expect(fetched.isEmpty)
+    }
+
+    @Test("refetch replaces prior snapshot, not appends")
+    func refetchReplacesSnapshot() async throws {
+        let container = try InMemoryModelContainer.make()
+        let context = ModelContext(container)
+        let service = CompFetchService(context: context)
+        let decoded = Self.makeDecodedWithPoketraceAndListings()
+        let scan = Self.makeScan()
+        context.insert(scan)
+        try context.save()
+
+        // Two successive persists — should yield exactly 1 snapshot row.
+        try await service.persist(scan: scan, decoded: decoded)
+        try await service.persist(scan: scan, decoded: decoded)
+
+        let fetched: [GradedMarketSnapshot] = try context.fetch(FetchDescriptor<GradedMarketSnapshot>())
+        #expect(fetched.count == 1)
     }
 }
 
 @Suite("CompFetchService.classify")
 struct CompFetchServiceClassifyTests {
-    @Test("noMarketData maps to no_data with a Pokemon Price Tracker-flavored message")
+    @Test("noMarketData maps to no_data with Poketrace-flavored message")
     func mapsNoMarketData() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.noMarketData)
         #expect(state == .noData)
-        #expect(message.localizedCaseInsensitiveContains("pokemon price tracker"))
+        #expect(message.localizedCaseInsensitiveContains("poketrace"))
     }
 
     @Test("productNotResolved also maps to no_data, with distinct copy")
@@ -123,18 +236,11 @@ struct CompFetchServiceClassifyTests {
         #expect(message.localizedCaseInsensitiveContains("couldn't find"))
     }
 
-    @Test("upstreamUnavailable maps to failed with Pokemon Price Tracker wording")
+    @Test("upstreamUnavailable maps to failed with Poketrace wording")
     func mapsUpstream() {
         let (state, message) = CompFetchService.classify(CompRepository.Error.upstreamUnavailable)
         #expect(state == .failed)
-        #expect(message.localizedCaseInsensitiveContains("pokemon price tracker"))
-    }
-
-    @Test("authInvalid maps to failed with operator-actionable copy")
-    func mapsAuthInvalid() {
-        let (state, message) = CompFetchService.classify(CompRepository.Error.authInvalid)
-        #expect(state == .failed)
-        #expect(message.localizedCaseInsensitiveContains("misconfigured"))
+        #expect(message.localizedCaseInsensitiveContains("poketrace"))
     }
 
     @Test("identityNotFound suggests re-scanning the cert")

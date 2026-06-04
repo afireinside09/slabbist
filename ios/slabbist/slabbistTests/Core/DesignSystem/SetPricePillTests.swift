@@ -120,12 +120,11 @@ struct SetPricePillStateTests {
             identityId: UUID(),
             gradingService: "PSA",
             grade: "10",
-            source: GradedMarketSnapshot.sourcePPT,
+            source: GradedMarketSnapshot.sourcePoketrace,
             headlinePriceCents: headline,
             priceHistoryJSON: nil,
             fetchedAt: Date(),
-            cacheHit: false,
-            isStaleFallback: false
+            cacheHit: false
         )
     }
 

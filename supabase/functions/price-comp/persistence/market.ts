@@ -1,93 +1,68 @@
 // supabase/functions/price-comp/persistence/market.ts
 // @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
+//
+// Poketrace-only market persistence. PPT ladder + dual-source branching removed.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GradingService } from "../types.ts";
-import type { LadderPrices, PriceHistoryPoint } from "../ppt/parse.ts";
-
-export type MarketSource = "pokemonpricetracker" | "poketrace";
+import type { GradingService, PriceHistoryWirePoint } from "../types.ts";
 
 export interface MarketUpsertInput {
   identityId: string;
   gradingService: GradingService;
   grade: string;
-  source: MarketSource;
   headlinePriceCents: number | null;
-  ladderCents: LadderPrices;
-  priceHistory: PriceHistoryPoint[];
-  pptTCGPlayerId: string;
-  pptUrl: string;
-  poketrace?: {
-    avgCents:        number | null;
-    lowCents:        number | null;
-    highCents:       number | null;
-    avg1dCents:      number | null;
-    avg7dCents:      number | null;
-    avg30dCents:     number | null;
-    median3dCents:   number | null;
-    median7dCents:   number | null;
-    median30dCents:  number | null;
-    trend:           "up" | "down" | "stable" | null;
-    confidence:      "high" | "medium" | "low" | null;
-    saleCount:       number | null;
-    /// iOS comp-card ladder for the source toggle, keyed by snake_case
-    /// tier ids ("loose"/"psa_7".."sgc_10"), values in integer cents.
-    /// Empty `{}` is allowed (= card has no graded tiers in the ladder).
+  priceHistory: PriceHistoryWirePoint[];
+  poketrace: {
+    avgCents: number | null;
+    lowCents: number | null;
+    highCents: number | null;
+    avg1dCents: number | null;
+    avg7dCents: number | null;
+    avg30dCents: number | null;
+    median3dCents: number | null;
+    median7dCents: number | null;
+    median30dCents: number | null;
+    trend: "up" | "down" | "stable" | null;
+    confidence: "high" | "medium" | "low" | null;
+    saleCount: number | null;
     tierPricesCents: Record<string, number>;
   };
 }
 
-function centsToDecimal(cents: number | null): number | null {
-  if (cents === null) return null;
-  return Math.round(cents) / 100;
-}
+const c2d = (c: number | null): number | null =>
+  c === null ? null : Math.round(c) / 100;
+
+const d2c = (d: string | number | null | undefined): number | null => {
+  if (d === null || d === undefined) return null;
+  const n = typeof d === "string" ? Number(d) : d;
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+};
 
 export async function upsertMarketLadder(
   supabase: SupabaseClient,
   input: MarketUpsertInput,
 ): Promise<void> {
-  const isPpt = input.source === "pokemonpricetracker";
-  const row: Record<string, unknown> = {
+  const row = {
     identity_id: input.identityId,
     grading_service: input.gradingService,
     grade: input.grade,
-    source: input.source,
+    source: "poketrace",
+    headline_price: c2d(input.headlinePriceCents),
     price_history: input.priceHistory,
-    headline_price: centsToDecimal(input.headlinePriceCents),
+    pt_avg: c2d(input.poketrace.avgCents),
+    pt_low: c2d(input.poketrace.lowCents),
+    pt_high: c2d(input.poketrace.highCents),
+    pt_avg_1d: c2d(input.poketrace.avg1dCents),
+    pt_avg_7d: c2d(input.poketrace.avg7dCents),
+    pt_avg_30d: c2d(input.poketrace.avg30dCents),
+    pt_median_3d: c2d(input.poketrace.median3dCents),
+    pt_median_7d: c2d(input.poketrace.median7dCents),
+    pt_median_30d: c2d(input.poketrace.median30dCents),
+    pt_trend: input.poketrace.trend,
+    pt_confidence: input.poketrace.confidence,
+    pt_sale_count: input.poketrace.saleCount,
+    pt_tier_prices_cents: input.poketrace.tierPricesCents,
     updated_at: new Date().toISOString(),
   };
-
-  if (isPpt) {
-    Object.assign(row, {
-      ppt_tcgplayer_id: input.pptTCGPlayerId,
-      ppt_url: input.pptUrl,
-      loose_price:    centsToDecimal(input.ladderCents.loose),
-      psa_7_price:    centsToDecimal(input.ladderCents.psa_7),
-      psa_8_price:    centsToDecimal(input.ladderCents.psa_8),
-      psa_9_price:    centsToDecimal(input.ladderCents.psa_9),
-      psa_9_5_price:  centsToDecimal(input.ladderCents.psa_9_5),
-      psa_10_price:   centsToDecimal(input.ladderCents.psa_10),
-      bgs_10_price:   centsToDecimal(input.ladderCents.bgs_10),
-      cgc_10_price:   centsToDecimal(input.ladderCents.cgc_10),
-      sgc_10_price:   centsToDecimal(input.ladderCents.sgc_10),
-    });
-  } else if (input.poketrace) {
-    Object.assign(row, {
-      pt_avg:        centsToDecimal(input.poketrace.avgCents),
-      pt_low:        centsToDecimal(input.poketrace.lowCents),
-      pt_high:       centsToDecimal(input.poketrace.highCents),
-      pt_avg_1d:     centsToDecimal(input.poketrace.avg1dCents),
-      pt_avg_7d:     centsToDecimal(input.poketrace.avg7dCents),
-      pt_avg_30d:    centsToDecimal(input.poketrace.avg30dCents),
-      pt_median_3d:  centsToDecimal(input.poketrace.median3dCents),
-      pt_median_7d:  centsToDecimal(input.poketrace.median7dCents),
-      pt_median_30d: centsToDecimal(input.poketrace.median30dCents),
-      pt_trend:      input.poketrace.trend,
-      pt_confidence: input.poketrace.confidence,
-      pt_sale_count: input.poketrace.saleCount,
-      pt_tier_prices_cents: input.poketrace.tierPricesCents,
-    });
-  }
-
   const { error } = await supabase
     .from("graded_market")
     .upsert(row, { onConflict: "identity_id,grading_service,grade,source" });
@@ -96,35 +71,23 @@ export async function upsertMarketLadder(
 
 export interface MarketReadResult {
   headlinePriceCents: number | null;
-  ladderCents: LadderPrices;
-  priceHistory: PriceHistoryPoint[];
-  pptTCGPlayerId: string | null;
-  pptUrl: string | null;
+  priceHistory: PriceHistoryWirePoint[];
   updatedAt: string | null;
-  // Poketrace fields. Populated only when reading source='poketrace'.
   poketrace: {
-    avgCents:        number | null;
-    lowCents:        number | null;
-    highCents:       number | null;
-    avg1dCents:      number | null;
-    avg7dCents:      number | null;
-    avg30dCents:     number | null;
-    median3dCents:   number | null;
-    median7dCents:   number | null;
-    median30dCents:  number | null;
-    trend:           "up" | "down" | "stable" | null;
-    confidence:      "high" | "medium" | "low" | null;
-    saleCount:       number | null;
-    /// iOS comp-card ladder for the source toggle.
+    avgCents: number | null;
+    lowCents: number | null;
+    highCents: number | null;
+    avg1dCents: number | null;
+    avg7dCents: number | null;
+    avg30dCents: number | null;
+    median3dCents: number | null;
+    median7dCents: number | null;
+    median30dCents: number | null;
+    trend: "up" | "down" | "stable" | null;
+    confidence: "high" | "medium" | "low" | null;
+    saleCount: number | null;
     tierPricesCents: Record<string, number>;
-  } | null;
-}
-
-function decimalToCents(d: string | number | null): number | null {
-  if (d === null || d === undefined) return null;
-  const n = typeof d === "string" ? Number(d) : d;
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100);
+  };
 }
 
 export async function readMarketLadder(
@@ -132,23 +95,18 @@ export async function readMarketLadder(
   identityId: string,
   gradingService: GradingService,
   grade: string,
-  source: MarketSource = "pokemonpricetracker",
 ): Promise<MarketReadResult | null> {
   const { data } = await supabase
     .from("graded_market")
     .select(
-      "headline_price, loose_price, " +
-      "psa_7_price, psa_8_price, psa_9_price, psa_9_5_price, psa_10_price, " +
-      "bgs_10_price, cgc_10_price, sgc_10_price, " +
-      "price_history, ppt_tcgplayer_id, ppt_url, updated_at, " +
-      "pt_avg, pt_low, pt_high, pt_avg_1d, pt_avg_7d, pt_avg_30d, " +
-      "pt_median_3d, pt_median_7d, pt_median_30d, " +
+      "headline_price, price_history, updated_at, pt_avg, pt_low, pt_high, " +
+      "pt_avg_1d, pt_avg_7d, pt_avg_30d, pt_median_3d, pt_median_7d, pt_median_30d, " +
       "pt_trend, pt_confidence, pt_sale_count, pt_tier_prices_cents",
     )
     .eq("identity_id", identityId)
     .eq("grading_service", gradingService)
     .eq("grade", grade)
-    .eq("source", source)
+    .eq("source", "poketrace")
     .maybeSingle();
   if (!data) return null;
   const history = Array.isArray(data.price_history)
@@ -157,54 +115,37 @@ export async function readMarketLadder(
         .map((p) => ({ ts: p.ts as string, price_cents: p.price_cents as number }))
     : [];
   return {
-    headlinePriceCents: decimalToCents(data.headline_price),
-    ladderCents: {
-      loose:    decimalToCents(data.loose_price),
-      psa_7:    decimalToCents(data.psa_7_price),
-      psa_8:    decimalToCents(data.psa_8_price),
-      psa_9:    decimalToCents(data.psa_9_price),
-      psa_9_5:  decimalToCents(data.psa_9_5_price),
-      psa_10:   decimalToCents(data.psa_10_price),
-      bgs_10:   decimalToCents(data.bgs_10_price),
-      cgc_10:   decimalToCents(data.cgc_10_price),
-      sgc_10:   decimalToCents(data.sgc_10_price),
-    },
+    headlinePriceCents: d2c(data.headline_price),
     priceHistory: history,
-    pptTCGPlayerId: data.ppt_tcgplayer_id ?? null,
-    pptUrl: data.ppt_url ?? null,
     updatedAt: data.updated_at ?? null,
-    poketrace: source === "poketrace"
-      ? {
-          avgCents:       decimalToCents(data.pt_avg),
-          lowCents:       decimalToCents(data.pt_low),
-          highCents:      decimalToCents(data.pt_high),
-          avg1dCents:     decimalToCents(data.pt_avg_1d),
-          avg7dCents:     decimalToCents(data.pt_avg_7d),
-          avg30dCents:    decimalToCents(data.pt_avg_30d),
-          median3dCents:  decimalToCents(data.pt_median_3d),
-          median7dCents:  decimalToCents(data.pt_median_7d),
-          median30dCents: decimalToCents(data.pt_median_30d),
-          trend:          (data.pt_trend ?? null) as ("up" | "down" | "stable" | null),
-          confidence:     (data.pt_confidence ?? null) as ("high" | "medium" | "low" | null),
-          saleCount:      typeof data.pt_sale_count === "number" ? data.pt_sale_count : null,
-          tierPricesCents: parseTierPricesCents(data.pt_tier_prices_cents),
-        }
-      : null,
+    poketrace: {
+      avgCents: d2c(data.pt_avg),
+      lowCents: d2c(data.pt_low),
+      highCents: d2c(data.pt_high),
+      avg1dCents: d2c(data.pt_avg_1d),
+      avg7dCents: d2c(data.pt_avg_7d),
+      avg30dCents: d2c(data.pt_avg_30d),
+      median3dCents: d2c(data.pt_median_3d),
+      median7dCents: d2c(data.pt_median_7d),
+      median30dCents: d2c(data.pt_median_30d),
+      trend: (data.pt_trend ?? null) as ("up" | "down" | "stable" | null),
+      confidence: (data.pt_confidence ?? null) as ("high" | "medium" | "low" | null),
+      saleCount: typeof data.pt_sale_count === "number" ? data.pt_sale_count : null,
+      tierPricesCents: parseTierPricesCents(data.pt_tier_prices_cents),
+    },
   };
 }
 
 /**
- * Defensive decoder for the JSONB `pt_tier_prices_cents` column. Throws
- * away keys whose values aren't finite integers; returns `{}` when the
- * column is null or malformed.
+ * Defensive decoder for the JSONB `pt_tier_prices_cents` column.
+ * Throws away keys whose values aren't finite numbers; returns `{}` when
+ * the column is null or malformed.
  */
 function parseTierPricesCents(value: unknown): Record<string, number> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof v === "number" && Number.isFinite(v)) {
-      out[k] = Math.round(v);
-    }
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = Math.round(v);
   }
   return out;
 }

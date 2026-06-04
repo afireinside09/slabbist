@@ -1,10 +1,12 @@
 // @ts-nocheck — Deno runtime; LSP can't resolve std/* or .ts paths.
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   extractTierPrice,
   extractPoketraceLadder,
   tierPriceToBlock,
   parseHistoryResponse,
+  scoreSearchCard,
+  parseListings,
   type RawTierPrice,
 } from "../poketrace/parse.ts";
 
@@ -129,4 +131,53 @@ Deno.test("extractPoketraceLadder: maps Poketrace tier keys → iOS ladder ids i
 Deno.test("extractPoketraceLadder: empty input → {}", () => {
   assertEquals(extractPoketraceLadder({}), {});
   assertEquals(extractPoketraceLadder({ data: { id: "x" } }), {});
+});
+
+// ── scoreSearchCard tests (Task 2.2) ─────────────────────────────────────
+
+Deno.test("scoreSearchCard: exact number + name accepts", () => {
+  const card = { id: "u1", name: "Charizard", cardNumber: "4/102", set: { name: "Base Set" } };
+  const r = scoreSearchCard(card, { card_name: "Charizard", card_number: "4", set_name: "Base Set" });
+  assert(r.accept);
+});
+
+Deno.test("scoreSearchCard: name mismatch rejects", () => {
+  const card = { id: "u1", name: "Blastoise", cardNumber: "2/102", set: { name: "Base Set" } };
+  const r = scoreSearchCard(card, { card_name: "Charizard", card_number: "4", set_name: "Base Set" });
+  assert(!r.accept);
+});
+
+Deno.test("scoreSearchCard: null card_number, set-overlap >= 2 accepts", () => {
+  // No card number on either side → acceptance must hinge on distinctive
+  // set-token overlap. "prismatic" + "evolutions" are both ≥4 chars and
+  // not stopwords, giving overlap === 2.
+  const card = { id: "u1", name: "Umbreon", cardNumber: null, set: { name: "Prismatic Evolutions" } };
+  const r = scoreSearchCard(card, { card_name: "Umbreon", card_number: null, set_name: "Prismatic Evolutions" });
+  assert(r.accept);
+});
+
+// ── parseListings tests (Task 2.2) ────────────────────────────────────────
+
+Deno.test("parseListings: maps Listing → SoldListingWire, drops invalid", () => {
+  const body = { data: [
+    { sourceItemId: "e1", title: "Charizard PSA 10", price: 1200.50, listingUrl: "http://x",
+      condition: "Graded", grader: "PSA", grade: "10", soldAt: "2026-05-01T00:00:00Z", anomalyFlag: null },
+    { sourceItemId: "", title: "bad", price: 1, soldAt: "2026-05-01T00:00:00Z" }, // no id → dropped
+  ] };
+  const out = parseListings(body);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].price_cents, 120050);
+  assertEquals(out[0].source_listing_id, "e1");
+});
+
+Deno.test("parseListings: drops entries with missing/non-numeric price", () => {
+  const body = { data: [
+    { sourceItemId: "e1", title: "good", price: 50, soldAt: "2026-05-01T00:00:00Z" },
+    { sourceItemId: "e2", title: "no price", soldAt: "2026-05-01T00:00:00Z" }, // missing → dropped
+    { sourceItemId: "e3", title: "bad price", price: "NaN", soldAt: "2026-05-01T00:00:00Z" }, // non-numeric → dropped
+  ] };
+  const out = parseListings(body);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].source_listing_id, "e1");
+  assertEquals(out[0].price_cents, 5000);
 });

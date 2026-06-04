@@ -7,35 +7,21 @@ final class GradedMarketSnapshot {
     var gradingService: String
     var grade: String
 
-    /// "pokemonpricetracker" | "poketrace". Two snapshots can coexist for the
-    /// same (identity, service, grade) — one per source.
+    /// "poketrace". A single snapshot per (identity, service, grade) is now
+    /// written — Poketrace is the sole pricing source.
     ///
     /// The default literal matters: SwiftData's lightweight migration uses it
-    /// to backfill existing rows from the pre-poketrace schema (which had no
-    /// `source` column). Without the default, migration fails with
-    /// NSCocoaErrorDomain 134110 ("missing attribute values on mandatory
-    /// destination attribute") and the catch-init-failure path in
-    /// ModelContainer.swift has to nuke the store. Existing rows pre-date
-    /// the poketrace integration so PPT is the correct backfill.
-    var source: String = "pokemonpricetracker"
+    /// to backfill existing rows. Pre-PPT-removal rows carried
+    /// "pokemonpricetracker"; the migration deletes those rows server-side, so
+    /// any surviving on-device rows that survive without a store reset will be
+    /// treated as the Poketrace source on next read. The store-reset catch path
+    /// in ModelContainer.swift handles the destructive column removal if
+    /// lightweight migration cannot proceed.
+    var source: String = "poketrace"
 
     var headlinePriceCents: Int64?
 
-    // PPT-shaped ladder. Only populated when source == "pokemonpricetracker".
-    var loosePriceCents: Int64?
-    var psa7PriceCents: Int64?
-    var psa8PriceCents: Int64?
-    var psa9PriceCents: Int64?
-    var psa9_5PriceCents: Int64?
-    var psa10PriceCents: Int64?
-    var bgs10PriceCents: Int64?
-    var cgc10PriceCents: Int64?
-    var sgc10PriceCents: Int64?
-
-    var pptTCGPlayerId: String?
-    var pptURL: URL?
-
-    // Poketrace-shaped fields. Only populated when source == "poketrace".
+    // Poketrace-shaped fields.
     var ptAvgCents: Int64?
     var ptLowCents: Int64?
     var ptHighCents: Int64?
@@ -52,10 +38,10 @@ final class GradedMarketSnapshot {
 
     /// JSON-encoded `[String: Int64]` map of Poketrace's per-tier
     /// average prices in cents, keyed by snake_case tier ids
-    /// ("loose"/"psa_7".."sgc_10") so the iOS source toggle can flip the
-    /// ladder. Same string-encoded-blob convention as `priceHistoryJSON`
-    /// — SwiftData lightweight migration handles a String? field cleanly,
-    /// whereas a Codable dictionary property risks migration failures.
+    /// ("loose"/"psa_7".."sgc_10"). Same string-encoded-blob convention
+    /// as `priceHistoryJSON` — SwiftData lightweight migration handles a
+    /// String? field cleanly, whereas a Codable dictionary property risks
+    /// migration failures.
     var ptTierPricesJSON: String?
 
     /// JSON-encoded `[PriceHistoryPoint]`. Decoded on demand for the
@@ -64,27 +50,23 @@ final class GradedMarketSnapshot {
     /// migration.
     var priceHistoryJSON: String?
 
+    /// Deep-link to the eBay sold-results page for this card + grade.
+    /// Populated from the v3 `marketplace_url` field.
+    var marketplaceURL: URL?
+
+    /// JSON-encoded `[SoldListing]`; decoded on demand via `soldListings`.
+    /// Same blob convention as `priceHistoryJSON`.
+    var soldListingsJSON: String?
+
     var fetchedAt: Date
     var cacheHit: Bool
-    var isStaleFallback: Bool
 
     init(
         identityId: UUID,
         gradingService: String,
         grade: String,
-        source: String,
+        source: String = "poketrace",
         headlinePriceCents: Int64?,
-        loosePriceCents: Int64? = nil,
-        psa7PriceCents: Int64? = nil,
-        psa8PriceCents: Int64? = nil,
-        psa9PriceCents: Int64? = nil,
-        psa9_5PriceCents: Int64? = nil,
-        psa10PriceCents: Int64? = nil,
-        bgs10PriceCents: Int64? = nil,
-        cgc10PriceCents: Int64? = nil,
-        sgc10PriceCents: Int64? = nil,
-        pptTCGPlayerId: String? = nil,
-        pptURL: URL? = nil,
         ptAvgCents: Int64? = nil,
         ptLowCents: Int64? = nil,
         ptHighCents: Int64? = nil,
@@ -100,26 +82,16 @@ final class GradedMarketSnapshot {
         poketraceCardId: String? = nil,
         ptTierPricesJSON: String? = nil,
         priceHistoryJSON: String?,
+        marketplaceURL: URL? = nil,
+        soldListingsJSON: String? = nil,
         fetchedAt: Date,
-        cacheHit: Bool,
-        isStaleFallback: Bool
+        cacheHit: Bool
     ) {
         self.identityId = identityId
         self.gradingService = gradingService
         self.grade = grade
         self.source = source
         self.headlinePriceCents = headlinePriceCents
-        self.loosePriceCents = loosePriceCents
-        self.psa7PriceCents = psa7PriceCents
-        self.psa8PriceCents = psa8PriceCents
-        self.psa9PriceCents = psa9PriceCents
-        self.psa9_5PriceCents = psa9_5PriceCents
-        self.psa10PriceCents = psa10PriceCents
-        self.bgs10PriceCents = bgs10PriceCents
-        self.cgc10PriceCents = cgc10PriceCents
-        self.sgc10PriceCents = sgc10PriceCents
-        self.pptTCGPlayerId = pptTCGPlayerId
-        self.pptURL = pptURL
         self.ptAvgCents = ptAvgCents
         self.ptLowCents = ptLowCents
         self.ptHighCents = ptHighCents
@@ -135,9 +107,10 @@ final class GradedMarketSnapshot {
         self.poketraceCardId = poketraceCardId
         self.ptTierPricesJSON = ptTierPricesJSON
         self.priceHistoryJSON = priceHistoryJSON
+        self.marketplaceURL = marketplaceURL
+        self.soldListingsJSON = soldListingsJSON
         self.fetchedAt = fetchedAt
         self.cacheHit = cacheHit
-        self.isStaleFallback = isStaleFallback
     }
 
     /// Decoded view of `priceHistoryJSON`. Returns `[]` when missing or
@@ -157,9 +130,17 @@ final class GradedMarketSnapshot {
         guard let json = ptTierPricesJSON, let data = json.data(using: .utf8) else { return [:] }
         return (try? JSONDecoder().decode([String: Int64].self, from: data)) ?? [:]
     }
+
+    /// Decoded view of `soldListingsJSON`. Returns `[]` when missing or
+    /// malformed — UI shows empty/degraded state.
+    var soldListings: [SoldListing] {
+        guard let json = soldListingsJSON, let data = json.data(using: .utf8) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([SoldListing].self, from: data)) ?? []
+    }
 }
 
 extension GradedMarketSnapshot {
-    static let sourcePPT = "pokemonpricetracker"
     static let sourcePoketrace = "poketrace"
 }

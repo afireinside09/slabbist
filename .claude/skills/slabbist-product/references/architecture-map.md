@@ -17,13 +17,12 @@ Multiple sources feed comps and signals; they are independent and fan out in par
 
 | Source | Role | Notes |
 |---|---|---|
-| **Pokemon Price Tracker (PPT)** | Primary graded pricing | eBay-aggregate per (grader, grade) with multi-month history and a per-grade ladder in one call. |
-| **Poketrace** | Secondary graded pricing + rich metadata | Adds trend / confidence / sale-count dimensions; backfills the Grade Gains lookup. |
+| **Poketrace** | Sole graded pricing source | eBay-aggregate per (grader, grade) with multi-month history, a per-grade ladder, trend / confidence / sale-count dimensions; backfills the Grade Gains lookup. |
 | **eBay sold listings / movers** | Momentum signal | Drives Movers; momentum, not a live per-slab comp. Uses its own eBay credentials. |
 | **PriceCharting** | Comp source (see spec) | `2026-05-05-pricecharting-comp-design.md`. |
 | **Pop reports (PSA/CGC/BGS/SGC/TAG)** | Population stats | Submission-difficulty / gem-rate signal; scraped on a schedule; **not** a pricing source. |
 
-**Reconciliation.** PPT and Poketrace run in parallel on every comp request; the reconciled headline blends both, falling back to whichever source succeeds. Spec: `2026-05-13-poketrace-first-class-fanout-design.md`.
+**Reconciliation.** Poketrace is the sole graded-pricing provider as of 2026-06-04. Spec: `2026-06-04-poketrace-only-comp-design.md`.
 
 ## Code map
 

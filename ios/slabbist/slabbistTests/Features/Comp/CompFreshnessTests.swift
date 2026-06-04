@@ -88,7 +88,7 @@ struct CompFreshnessTests {
         let gate = DispatchSemaphore(value: 0)
         MockURLProtocol.requestHandler = { _ in
             gate.wait()
-            return (Self.httpResponse(status: 200), CompFetchE2ETests.fullLadderJSON.data(using: .utf8))
+            return (Self.httpResponse(status: 200), CompFetchE2ETests.v3FullJSON.data(using: .utf8))
         }
 
         let scan = Self.insertValidatedScan(in: h.context)
@@ -202,7 +202,7 @@ struct CompFreshnessTests {
     func successfulFetchStampsFetchedAt() async throws {
         let h = try Self.makeHarness()
         MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), CompFetchE2ETests.fullLadderJSON.data(using: .utf8))
+            (Self.httpResponse(status: 200), CompFetchE2ETests.v3FullJSON.data(using: .utf8))
         }
 
         let scan = Self.insertValidatedScan(in: h.context)
@@ -266,7 +266,7 @@ struct CompFreshnessTests {
         let gate = DispatchSemaphore(value: 0)
         MockURLProtocol.requestHandler = { _ in
             gate.wait()
-            return (Self.httpResponse(status: 200), CompFetchE2ETests.fullLadderJSON.data(using: .utf8))
+            return (Self.httpResponse(status: 200), CompFetchE2ETests.v3FullJSON.data(using: .utf8))
         }
 
         // Two scans, same `(identityId, grader, grade)` — like two

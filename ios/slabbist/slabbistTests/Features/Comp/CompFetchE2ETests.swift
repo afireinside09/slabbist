@@ -112,77 +112,105 @@ struct CompFetchE2ETests {
         return nil
     }
 
-    /// Canonical full-ladder PPT payload used by the happy-path test. Mirrors
-    /// the `CompRepository.Wire` shape exactly.
-    static let fullLadderJSON: String = """
+    /// Canonical v3 Poketrace payload used by the happy-path test.
+    /// Matches the `CompRepository.Wire` v3 shape exactly.
+    static let v3FullJSON: String = """
     {
-      "headline_price_cents": 18500,
       "grading_service": "PSA",
       "grade": "10",
-      "loose_price_cents": 400,
-      "psa_7_price_cents": 2400,
-      "psa_8_price_cents": 3400,
-      "psa_9_price_cents": 6800,
-      "psa_9_5_price_cents": 11200,
-      "psa_10_price_cents": 18500,
-      "bgs_10_price_cents": 21500,
-      "cgc_10_price_cents": 16800,
-      "sgc_10_price_cents": 16500,
-      "price_history": [
-        { "ts": "2025-11-08T00:00:00Z", "price_cents": 16200 },
-        { "ts": "2025-11-15T00:00:00Z", "price_cents": 16850 }
+      "headline_price_cents": 19500,
+      "poketrace": {
+        "card_id": "22222222-2222-2222-2222-222222222222",
+        "tier": "PSA_10",
+        "avg_cents": 19500,
+        "low_cents": 18000,
+        "high_cents": 21000,
+        "avg_1d_cents": null,
+        "avg_7d_cents": 19400,
+        "avg_30d_cents": 19200,
+        "median_3d_cents": 19500,
+        "median_7d_cents": 19350,
+        "median_30d_cents": 19000,
+        "trend": "stable",
+        "confidence": "high",
+        "sale_count": 24,
+        "tier_prices_cents": { "psa_10": 19500, "psa_9": 6800 },
+        "price_history": [
+          { "ts": "2026-04-30T00:00:00Z", "price_cents": 19200 }
+        ],
+        "fetched_at": "2026-05-07T22:14:03Z"
+      },
+      "sold_listings": [
+        {
+          "source_listing_id": "ebay-001",
+          "title": "Charizard PSA 10",
+          "price_cents": 19500,
+          "sold_at": "2026-04-28T10:00:00Z",
+          "grader": "PSA",
+          "grade": "10",
+          "condition": "Graded",
+          "url": "https://www.ebay.com/itm/001",
+          "anomaly_flag": null
+        },
+        {
+          "source_listing_id": "ebay-002",
+          "title": "Charizard PSA 10 Base",
+          "price_cents": 20000,
+          "sold_at": "2026-04-25T14:00:00Z",
+          "grader": "PSA",
+          "grade": "10",
+          "condition": "Graded",
+          "url": "https://www.ebay.com/itm/002",
+          "anomaly_flag": null
+        }
       ],
-      "ppt_tcgplayer_id": "243172",
-      "ppt_url": "https://www.pokemonpricetracker.com/card/charizard-base-set",
+      "marketplace_url": "https://www.ebay.com/sch/i.html?_nkw=charizard+psa+10",
       "fetched_at": "2026-05-07T22:14:03Z",
-      "cache_hit": false,
-      "is_stale_fallback": false
+      "cache_hit": false
     }
     """
 
     // MARK: - 1. Happy path
 
-    @Test("happy path: 200 → snapshot persisted, scan resolved")
+    @Test("happy path: 200 → single poketrace snapshot persisted, soldListingsJSON set, scan resolved")
     func happyPath() async throws {
         let h = try Self.makeHarness()
         MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+            (Self.httpResponse(status: 200), Self.v3FullJSON.data(using: .utf8))
         }
 
-        // Direct repository assertion — the wire shape decodes correctly.
+        // Direct repository assertion — the v3 wire shape decodes correctly.
         let decoded = try await h.repository.fetchComp(
             identityId: Self.fixedIdentityId,
             gradingService: "PSA",
             grade: "10"
         )
-        #expect(decoded.headlinePriceCents == 18500)
-        #expect(decoded.psa10PriceCents == 18500)
-        #expect(decoded.bgs10PriceCents == 21500)
-        #expect(decoded.psa9_5PriceCents == 11200)
-        #expect(decoded.loosePriceCents == 400)
-        #expect(decoded.priceHistory.count == 2)
-        #expect(decoded.pptTCGPlayerId == "243172")
-        #expect(decoded.isStaleFallback == false)
+        #expect(decoded.headlinePriceCents == 19500)
+        #expect(decoded.poketrace?.avgCents == 19500)
+        #expect(decoded.soldListings.count == 2)
+        #expect(decoded.marketplaceURL != nil)
+        #expect(decoded.cacheHit == false)
 
-        // Now the service path: persists a snapshot, flips state to .resolved.
+        // Now the service path: persists a single snapshot, flips state to .resolved.
         let scan = Self.insertValidatedScan(in: h.context)
         CompFetchService.fetch(scan: scan, repository: h.repository, context: h.context)
         let finalState = await Self.waitForCompFetch(scanId: scan.id, in: h.context)
         #expect(finalState == CompFetchState.resolved.rawValue)
 
         let snapshots = try h.context.fetch(FetchDescriptor<GradedMarketSnapshot>())
+        // Single poketrace snapshot — no PPT row.
         #expect(snapshots.count == 1)
         let snap = try #require(snapshots.first)
         #expect(snap.identityId == Self.fixedIdentityId)
         #expect(snap.gradingService == "PSA")
         #expect(snap.grade == "10")
-        #expect(snap.headlinePriceCents == 18500)
-        #expect(snap.psa10PriceCents == 18500)
-        #expect(snap.bgs10PriceCents == 21500)
-        #expect(snap.loosePriceCents == 400)
-        #expect(snap.pptTCGPlayerId == "243172")
-        #expect(snap.isStaleFallback == false)
-        #expect(snap.priceHistory.count == 2)
+        #expect(snap.source == GradedMarketSnapshot.sourcePoketrace)
+        #expect(snap.headlinePriceCents == 19500)
+        #expect(snap.ptAvgCents == 19500)
+        #expect(snap.cacheHit == false)
+        #expect(snap.soldListingsJSON != nil)
+        #expect(snap.soldListings.count == 2)
+        #expect(snap.marketplaceURL != nil)
     }
 
     // MARK: - 2. Network failure (URLError.timedOut)
@@ -250,12 +278,12 @@ struct CompFetchE2ETests {
 
         let (state, message) = CompFetchService.classify(CompRepository.Error.productNotResolved)
         #expect(state == .noData)
-        #expect(message == "We couldn't find this card on Pokemon Price Tracker.")
+        #expect(message == "We couldn't find this card on Poketrace.")
     }
 
     // MARK: - 5. 404 NO_MARKET_DATA
 
-    @Test("404 NO_MARKET_DATA → noData + supported-tier copy")
+    @Test("404 NO_MARKET_DATA → noData + Poketrace-flavored copy")
     func noMarketData() async throws {
         let h = try Self.makeHarness()
         let body = #"{"code":"NO_MARKET_DATA"}"#.data(using: .utf8)
@@ -271,31 +299,10 @@ struct CompFetchE2ETests {
 
         let (state, message) = CompFetchService.classify(CompRepository.Error.noMarketData)
         #expect(state == .noData)
-        #expect(message == "Pokemon Price Tracker has no comp for this slab yet.")
+        #expect(message == "Poketrace has no comp for this slab yet.")
     }
 
-    // MARK: - 6. 502 AUTH_INVALID
-
-    @Test("502 AUTH_INVALID → authInvalid + misconfigured copy")
-    func authInvalid() async throws {
-        let h = try Self.makeHarness()
-        let body = #"{"code":"AUTH_INVALID"}"#.data(using: .utf8)
-        MockURLProtocol.requestHandler = { _ in (Self.httpResponse(status: 502), body) }
-
-        await #expect(throws: CompRepository.Error.authInvalid) {
-            _ = try await h.repository.fetchComp(
-                identityId: Self.fixedIdentityId,
-                gradingService: "PSA",
-                grade: "10"
-            )
-        }
-
-        let (state, message) = CompFetchService.classify(CompRepository.Error.authInvalid)
-        #expect(state == .failed)
-        #expect(message == "Comp lookup misconfigured — contact support.")
-    }
-
-    // MARK: - 7. 503 UPSTREAM_UNAVAILABLE
+    // MARK: - 6. 503 UPSTREAM_UNAVAILABLE
 
     @Test("503 UPSTREAM_UNAVAILABLE → upstreamUnavailable + try-again copy")
     func upstreamUnavailable() async throws {
@@ -313,118 +320,10 @@ struct CompFetchE2ETests {
 
         let (state, message) = CompFetchService.classify(CompRepository.Error.upstreamUnavailable)
         #expect(state == .failed)
-        #expect(message == "Pokemon Price Tracker lookup unavailable — try again.")
+        #expect(message == "Poketrace lookup unavailable — try again.")
     }
 
-    // MARK: - 8. Stale fallback
-
-    @Test("stale fallback → snapshot persisted with isStaleFallback=true")
-    func staleFallback() async throws {
-        let h = try Self.makeHarness()
-        let staleJSON = """
-        {
-          "headline_price_cents": 12000,
-          "grading_service": "PSA",
-          "grade": "10",
-          "loose_price_cents": 350,
-          "psa_7_price_cents": null,
-          "psa_8_price_cents": null,
-          "psa_9_price_cents": 5000,
-          "psa_9_5_price_cents": null,
-          "psa_10_price_cents": 12000,
-          "bgs_10_price_cents": null,
-          "cgc_10_price_cents": null,
-          "sgc_10_price_cents": null,
-          "price_history": [],
-          "ppt_tcgplayer_id": "111",
-          "ppt_url": "https://www.pokemonpricetracker.com/card/stale",
-          "fetched_at": "2026-05-07T22:14:03Z",
-          "cache_hit": true,
-          "is_stale_fallback": true
-        }
-        """
-        MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), staleJSON.data(using: .utf8))
-        }
-
-        let decoded = try await h.repository.fetchComp(
-            identityId: Self.fixedIdentityId,
-            gradingService: "PSA",
-            grade: "10"
-        )
-        #expect(decoded.isStaleFallback == true)
-        #expect(decoded.cacheHit == true)
-
-        let scan = Self.insertValidatedScan(in: h.context)
-        CompFetchService.fetch(scan: scan, repository: h.repository, context: h.context)
-        let finalState = await Self.waitForCompFetch(scanId: scan.id, in: h.context)
-        #expect(finalState == CompFetchState.resolved.rawValue)
-
-        let snapshots = try h.context.fetch(FetchDescriptor<GradedMarketSnapshot>())
-        let snap = try #require(snapshots.first)
-        #expect(snap.isStaleFallback == true)
-        #expect(snap.cacheHit == true)
-    }
-
-    // MARK: - 9. JP card (only loose populated)
-
-    @Test("JP card → only loosePriceCents populated, all PSA tiers nil")
-    func jpRawOnly() async throws {
-        let h = try Self.makeHarness()
-        let jpJSON = """
-        {
-          "headline_price_cents": null,
-          "grading_service": "PSA",
-          "grade": "10",
-          "loose_price_cents": 800,
-          "psa_7_price_cents": null,
-          "psa_8_price_cents": null,
-          "psa_9_price_cents": null,
-          "psa_9_5_price_cents": null,
-          "psa_10_price_cents": null,
-          "bgs_10_price_cents": null,
-          "cgc_10_price_cents": null,
-          "sgc_10_price_cents": null,
-          "price_history": [],
-          "ppt_tcgplayer_id": "999",
-          "ppt_url": "https://www.pokemonpricetracker.com/card/jp",
-          "fetched_at": "2026-05-07T22:14:03Z",
-          "cache_hit": false,
-          "is_stale_fallback": false
-        }
-        """
-        MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), jpJSON.data(using: .utf8))
-        }
-
-        let decoded = try await h.repository.fetchComp(
-            identityId: Self.fixedIdentityId,
-            gradingService: "PSA",
-            grade: "10"
-        )
-        #expect(decoded.headlinePriceCents == nil)
-        #expect(decoded.loosePriceCents == 800)
-        #expect(decoded.psa10PriceCents == nil)
-        #expect(decoded.bgs10PriceCents == nil)
-        #expect(decoded.cgc10PriceCents == nil)
-        #expect(decoded.sgc10PriceCents == nil)
-        #expect(decoded.priceHistory.isEmpty)
-
-        let scan = Self.insertValidatedScan(in: h.context)
-        CompFetchService.fetch(scan: scan, repository: h.repository, context: h.context)
-        let finalState = await Self.waitForCompFetch(scanId: scan.id, in: h.context)
-        #expect(finalState == CompFetchState.resolved.rawValue)
-
-        let snapshots = try h.context.fetch(FetchDescriptor<GradedMarketSnapshot>())
-        let snap = try #require(snapshots.first)
-        #expect(snap.loosePriceCents == 800)
-        #expect(snap.headlinePriceCents == nil)
-        #expect(snap.psa10PriceCents == nil)
-        #expect(snap.bgs10PriceCents == nil)
-        #expect(snap.priceHistoryJSON == nil)
-    }
-
-    // MARK: - 10. Decoding error (malformed JSON)
+    // MARK: - 7. Decoding error (malformed JSON)
 
     @Test("malformed 200 body → decoding error surfaces")
     func decodingError() async throws {
@@ -456,7 +355,7 @@ struct CompFetchE2ETests {
         #expect(message.localizedCaseInsensitiveContains("couldn't decode"))
     }
 
-    // MARK: - 11. In-flight de-dup
+    // MARK: - 8. In-flight de-dup
 
     @Test("two scans of same (identity, grader, grade) share one network call")
     func inFlightDedup() async throws {
@@ -471,7 +370,7 @@ struct CompFetchE2ETests {
             // The handler runs off the main actor so this doesn't deadlock
             // the test's @MainActor body.
             gate.wait()
-            return (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+            return (Self.httpResponse(status: 200), Self.v3FullJSON.data(using: .utf8))
         }
 
         let scanA = Self.insertValidatedScan(in: h.context, certNumber: "AAA")
@@ -503,7 +402,7 @@ struct CompFetchE2ETests {
         #expect(snapshots.count == 1)
     }
 
-    // MARK: - 12. D4 — sibling-scan price isolation
+    // MARK: - 9. D4 — sibling-scan price isolation
 
     /// D4: refreshing ScanA's comp must NOT silently move ScanB's hero
     /// number. `reconciledHeadlinePriceCents` is the per-scan mirror of
@@ -519,7 +418,7 @@ struct CompFetchE2ETests {
     func refreshDoesNotBroadcastReconciledHeadline() async throws {
         let h = try Self.makeHarness()
         MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+            (Self.httpResponse(status: 200), Self.v3FullJSON.data(using: .utf8))
         }
 
         // Two scans of the same slab — same identity, same grader, same grade.
@@ -541,11 +440,11 @@ struct CompFetchE2ETests {
         let stateA = await Self.waitForCompFetch(scanId: aId, in: h.context)
         #expect(stateA == CompFetchState.resolved.rawValue)
 
-        // ScanA picks up the server's headline (18500 from the fixture).
+        // ScanA picks up the server's headline (19500 from the v3 fixture).
         let fetchedA = try h.context.fetch(
             FetchDescriptor<Scan>(predicate: #Predicate { $0.id == aId })
         ).first
-        #expect(fetchedA?.reconciledHeadlinePriceCents == 18500)
+        #expect(fetchedA?.reconciledHeadlinePriceCents == 19500)
 
         // ScanB's mirror stayed put — siblings are not silently rewritten.
         let fetchedB = try h.context.fetch(
@@ -562,7 +461,7 @@ struct CompFetchE2ETests {
     func siblingCanFetchAfterPeerRefresh() async throws {
         let h = try Self.makeHarness()
         MockURLProtocol.requestHandler = { _ in
-            (Self.httpResponse(status: 200), Self.fullLadderJSON.data(using: .utf8))
+            (Self.httpResponse(status: 200), Self.v3FullJSON.data(using: .utf8))
         }
 
         let scanA = Self.insertValidatedScan(in: h.context, certNumber: "AAA")
@@ -588,6 +487,6 @@ struct CompFetchE2ETests {
         let fetchedB = try h.context.fetch(
             FetchDescriptor<Scan>(predicate: #Predicate { $0.id == bId })
         ).first
-        #expect(fetchedB?.reconciledHeadlinePriceCents == 18500)
+        #expect(fetchedB?.reconciledHeadlinePriceCents == 19500)
     }
 }

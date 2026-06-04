@@ -107,9 +107,9 @@ final class LotsViewModel {
     }
 
     /// Persist the user-entered vendor asking price for a scan. Pass `nil` to
-    /// clear it (revert to whatever Pokemon Price Tracker eventually
-    /// returns). Mutates the scan in place and enqueues an
-    /// `updateScanOffer` outbox item so the value survives sync.
+    /// clear it (revert to the Poketrace auto-derived comp). Mutates the scan
+    /// in place and enqueues an `updateScanOffer` outbox item so the value
+    /// survives sync.
     func setOfferCents(scan: Scan, cents: Int64?) throws {
         let now = Date()
         scan.vendorAskCents = cents

@@ -12,8 +12,7 @@ export interface GradedCardIdentity {
   card_name: string;
   variant: string | null;
   year: number | null;
-  ppt_tcgplayer_id: string | null;
-  ppt_url: string | null;
+  tcgplayer_product_id: string | null;
 }
 
 export interface PriceCompRequest {
@@ -27,34 +26,9 @@ export interface PriceHistoryWirePoint {
   price_cents: number;
 }
 
-export interface PriceCompResponse {
-  headline_price_cents: number | null;
-  grading_service: GradingService;
-  grade: string;
-
-  loose_price_cents:    number | null;
-  psa_7_price_cents:    number | null;
-  psa_8_price_cents:    number | null;
-  psa_9_price_cents:    number | null;
-  psa_9_5_price_cents:  number | null;
-  psa_10_price_cents:   number | null;
-  bgs_10_price_cents:   number | null;
-  cgc_10_price_cents:   number | null;
-  sgc_10_price_cents:   number | null;
-
-  price_history: PriceHistoryWirePoint[];
-
-  ppt_tcgplayer_id: string;
-  ppt_url: string;
-
-  fetched_at: string;
-  cache_hit: boolean;
-  is_stale_fallback: boolean;
-}
-
 export type CacheState = "hit" | "miss" | "stale";
 
-// ---- Poketrace (second source) ---------------------------------------------
+// ---- Poketrace -------------------------------------------------------------
 
 export interface PoketraceTierFields {
   avg_cents:        number | null;
@@ -72,8 +46,7 @@ export interface PoketraceTierFields {
 }
 
 /**
- * Per-tier ladder map for the iOS comp-card. Keys are the same
- * snake_case ids the PPT branch uses for its column names
+ * Per-tier ladder map for the iOS comp-card. Keys are snake_case tier ids
  * ("loose", "psa_7", "psa_8", "psa_9", "psa_9_5", "psa_10", "bgs_10",
  * "cgc_10", "sgc_10"); values are integer cents.
  *
@@ -92,21 +65,26 @@ export interface PoketraceBlock extends PoketraceTierFields {
   fetched_at: string;
 }
 
-export type ReconciledSource =
-  | "avg"                  // simple average of both sources
-  | "ppt-only"             // only PPT had data
-  | "poketrace-only"       // only Poketrace had data
-  | "poketrace-preferred"; // both present, but Poketrace's saleCount + divergence override the simple average
-
-export interface ReconciledBlock {
-  headline_price_cents: number | null;
-  source: ReconciledSource;
+export interface SoldListingWire {
+  source_listing_id: string;
+  title: string | null;
+  price_cents: number | null;
+  sold_at: string;            // ISO8601
+  grader: string | null;      // PSA | BGS | CGC | SGC
+  grade: string | null;
+  condition: string | null;
+  url: string | null;
+  anomaly_flag: string | null;
 }
 
-// Wider response envelope. The legacy fields at the top remain populated for
-// the PPT branch so existing iOS clients on v1 keep working until the new
-// CompRepository decoder ships.
-export interface PriceCompResponseV2 extends PriceCompResponse {
-  poketrace: PoketraceBlock | null;
-  reconciled: ReconciledBlock;
+// v3 response — Poketrace is the sole source. No PPT fields, no reconciled block.
+export interface PriceCompResponse {
+  grading_service: GradingService;
+  grade: string;
+  headline_price_cents: number | null;   // = poketrace avg
+  poketrace: PoketraceBlock | null;       // null when no graded tier data
+  sold_listings: SoldListingWire[];       // [] off the Scale plan
+  marketplace_url: string | null;         // ebay sold-results deep link
+  fetched_at: string;
+  cache_hit: boolean;
 }

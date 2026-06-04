@@ -131,7 +131,7 @@ Monorepo, one shared Supabase project:
 - **Scraper:** `cd scraper && bun install`. `bun run typecheck` / `bun run test` / `bun run cli run raw tcgcsv` (daily) / `bun run cli run graded ebay` (6h, watchlist) / `bun run cli run graded pop -s all` (weekly) / `bun run cli seed popular-slabs`.
 - **Dashboard / Marketing:** `cd {dashboard,marketing} && bun install && bun dev | bun run build | bun run lint`.
 - **iOS:** `open ios/slabbist/slabbist.xcodeproj`. Scheme `slabbist`; tests `slabbistTests` / `slabbistUITests`. CLI: `xcodebuild -project ios/slabbist/slabbist.xcodeproj -scheme slabbist -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build`. Archive/CI/TestFlight: fill `ios/slabbist/Config/Secrets.xcconfig` from the example.
-- **Deno scripts:** `./scripts/validate-csv.ts` (offline), `./scripts/audit-aliases.ts` (live), `./scripts/probe-resolver.ts` (price-comp hit-rate).
+- **Deno scripts:** `./scripts/validate-csv.ts` (offline), `./scripts/audit-aliases.ts` (live).
 
 ## Critical architecture rules
 

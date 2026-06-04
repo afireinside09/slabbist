@@ -9,34 +9,20 @@ final class CompRepository {
         case noMarketData
         case productNotResolved
         case identityNotFound
-        case authInvalid
         case upstreamUnavailable
         case httpStatus(Int)
         case decoding(String)
     }
 
     nonisolated struct Wire: Decodable {
-        let headline_price_cents: Int64?
         let grading_service: String
         let grade: String
-        let loose_price_cents: Int64?
-        let psa_7_price_cents: Int64?
-        let psa_8_price_cents: Int64?
-        let psa_9_price_cents: Int64?
-        let psa_9_5_price_cents: Int64?
-        let psa_10_price_cents: Int64?
-        let bgs_10_price_cents: Int64?
-        let cgc_10_price_cents: Int64?
-        let sgc_10_price_cents: Int64?
-        let price_history: [PriceHistoryPoint]
-        let ppt_tcgplayer_id: String
-        let ppt_url: String
+        let headline_price_cents: Int64?
+        let poketrace: PoketraceWire?
+        let sold_listings: [SoldListingWire]
+        let marketplace_url: String?
         let fetched_at: Date
         let cache_hit: Bool
-        let is_stale_fallback: Bool
-        // v2 additions; both optional so legacy responses still decode.
-        let poketrace: PoketraceWire?
-        let reconciled: ReconciledWire?
 
         struct PoketraceWire: Decodable {
             let card_id: String
@@ -53,41 +39,36 @@ final class CompRepository {
             let trend: String?
             let confidence: String?
             let sale_count: Int?
-            /// Per-tier ladder for the iOS source toggle. Optional so
-            /// pre-ladder responses still decode; absent keys are
-            /// rendered as "no data" cells.
+            /// Per-tier ladder for the iOS comp-card, keyed by snake_case
+            /// tier ids ("loose"/"psa_7".."sgc_10"); values in cents.
+            /// Optional so pre-ladder responses still decode.
             let tier_prices_cents: [String: Int64]?
             let price_history: [PriceHistoryPoint]
             let fetched_at: Date
         }
-        struct ReconciledWire: Decodable {
-            let headline_price_cents: Int64?
-            let source: String
+
+        struct SoldListingWire: Decodable {
+            let source_listing_id: String
+            let title: String?
+            let price_cents: Int64?
+            let sold_at: Date
+            let grader: String?
+            let grade: String?
+            let condition: String?
+            let url: String?
+            let anomaly_flag: String?
         }
     }
 
     struct Decoded {
-        let headlinePriceCents: Int64?
         let gradingService: String
         let grade: String
-        let loosePriceCents: Int64?
-        let psa7PriceCents: Int64?
-        let psa8PriceCents: Int64?
-        let psa9PriceCents: Int64?
-        let psa9_5PriceCents: Int64?
-        let psa10PriceCents: Int64?
-        let bgs10PriceCents: Int64?
-        let cgc10PriceCents: Int64?
-        let sgc10PriceCents: Int64?
-        let priceHistory: [PriceHistoryPoint]
-        let pptTCGPlayerId: String
-        let pptURL: URL?
+        let headlinePriceCents: Int64?
+        let poketrace: SourceComp?
+        let soldListings: [SoldListing]
+        let marketplaceURL: URL?
         let fetchedAt: Date
         let cacheHit: Bool
-        let isStaleFallback: Bool
-        let poketrace: SourceComp?
-        let reconciledHeadlineCents: Int64?
-        let reconciledSource: String  // "avg" | "ppt-only" | "poketrace-only"
 
         struct SourceComp: Equatable {
             let cardId: String
@@ -104,8 +85,8 @@ final class CompRepository {
             let trend: String?
             let confidence: String?
             let saleCount: Int?
-            /// Per-tier ladder for the source toggle, keyed by snake_case
-            /// ladder ids ("loose"/"psa_7".."sgc_10"); values in cents.
+            /// Per-tier ladder for the comp-card, keyed by snake_case ladder ids
+            /// ("loose"/"psa_7".."sgc_10"); values in cents.
             let tierPricesCents: [String: Int64]
             let priceHistory: [PriceHistoryPoint]
             let fetchedAt: Date
@@ -135,6 +116,7 @@ final class CompRepository {
         let wire: Wire
         do { wire = try decoder.decode(Wire.self, from: data) }
         catch { throw Error.decoding("\(error)") }
+
         let poketrace = wire.poketrace.map { pt in
             Decoded.SourceComp(
                 cardId: pt.card_id, tier: pt.tier,
@@ -146,30 +128,30 @@ final class CompRepository {
                 priceHistory: pt.price_history, fetchedAt: pt.fetched_at
             )
         }
-        let reconciledCents = wire.reconciled?.headline_price_cents ?? wire.headline_price_cents
-        let reconciledSource = wire.reconciled?.source ?? "ppt-only"
+
+        let soldListings: [SoldListing] = wire.sold_listings.compactMap { sl in
+            SoldListing(
+                sourceListingId: sl.source_listing_id,
+                title: sl.title,
+                priceCents: sl.price_cents,
+                soldAt: sl.sold_at,
+                grader: sl.grader,
+                grade: sl.grade,
+                condition: sl.condition,
+                url: sl.url.flatMap(URL.init(string:)),
+                anomalyFlag: sl.anomaly_flag
+            )
+        }
+
         return Decoded(
-            headlinePriceCents: wire.headline_price_cents,
             gradingService: wire.grading_service,
             grade: wire.grade,
-            loosePriceCents: wire.loose_price_cents,
-            psa7PriceCents: wire.psa_7_price_cents,
-            psa8PriceCents: wire.psa_8_price_cents,
-            psa9PriceCents: wire.psa_9_price_cents,
-            psa9_5PriceCents: wire.psa_9_5_price_cents,
-            psa10PriceCents: wire.psa_10_price_cents,
-            bgs10PriceCents: wire.bgs_10_price_cents,
-            cgc10PriceCents: wire.cgc_10_price_cents,
-            sgc10PriceCents: wire.sgc_10_price_cents,
-            priceHistory: wire.price_history,
-            pptTCGPlayerId: wire.ppt_tcgplayer_id,
-            pptURL: URL(string: wire.ppt_url),
-            fetchedAt: wire.fetched_at,
-            cacheHit: wire.cache_hit,
-            isStaleFallback: wire.is_stale_fallback,
+            headlinePriceCents: wire.headline_price_cents,
             poketrace: poketrace,
-            reconciledHeadlineCents: reconciledCents,
-            reconciledSource: reconciledSource
+            soldListings: soldListings,
+            marketplaceURL: wire.marketplace_url.flatMap(URL.init(string:)),
+            fetchedAt: wire.fetched_at,
+            cacheHit: wire.cache_hit
         )
     }
 
@@ -180,7 +162,6 @@ final class CompRepository {
         case (404, "NO_MARKET_DATA"):       throw Error.noMarketData
         case (404, "PRODUCT_NOT_RESOLVED"): throw Error.productNotResolved
         case (404, "IDENTITY_NOT_FOUND"):   throw Error.identityNotFound
-        case (502, "AUTH_INVALID"):         throw Error.authInvalid
         case (503, "UPSTREAM_UNAVAILABLE"): throw Error.upstreamUnavailable
         default: throw Error.httpStatus(statusCode)
         }
