@@ -13,18 +13,26 @@ Slabbist earns commission on resulting purchases.
 ## Background: how impact.com affiliate links work
 
 impact.com does **not** require a separate registered link per card. Once the
-account is approved for the TCGplayer campaign, the dashboard yields **one**
-base tracking URL on TCGplayer's vanity domain:
+account is approved for the TCGplayer campaign, the dashboard's **Get Tracking
+Link** (Ads → the TCGplayer "API Link" / Text Link) yields **one** base
+tracking URL on TCGplayer's vanity domain, of the form
+`https://partner.tcgplayer.com/c/{accountId}/{adId}/{campaignId}`. The account's
+actual value is:
 
 ```
-https://tcgplayer.pxf.io/c/{accountId}/{adId}/{campaignId}
+https://partner.tcgplayer.com/c/6098165/1830156/21018
 ```
+
+The dashboard's separate **Vanity Links** screen (short links like
+`partner.tcgplayer.com/zzN6BM`) is NOT used — each is bound to one fixed landing
+page. Leave the tracking link's "Landing Page (Optional)" field blank; the app
+supplies the destination per card via `u=`.
 
 Any specific product is reached by appending a percent-encoded destination in
-the `u=` parameter:
+the `u=` parameter (and the surface tag in `subId1`):
 
 ```
-https://tcgplayer.pxf.io/c/123456/789012/15676?u=https%3A%2F%2Fwww.tcgplayer.com%2Fproduct%2F517812
+https://partner.tcgplayer.com/c/6098165/1830156/21018?subId1=graded&u=https%3A%2F%2Fwww.tcgplayer.com%2Fproduct%2F517812
 ```
 
 The IDs are constant; only the `u=` value changes per card. The link can be
@@ -82,18 +90,30 @@ reports attribute clicks by screen.
 
 ### 2. Config — `Core/Config/AppEnvironment.swift`
 
-Add, following the exact `epnCampaignID` pattern:
+Add, following the `epnCustomID` pattern (real default, env-overridable).
+Affiliate tracking links are public (embedded in every outbound tap), so the
+account's tracking link is baked in as the default — buttons monetize with zero
+setup. `TCGPLAYER_IMPACT_BASE_URL` overrides it (e.g. campaign rotation); an
+explicitly empty value falls back to raw tcgplayer.com links.
 
 ```
-/// impact.com base tracking URL for the TCGplayer campaign, e.g.
-/// "https://tcgplayer.pxf.io/c/{account}/{ad}/{campaign}". Empty string
-/// when unset → affiliate wrapping is skipped (links open raw tcgplayer.com).
-static let tcgplayerImpactBaseURL: String = lookup("TCGPLAYER_IMPACT_BASE_URL") ?? ""
+/// impact.com base tracking URL for the TCGplayer campaign,
+/// "https://partner.tcgplayer.com/c/{account}/{ad}/{campaign}". The app
+/// appends ?subId1=<surface>&u=<encoded product url> per card. Defaults to
+/// the account's live tracking link; override via env for campaign rotation.
+static let tcgplayerImpactBaseURL: String = {
+    if let value = lookup("TCGPLAYER_IMPACT_BASE_URL") { return value }
+    return "https://partner.tcgplayer.com/c/6098165/1830156/21018"
+}()
 ```
 
-Add `TCGPLAYER_IMPACT_BASE_URL=` to `ios/slabbist/Config/Secrets.xcconfig.example`
-and to the repo-root `.envrc` (empty placeholder; the real value is pasted from
-the impact dashboard locally / in CI).
+Note: `lookup` returns nil only when the var is unset/empty, so an explicitly
+empty env value cannot reach here — to force the raw fallback in a build, the
+config simply uses a value the wrapper treats as "no base" (handled in
+`TCGPlayerAffiliateLink`, which checks for a parseable `/c/` tracking URL).
+Document `TCGPLAYER_IMPACT_BASE_URL` in
+`ios/slabbist/Config/Secrets.xcconfig.example` and `.envrc` as an optional
+override (commented; the default already carries the live link).
 
 ### 3. Server plumbing (graded surface only)
 
