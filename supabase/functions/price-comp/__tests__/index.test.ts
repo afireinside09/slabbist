@@ -320,6 +320,8 @@ Deno.test("(c) cold path: resolve UUID → fetch prices+history+listings → v3 
   assertEquals(body.sold_listings[0].price_cents, 18500);
   // Should have persisted the market row
   assert(fake._upsertedMarket() !== null, "market row should be persisted");
+  // Cold path must hit the upstream — symmetric with case (b)'s fetchCalls === 0.
+  assert(fetchedUrls.length > 0, "cold path must make upstream fetches");
 });
 
 // ─── (d) resolver returns null → 404 PRODUCT_NOT_RESOLVED ────────────────────
@@ -429,4 +431,89 @@ Deno.test("(e) prices present + listings 403 → block returned, sold_listings:[
   assert(body.poketrace !== null, "block should be present");
   assertEquals(body.poketrace.avg_cents, 20000);
   assertEquals(body.sold_listings, [], "sold_listings must be [] on 403");
+});
+
+// ─── (f) no tier aggregate + sold listings present → 200 poketrace:null, listings ───
+//
+// A slab can have eBay sold comps without a computed graded-tier aggregate.
+// The feature's whole point is to surface those comps, so the handler MUST
+// return 200 with poketrace:null and the listings — NOT 404 NO_MARKET_DATA.
+
+Deno.test("(f) no tier aggregate but listings present → 200 poketrace:null + sold_listings", async () => {
+  const identity = { ...baseIdentity };
+  const fake = fakeSupabase({ identity, market: null, sales: [] });
+
+  const stubFetch: typeof fetch = (input, _init) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    const u = new URL(url);
+
+    // Resolve succeeds.
+    if (u.pathname.endsWith("/cards") && u.searchParams.get("search")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [
+          { id: "pt-uuid-f", name: "Charizard", cardNumber: "4/102", set: { name: "Base Set" } },
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+
+    // History empty.
+    if (u.pathname.includes("/prices/") && u.pathname.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      }));
+    }
+
+    // Listings present.
+    if (u.pathname.includes("/listings")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [
+          {
+            sourceItemId: "e9",
+            title: "Charizard PSA 10",
+            price: 195.0,
+            soldAt: "2026-05-02T00:00:00Z",
+            grader: "PSA",
+            grade: "10",
+            listingUrl: "http://ebay/e9",
+            condition: "Graded",
+            anomalyFlag: null,
+          },
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+
+    // Card detail: NO matching tier → fetchPoketracePrices returns fields:null.
+    if (u.pathname.match(/\/cards\/[^/]+$/)) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: { id: "pt-uuid-f", prices: {} },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+
+    return Promise.resolve(new Response(JSON.stringify({ data: [] }), {
+      status: 200, headers: { "content-type": "application/json" },
+    }));
+  };
+
+  const req = makeRequest({
+    graded_card_identity_id: "id-1",
+    grading_service: "PSA",
+    grade: "10",
+  });
+  const res = await handle(req, {
+    supabase: fake,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "test-key",
+    ttlSeconds: 86400,
+    now: () => Date.now(),
+    fetchImpl: stubFetch,
+  });
+  const body = await res.json();
+  assertEquals(res.status, 200);
+  assertEquals(body.cache_hit, false);
+  assertEquals(body.poketrace, null, "poketrace block must be null with no tier aggregate");
+  assert(body.sold_listings.length > 0, "sold_listings must be surfaced");
+  assertEquals(body.sold_listings[0].source_listing_id, "e9");
+  // No market row persisted (no aggregate), but sold listings ARE persisted.
+  assertEquals(fake._upsertedMarket(), null, "no market row without a tier aggregate");
+  assert(fake._upsertedSales().length > 0, "sold listings must be persisted");
 });

@@ -10,6 +10,7 @@ import type {
   PoketraceBlock,
 } from "./types.ts";
 import { upsertMarketLadder, readMarketLadder } from "./persistence/market.ts";
+import type { MarketReadResult } from "./persistence/market.ts";
 import { upsertSoldListings } from "./persistence/sales.ts";
 import { evaluateFreshness } from "./cache/freshness.ts";
 import { resolvePoketraceCard } from "./poketrace/resolve.ts";
@@ -63,7 +64,7 @@ function blockToResponse(
 }
 
 // Rebuild a PoketraceBlock from a cached MarketReadResult.
-function toBlock(cached: any, service: GradingService, grade: string, cardId: string): PoketraceBlock {
+function toBlock(cached: MarketReadResult, service: GradingService, grade: string, cardId: string): PoketraceBlock {
   const p = cached.poketrace;
   return {
     card_id: cardId,
@@ -216,57 +217,53 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
   const history = historyR.status === "fulfilled" ? historyR.value.history : [];
   const sold = listingsR.status === "fulfilled" ? listingsR.value.listings : [];
 
-  if (!prices || !prices.fields) {
-    // No graded tier data — still persist any listings, then 404.
-    if (sold.length) {
-      try {
-        await upsertSoldListings(
-          supabase,
-          body.graded_card_identity_id,
-          body.grading_service,
-          body.grade,
-          sold,
-        );
-      } catch {}
-    }
+  // No graded tier aggregate AND no sold comps — nothing to surface.
+  if ((!prices || !prices.fields) && sold.length === 0) {
     return json(404, { code: "NO_MARKET_DATA" });
   }
 
-  const block: PoketraceBlock = {
-    card_id: cardId,
-    tier: tierKey,
-    ...prices.fields,
-    tier_prices_cents: prices.ladderCents,
-    price_history: history,
-    fetched_at: new Date().toISOString(),
-  };
+  // A slab may have sold listings but no computed graded-tier aggregate. In
+  // that case `block` is null and we still return 200 with the listings so
+  // iOS can render the sold-comps section (plan Task 2.7 / iOS Task 3.3).
+  const block: PoketraceBlock | null = prices?.fields
+    ? {
+        card_id: cardId,
+        tier: tierKey,
+        ...prices.fields,
+        tier_prices_cents: prices.ladderCents,
+        price_history: history,
+        fetched_at: new Date().toISOString(),
+      }
+    : null;
 
-  // 5. Persist market + sold listings.
-  try {
-    await upsertMarketLadder(supabase, {
-      identityId: body.graded_card_identity_id,
-      gradingService: body.grading_service,
-      grade: body.grade,
-      headlinePriceCents: block.avg_cents,
-      priceHistory: history,
-      poketrace: {
-        avgCents: block.avg_cents,
-        lowCents: block.low_cents,
-        highCents: block.high_cents,
-        avg1dCents: block.avg_1d_cents,
-        avg7dCents: block.avg_7d_cents,
-        avg30dCents: block.avg_30d_cents,
-        median3dCents: block.median_3d_cents,
-        median7dCents: block.median_7d_cents,
-        median30dCents: block.median_30d_cents,
-        trend: block.trend,
-        confidence: block.confidence,
-        saleCount: block.sale_count,
-        tierPricesCents: block.tier_prices_cents,
-      },
-    });
-  } catch (e) {
-    console.error("poketrace.persist_failed", { message: String(e) });
+  // 5. Persist market (only when a tier aggregate exists) + sold listings.
+  if (block) {
+    try {
+      await upsertMarketLadder(supabase, {
+        identityId: body.graded_card_identity_id,
+        gradingService: body.grading_service,
+        grade: body.grade,
+        headlinePriceCents: block.avg_cents,
+        priceHistory: history,
+        poketrace: {
+          avgCents: block.avg_cents,
+          lowCents: block.low_cents,
+          highCents: block.high_cents,
+          avg1dCents: block.avg_1d_cents,
+          avg7dCents: block.avg_7d_cents,
+          avg30dCents: block.avg_30d_cents,
+          median3dCents: block.median_3d_cents,
+          median7dCents: block.median_7d_cents,
+          median30dCents: block.median_30d_cents,
+          trend: block.trend,
+          confidence: block.confidence,
+          saleCount: block.sale_count,
+          tierPricesCents: block.tier_prices_cents,
+        },
+      });
+    } catch (e) {
+      console.error("poketrace.persist_failed", { message: String(e) });
+    }
   }
   if (sold.length) {
     try {
