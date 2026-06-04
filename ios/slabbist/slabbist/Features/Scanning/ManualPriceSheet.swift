@@ -82,7 +82,7 @@ struct ManualPriceSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             KickerLabel("Manual price")
             Text("Enter your asking price").slabTitle()
-            Text("Use this when Pokemon Price Tracker has no comp. The amount appears in this lot's totals.")
+            Text("Use this when Poketrace has no comp. The amount appears in this lot's totals.")
                 .font(SlabFont.sans(size: 13))
                 .foregroundStyle(AppColor.muted)
         }

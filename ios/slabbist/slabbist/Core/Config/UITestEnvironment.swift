@@ -42,10 +42,10 @@ enum UITestEnvironment {
         /// one via the UI. Useful for isolating downstream flows.
         case seedSampleLot = "--ui-tests-seed-sample-lot"
 
-        /// Pre-seed a validated scan stuck in `noData` (Pokemon Price
-        /// Tracker found no comp) inside the sample lot. Lets the manual-
-        /// price flow be tested without driving the cert-lookup +
-        /// comp-fetch network pipeline. Implies `seedSampleLot`.
+        /// Pre-seed a validated scan stuck in `noData` (Poketrace found no
+        /// comp) inside the sample lot. Lets the manual-price flow be tested
+        /// without driving the cert-lookup + comp-fetch network pipeline.
+        /// Implies `seedSampleLot`.
         case seedNoCompScan = "--ui-tests-seed-no-comp-scan"
 
         /// Pre-seed a "priced" lot: a `Lot` with `marginPctSnapshot` set
@@ -257,7 +257,7 @@ enum UITestEnvironment {
         scan.compFetchState = CompFetchState.resolved.rawValue
         scan.compFetchedAt = now
         scan.reconciledHeadlinePriceCents = 100_00
-        scan.reconciledSource = "ppt-only"
+        scan.reconciledSource = "poketrace-only"
         scan.buyPriceCents = 60_00
         scan.buyPriceOverridden = false
         context.insert(scan)

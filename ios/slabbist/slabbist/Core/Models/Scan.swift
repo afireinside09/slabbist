@@ -81,10 +81,12 @@ final class Scan {
     /// the snapshots.
     var reconciledHeadlinePriceCents: Int64?
     /// Which provider (or rule) produced `reconciledHeadlinePriceCents`.
-    /// One of: "avg" | "ppt-only" | "poketrace-only" | "poketrace-preferred".
-    /// Drives the caption under the comp-card hero. Optional + no default
-    /// → SwiftData lightweight migration leaves existing rows nil and the
-    /// CompCardView falls back to inferring from snapshot presence.
+    /// Now always "poketrace-only" for new rows (Poketrace is the sole source).
+    /// Legacy rows from before the PPT removal may carry "avg", "ppt-only", or
+    /// "poketrace-preferred"; `CompCardView` displays those values as
+    /// "Poketrace" since only one source exists going forward. Optional + no
+    /// default → SwiftData lightweight migration leaves existing rows nil and
+    /// the CompCardView caption falls back to "Poketrace".
     var reconciledSource: String?
     /// Why the most recent `cert-lookup` attempt didn't yield a validated
     /// identity. One of: `"not_found"` (PSA has no record of the cert),

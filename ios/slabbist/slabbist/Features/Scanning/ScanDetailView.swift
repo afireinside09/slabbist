@@ -32,17 +32,8 @@ struct ScanDetailView: View {
 
     private var identity: GradedCardIdentity? { identities.first }
 
-    /// PPT row for this slab. Two snapshots can coexist per
-    /// `(identityId, service, grade)` — one per source — so we partition
-    /// the `@Query` results by `source` here and pass both into
-    /// `CompCardView` for side-by-side rendering.
-    private var pptSnapshot: GradedMarketSnapshot? {
-        snapshots.first { $0.source == GradedMarketSnapshot.sourcePPT }
-    }
-
-    /// Poketrace row for this slab. `nil` when the Poketrace branch had
-    /// no match or its API key is unset / failing — `CompCardView`
-    /// renders "no data" in that column rather than hiding the surface.
+    /// Poketrace snapshot for this slab. There is now a single snapshot per
+    /// `(identityId, service, grade)` — Poketrace is the sole pricing source.
     private var poketraceSnapshot: GradedMarketSnapshot? {
         snapshots.first { $0.source == GradedMarketSnapshot.sourcePoketrace }
     }
@@ -54,7 +45,7 @@ struct ScanDetailView: View {
                     scanFrozenBanner
                     header
                     buyPriceCard
-                    if pptSnapshot != nil || poketraceSnapshot != nil {
+                    if poketraceSnapshot != nil {
                         valueSection
                     } else {
                         fallbackContent
@@ -169,8 +160,7 @@ struct ScanDetailView: View {
             KickerLabel("Market value")
             CompCardView(
                 scan: scan,
-                pptSnapshot: pptSnapshot,
-                poketraceSnapshot: poketraceSnapshot
+                snapshot: poketraceSnapshot
             )
             if let attemptedAt = scan.compFetchedAt {
                 Text("Last refreshed \(attemptedAt.formatted(date: .abbreviated, time: .shortened))")
@@ -208,7 +198,7 @@ struct ScanDetailView: View {
             kicker: "Fetching",
             symbol: "arrow.triangle.2.circlepath",
             symbolTint: AppColor.gold,
-            title: "Fetching Pokemon Price Tracker comp…",
+            title: "Fetching Poketrace comp…",
             detail: "This usually takes a couple of seconds. Tap retry if it's stuck.",
             showsProgress: true,
             cta: ("Retry comp fetch", retry)
@@ -351,8 +341,8 @@ struct ScanDetailView: View {
             kicker: "No comp",
             symbol: "magnifyingglass",
             symbolTint: AppColor.muted,
-            title: "Pokemon Price Tracker has no comp for this slab",
-            detail: "Either we couldn't find this card on Pokemon Price Tracker, or there's no published price for this tier yet. Set a manual price to count this slab in your lot total.",
+            title: "Poketrace has no comp for this slab",
+            detail: "Either we couldn't find this card on Poketrace, or there's no published price for this tier yet. Set a manual price to count this slab in your lot total.",
             showsProgress: false,
             cta: ("Retry comp fetch", retry),
             secondaryCta: scan.vendorAskCents == nil ? ("Set manual price", { showingManualPrice = true }) : nil
@@ -517,7 +507,7 @@ struct ScanDetailView: View {
         }
     }
 
-    /// Standalone card showing the manual price the user set when no PPT
+    /// Standalone card showing the manual price the user set when no Poketrace
     /// comp was available. Rendered in addition to the comp / empty state
     /// so the user can edit or clear the value at any time. Tap-to-edit
     /// presents the same `ManualPriceSheet` used to enter it.
@@ -655,9 +645,8 @@ struct ScanDetailView: View {
     /// drives the queue-row + lot-row Retry pills.
     private func autoTriggerCompFetchIfNeeded() {
         guard scan.gradedCardIdentityId != nil else { return }
-        // Either source landing means we have *something* to render;
-        // only auto-trigger when we have nothing at all.
-        guard pptSnapshot == nil && poketraceSnapshot == nil else { return }
+        // Only auto-trigger when we have no snapshot at all.
+        guard poketraceSnapshot == nil else { return }
         let state = scan.compFetchState.flatMap(CompFetchState.init(rawValue:))
         if state == nil || CompFetchService.isStaleFetching(scan) {
             retry()

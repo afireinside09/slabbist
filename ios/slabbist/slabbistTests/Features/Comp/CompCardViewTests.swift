@@ -6,9 +6,11 @@ import SwiftData
 /// Unit tests for `CompCardView`'s hero-value fallback logic. Snapshot
 /// rendering lives in `CompCardViewSnapshotTests`; these tests assert
 /// the *intent* of the fallback — i.e. when `reconciledHeadlinePriceCents`
-/// is nil but the ladder has cells, the hero surfaces the nearest grade
-/// as an explicit `.estimated`. The fixture-table form makes the
-/// adjacency rules legible alongside the code under test.
+/// is nil but the ptTierPricesCents ladder has cells, the hero surfaces the
+/// nearest grade as an explicit `.estimated`.
+///
+/// **Poketrace-only (post-PPT-removal).** All fixtures use a single
+/// Poketrace snapshot and the new `CompCardView(scan:snapshot:)` API.
 @Suite("CompCardView hero fallback", .serialized)
 @MainActor
 struct CompCardViewTests {
@@ -46,40 +48,28 @@ struct CompCardViewTests {
         return scan
     }
 
-    /// PPT snapshot with optional per-tier cents. Mirrors the
-    /// production write shape (one `@Model` row per source).
-    private static func makePPT(
+    /// Poketrace snapshot with tier prices encoded in `ptTierPricesJSON`.
+    /// `headlinePriceCents` is nil to exercise the adjacency-walk path.
+    private static func makeSnapshot(
         gradingService: String,
         grade: String,
-        psa7: Int64? = nil,
-        psa8: Int64? = nil,
-        psa9: Int64? = nil,
-        psa9_5: Int64? = nil,
-        psa10: Int64? = nil,
-        bgs10: Int64? = nil,
-        cgc10: Int64? = nil,
-        sgc10: Int64? = nil,
+        tierPrices: [String: Int64],
         in context: ModelContext
     ) -> GradedMarketSnapshot {
+        let tierJSON = String(
+            data: (try? JSONEncoder().encode(tierPrices)) ?? Data(),
+            encoding: .utf8
+        )
         let snap = GradedMarketSnapshot(
             identityId: identityId,
             gradingService: gradingService,
             grade: grade,
-            source: GradedMarketSnapshot.sourcePPT,
-            headlinePriceCents: nil,           // hero is nil — that's the scenario
-            loosePriceCents: nil,
-            psa7PriceCents: psa7,
-            psa8PriceCents: psa8,
-            psa9PriceCents: psa9,
-            psa9_5PriceCents: psa9_5,
-            psa10PriceCents: psa10,
-            bgs10PriceCents: bgs10,
-            cgc10PriceCents: cgc10,
-            sgc10PriceCents: sgc10,
+            source: GradedMarketSnapshot.sourcePoketrace,
+            headlinePriceCents: nil,   // hero is nil — that's the scenario
+            ptTierPricesJSON: tierJSON,
             priceHistoryJSON: nil,
             fetchedAt: baseDate,
-            cacheHit: false,
-            isStaleFallback: false
+            cacheHit: false
         )
         context.insert(snap)
         return snap
@@ -93,8 +83,12 @@ struct CompCardViewTests {
     func confidentWhenReconciled() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: 18_750, in: container.mainContext)
-        let ppt = Self.makePPT(gradingService: "PSA", grade: "10", psa9: 6_800, psa10: 18_500, in: container.mainContext)
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let snapshot = Self.makeSnapshot(
+            gradingService: "PSA", grade: "10",
+            tierPrices: ["psa_9": 6_800, "psa_10": 18_500],
+            in: container.mainContext
+        )
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.heroValue == .confident(cents: 18_750))
     }
 
@@ -105,18 +99,21 @@ struct CompCardViewTests {
     func estimatedWhenReconciledNilButLadderHasSibling() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(gradingService: "PSA", grade: "10", psa9: 6_800, in: container.mainContext)
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let snapshot = Self.makeSnapshot(
+            gradingService: "PSA", grade: "10",
+            tierPrices: ["psa_9": 6_800],
+            in: container.mainContext
+        )
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.heroValue == .estimated(cents: 6_800, sourceTier: "PSA 9"))
     }
 
-    /// Empty ladder + nil reconciled: hero is `.unavailable`. This is
-    /// the "no data at all" floor — preserves the existing em-dash.
+    /// Empty snapshot + nil reconciled: hero is `.unavailable`.
     @Test("heroValue is .unavailable when neither reconciled nor ladder has values")
     func unavailableWhenEverythingIsEmpty() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
-        let view = CompCardView(scan: scan, pptSnapshot: nil, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: nil)
         #expect(view.heroValue == .unavailable)
     }
 
@@ -124,55 +121,52 @@ struct CompCardViewTests {
     //
     // The adjacency rule is **intra-grader only**: a PSA 10 estimate
     // walks PSA 9.5 → PSA 9 → PSA 8 → PSA 7. It never crosses into
-    // CGC / BGS / SGC because graders trade at different premiums
-    // (BGS Black Label ≫ PSA 10 ≫ CGC 10 for the same card), and a
-    // cross-grader walk would silently lowball the dealer's offer.
+    // CGC / BGS / SGC because graders trade at different premiums.
     // BGS / CGC / SGC ladders only carry the top tier in our schema,
     // so there is no same-grader sibling — those cases fall through
     // to `.unavailable` (dealer sets manual price / refreshes comp).
 
     /// PSA 10: prefers PSA 9.5, then PSA 9, then PSA 8, then PSA 7.
-    /// Walk each step by knocking out the higher-preference tiers.
     @Test("PSA 10 adjacency walk descends within PSA: 9.5 > 9 > 8 > 7")
     func psa10AdjacencyWalk() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
 
         // Has all PSA tiers — picks PSA 9.5 (highest preference).
-        let pptAll = Self.makePPT(
+        let snapAll = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            psa7: 2_400, psa8: 3_400, psa9: 6_800, psa9_5: 11_200,
+            tierPrices: ["psa_7": 2_400, "psa_8": 3_400, "psa_9": 6_800, "psa_9_5": 11_200],
             in: container.mainContext
         )
-        var view = CompCardView(scan: scan, pptSnapshot: pptAll, poketraceSnapshot: nil)
+        var view = CompCardView(scan: scan, snapshot: snapAll)
         #expect(view.nearestLadderTier()?.label == "PSA 9.5")
         #expect(view.nearestLadderTier()?.cents == 11_200)
 
         // No 9.5 → PSA 9 wins.
-        let pptNo9_5 = Self.makePPT(
+        let snapNo9_5 = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            psa7: 2_400, psa8: 3_400, psa9: 6_800,
+            tierPrices: ["psa_7": 2_400, "psa_8": 3_400, "psa_9": 6_800],
             in: container.mainContext
         )
-        view = CompCardView(scan: scan, pptSnapshot: pptNo9_5, poketraceSnapshot: nil)
+        view = CompCardView(scan: scan, snapshot: snapNo9_5)
         #expect(view.nearestLadderTier()?.label == "PSA 9")
 
         // No 9.5, no 9 → PSA 8 wins.
-        let pptPSA8 = Self.makePPT(
+        let snapPSA8 = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            psa7: 2_400, psa8: 3_400,
+            tierPrices: ["psa_7": 2_400, "psa_8": 3_400],
             in: container.mainContext
         )
-        view = CompCardView(scan: scan, pptSnapshot: pptPSA8, poketraceSnapshot: nil)
+        view = CompCardView(scan: scan, snapshot: snapPSA8)
         #expect(view.nearestLadderTier()?.label == "PSA 8")
 
         // Only PSA 7 left → PSA 7.
-        let pptPSA7 = Self.makePPT(
+        let snapPSA7 = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            psa7: 2_400,
+            tierPrices: ["psa_7": 2_400],
             in: container.mainContext
         )
-        view = CompCardView(scan: scan, pptSnapshot: pptPSA7, poketraceSnapshot: nil)
+        view = CompCardView(scan: scan, snapshot: snapPSA7)
         #expect(view.nearestLadderTier()?.label == "PSA 7")
     }
 
@@ -184,12 +178,12 @@ struct CompCardViewTests {
     func psa10NeverCrossesIntoBgsOrCgc() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            bgs10: 21_500, cgc10: 16_800,
+            tierPrices: ["bgs_10": 21_500, "cgc_10": 16_800],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.nearestLadderTier() == nil,
                 "intra-grader rule: PSA 10 must not estimate from BGS 10 or CGC 10")
         #expect(view.heroValue == .unavailable)
@@ -200,60 +194,58 @@ struct CompCardViewTests {
     func psa9AdjacencyWalk() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "9", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "PSA", grade: "9",
-            psa9_5: 11_200,
+            tierPrices: ["psa_9_5": 11_200],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.nearestLadderTier()?.label == "PSA 9.5")
     }
 
-    /// BGS 10 has no intra-grader sibling in our schema (no `bgs_9_5`
-    /// column on the snapshot). Returns nil even when PSA tiers are
-    /// populated — the dealer-safe direction.
+    /// BGS 10 has no intra-grader sibling. Returns nil even when PSA tiers
+    /// are populated — the dealer-safe direction.
     @Test("BGS 10 returns nil — no intra-grader sibling, never crosses to PSA")
     func bgs10HasNoSiblingDoesNotCrossToPsa() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .BGS, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "BGS", grade: "10",
-            psa9_5: 11_200, psa10: 18_500,
+            tierPrices: ["psa_9_5": 11_200, "psa_10": 18_500],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.nearestLadderTier() == nil)
         #expect(view.heroValue == .unavailable)
     }
 
-    /// CGC 10 likewise has no intra-grader sibling — never falls back
-    /// to PSA / BGS, even when they're populated.
+    /// CGC 10 likewise has no intra-grader sibling.
     @Test("CGC 10 returns nil — no intra-grader sibling, never crosses graders")
     func cgc10HasNoSiblingDoesNotCrossGraders() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .CGC, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "CGC", grade: "10",
-            psa9_5: 11_200, bgs10: 21_500,
+            tierPrices: ["psa_9_5": 11_200, "bgs_10": 21_500],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.nearestLadderTier() == nil)
         #expect(view.heroValue == .unavailable)
     }
 
-    /// SGC 10 / TAG: same as BGS/CGC — no intra-grader sibling, no
-    /// cross-grader fallback. Conservative default.
+    /// SGC 10: same as BGS/CGC — no intra-grader sibling, no cross-grader
+    /// fallback.
     @Test("SGC 10 returns nil — no intra-grader sibling, no cross-grader fallback")
     func sgcHasNoFallback() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .SGC, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "SGC", grade: "10",
-            psa9: 6_800, psa10: 18_500,
+            tierPrices: ["psa_9": 6_800, "psa_10": 18_500],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         #expect(view.nearestLadderTier() == nil)
     }
 
@@ -262,25 +254,23 @@ struct CompCardViewTests {
     func nilWhenNoTierExists() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
-        let view = CompCardView(scan: scan, pptSnapshot: nil, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: nil)
         #expect(view.nearestLadderTier() == nil)
     }
 
-    /// P2.9: explicit walk-vs-no-walk anchor. With the ladder populated
-    /// AND `reconciledHeadlinePriceCents == nil`, the hero MUST land
-    /// on `.estimated` (not `.unavailable`). This is the load-bearing
-    /// regression guard: if a future refactor of `heroValue` swallows
-    /// the `nearestLadderTier()` branch, this test fires.
+    /// With the ladder populated AND `reconciledHeadlinePriceCents == nil`,
+    /// the hero MUST land on `.estimated` (not `.unavailable`). This is
+    /// the load-bearing regression guard for the adjacency-walk path.
     @Test("populated ladder + nil reconciled produces .estimated, not .unavailable")
     func ladderPopulatedReconciledNilProducesEstimated() throws {
         let container = try Self.makeContainer()
         let scan = Self.makeScan(grader: .PSA, grade: "10", reconciled: nil, in: container.mainContext)
-        let ppt = Self.makePPT(
+        let snapshot = Self.makeSnapshot(
             gradingService: "PSA", grade: "10",
-            psa9: 6_800,
+            tierPrices: ["psa_9": 6_800],
             in: container.mainContext
         )
-        let view = CompCardView(scan: scan, pptSnapshot: ppt, poketraceSnapshot: nil)
+        let view = CompCardView(scan: scan, snapshot: snapshot)
         switch view.heroValue {
         case .estimated(let cents, let source):
             #expect(cents == 6_800)
