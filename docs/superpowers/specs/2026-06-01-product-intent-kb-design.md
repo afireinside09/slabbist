@@ -83,7 +83,7 @@ For each flagship loop: a durable 2-4 sentence **purpose + why it matters + the 
 Loops covered:
 
 - **Movers** — ranked top gainers/losers across EN/JP from real eBay sold listings; the dealer's market-momentum indicator. → `2026-05-26-movers-row-thumbnail-design.md`
-- **Graded card comps (multi-source)** — fan-out to PPT + Poketrace, reconciled headline + per-source rows + per-grade ladder + history; the *defensible number*. → `2026-05-06-pokemonpricetracker-comp-design.md`, `2026-05-08-poketrace-comp-design.md`, `2026-05-13-poketrace-first-class-fanout-design.md`, `2026-04-23-ebay-sold-listings-comp-design.md`, `2026-05-05-pricecharting-comp-design.md`
+- **Graded card comps (Poketrace-only)** — Poketrace headline + per-grade ladder + history + individual sold eBay listings; the *defensible number*. (PPT removed 2026-06-04.) → `2026-06-04-poketrace-only-comp-design.md`, `2026-05-08-poketrace-comp-design.md`, `2026-04-23-ebay-sold-listings-comp-design.md`
 - **Grade gains / pre-grade estimator** — "is this raw card worth grading?": Grade Gains ranks raw cards by PSA-10 profit spread by set; the Pre-Grade Estimator does photo-based sub-grade estimation. → `2026-06-01-grade-gains-page-design.md`, `2026-04-23-pre-grade-estimator-design.md`
 - **Bulk scan / comp** — scan a stack of slabs fast (OCR cert → cert-lookup → price-comp → lot); speed for offers made in front of the vendor. → `2026-04-22-bulk-scan-comp-design.md`, `2026-05-07-outbox-worker-design.md`
 - **Lots & offers** — the vendor workflow state machine from open lot to paid immutable transaction. → `2026-05-08-store-workflow-design.md`, `2026-05-11-lot-flow-ux-improvements-design.md`, `2026-05-12-lot-margin-mode-toggle-design.md`

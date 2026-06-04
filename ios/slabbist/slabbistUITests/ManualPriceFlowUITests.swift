@@ -102,7 +102,7 @@ final class ManualPriceFlowUITests: XCTestCase {
     }
 
     /// Manual-price entry on a scan that has been validated upstream
-    /// but has no comp from Pokemon Price Tracker. Driven by the
+    /// but has no comp from Poketrace. Driven by the
     /// `--ui-tests-seed-no-comp-scan` flag, which seeds:
     ///   * A `Sample Lot` open lot
     ///   * A `Test Card` graded identity

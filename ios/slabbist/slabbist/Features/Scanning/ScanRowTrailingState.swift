@@ -6,7 +6,7 @@ import Foundation
 /// and `LotDetailView`'s aggregate strip so all three surfaces resolve the
 /// same value for the same scan — there must not be two parallel resolvers
 /// that can drift (P0.1: the prior `trailingValue(for:)` helper would
-/// fall back to the raw PPT snapshot while the row would fall through to
+/// fall back to the raw market snapshot while the row would fall through to
 /// `.fetching`, producing a header total that didn't match the row body).
 ///
 /// Priority (top wins):
