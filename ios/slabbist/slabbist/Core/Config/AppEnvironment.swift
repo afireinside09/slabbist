@@ -55,6 +55,19 @@ nonisolated enum AppEnvironment {
         return "slabbist-ios"
     }()
 
+    /// impact.com base tracking URL for the TCGplayer campaign,
+    /// "https://partner.tcgplayer.com/c/{account}/{ad}/{campaign}". The app
+    /// appends `?subId1=<surface>&u=<encoded product url>` per card. Affiliate
+    /// links are public (embedded in every outbound tap), so the account's
+    /// live tracking link is baked in as the default — the buttons monetize
+    /// with zero setup. Override via `TCGPLAYER_IMPACT_BASE_URL` (e.g. campaign
+    /// rotation). An empty value makes `TCGPlayerAffiliateLink` open raw
+    /// tcgplayer.com links instead.
+    static let tcgplayerImpactBaseURL: String = {
+        if let value = lookup("TCGPLAYER_IMPACT_BASE_URL"), !value.isEmpty { return value }
+        return "https://partner.tcgplayer.com/c/6098165/1830156/21018"
+    }()
+
     private static func lookup(_ name: String) -> String? {
         if let raw = ProcessInfo.processInfo.environment[name], !raw.isEmpty {
             return raw
