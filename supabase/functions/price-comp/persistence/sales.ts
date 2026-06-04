@@ -17,7 +17,9 @@ export async function upsertSoldListings(
     grade,
     source: "ebay",
     source_listing_id: l.source_listing_id,
-    sold_price: l.price_cents === null ? 0 : Math.round(l.price_cents) / 100,
+    // parseListings drops any listing with a null/non-finite price, so
+    // price_cents is always a finite number here.
+    sold_price: Math.round(l.price_cents as number) / 100,
     sold_at: l.sold_at,
     title: l.title,
     url: l.url,

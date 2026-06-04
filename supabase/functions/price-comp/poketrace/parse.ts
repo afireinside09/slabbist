@@ -241,11 +241,15 @@ export function parseListings(body: unknown): SoldListingWire[] {
     const r = it as Record<string, unknown>;
     const id = typeof r.sourceItemId === "string" ? r.sourceItemId : "";
     const soldAt = typeof r.soldAt === "string" ? r.soldAt : "";
-    if (!id || !soldAt) continue;
+    const priceCents = dollarsToCents(r.price);
+    // A sold comp with no usable price is useless and would corrupt the
+    // not-null sold_price column downstream — drop it, same as a missing
+    // id or soldAt.
+    if (!id || !soldAt || priceCents === null) continue;
     out.push({
       source_listing_id: id,
       title: typeof r.title === "string" ? r.title : null,
-      price_cents: dollarsToCents(r.price),
+      price_cents: priceCents,
       sold_at: soldAt,
       grader: typeof r.grader === "string" ? r.grader : null,
       grade: typeof r.grade === "string" ? r.grade : null,

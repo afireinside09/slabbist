@@ -147,6 +147,15 @@ Deno.test("scoreSearchCard: name mismatch rejects", () => {
   assert(!r.accept);
 });
 
+Deno.test("scoreSearchCard: null card_number, set-overlap >= 2 accepts", () => {
+  // No card number on either side → acceptance must hinge on distinctive
+  // set-token overlap. "prismatic" + "evolutions" are both ≥4 chars and
+  // not stopwords, giving overlap === 2.
+  const card = { id: "u1", name: "Umbreon", cardNumber: null, set: { name: "Prismatic Evolutions" } };
+  const r = scoreSearchCard(card, { card_name: "Umbreon", card_number: null, set_name: "Prismatic Evolutions" });
+  assert(r.accept);
+});
+
 // ── parseListings tests (Task 2.2) ────────────────────────────────────────
 
 Deno.test("parseListings: maps Listing → SoldListingWire, drops invalid", () => {
@@ -159,4 +168,16 @@ Deno.test("parseListings: maps Listing → SoldListingWire, drops invalid", () =
   assertEquals(out.length, 1);
   assertEquals(out[0].price_cents, 120050);
   assertEquals(out[0].source_listing_id, "e1");
+});
+
+Deno.test("parseListings: drops entries with missing/non-numeric price", () => {
+  const body = { data: [
+    { sourceItemId: "e1", title: "good", price: 50, soldAt: "2026-05-01T00:00:00Z" },
+    { sourceItemId: "e2", title: "no price", soldAt: "2026-05-01T00:00:00Z" }, // missing → dropped
+    { sourceItemId: "e3", title: "bad price", price: "NaN", soldAt: "2026-05-01T00:00:00Z" }, // non-numeric → dropped
+  ] };
+  const out = parseListings(body);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].source_listing_id, "e1");
+  assertEquals(out[0].price_cents, 5000);
 });

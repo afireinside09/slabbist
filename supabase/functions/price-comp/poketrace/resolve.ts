@@ -83,12 +83,17 @@ export async function resolvePoketraceCard(
       }
     }
   }
+  // A non-200 from any attempted fetch means we can't conclude "no match" —
+  // a transient outage must NOT poison the 7-day negative cache.
+  let sawTransientFailure = false;
+
   for (const pid of productIds) {
     const res = await fetchImpl<CardSearch>(
       deps.client,
       `/cards?tcgplayer_ids=${encodeURIComponent(pid)}&limit=20`,
     );
-    if (res.status === 200 && res.body?.data?.length) {
+    if (res.status !== 200) { sawTransientFailure = true; continue; }
+    if (res.body?.data?.length) {
       const uuid = res.body.data[0].id;
       await persistIdentityPoketraceCardId(deps.supabase, identity.id, uuid);
       return uuid;
@@ -96,17 +101,21 @@ export async function resolvePoketraceCard(
   }
 
   // 4. Tier B — native search by name (+ card number), scored.
-  const searchPaths = [
-    `/cards?search=${encodeURIComponent(identity.card_name)}${
-      identity.card_number
-        ? `&card_number=${encodeURIComponent(identity.card_number)}`
-        : ""
-    }&limit=20`,
-    `/cards?search=${encodeURIComponent(identity.card_name)}&limit=20`,
-  ];
+  //    The bare-name path is only useful when it differs from the first
+  //    path (i.e. when card_number narrowed it); skip the duplicate request.
+  const primaryPath = `/cards?search=${encodeURIComponent(identity.card_name)}${
+    identity.card_number
+      ? `&card_number=${encodeURIComponent(identity.card_number)}`
+      : ""
+  }&limit=20`;
+  const bareNamePath = `/cards?search=${encodeURIComponent(identity.card_name)}&limit=20`;
+  const searchPaths = primaryPath === bareNamePath
+    ? [primaryPath]
+    : [primaryPath, bareNamePath];
   for (const path of searchPaths) {
     const res = await fetchImpl<CardSearch>(deps.client, path);
-    if (res.status !== 200 || !res.body?.data?.length) continue;
+    if (res.status !== 200) { sawTransientFailure = true; continue; }
+    if (!res.body?.data?.length) continue;
     let best: { card: SearchCardLite; score: number } | null = null;
     for (const card of res.body.data) {
       const sc = scoreSearchCard(card, identity);
@@ -118,7 +127,10 @@ export async function resolvePoketraceCard(
     }
   }
 
-  // 5. Total miss → negative sentinel.
+  // 5. Only persist the "no match" sentinel when every attempted fetch was a
+  //    clean 200. On a transient failure, return null WITHOUT poisoning the
+  //    negative cache so the next scan re-attempts.
+  if (sawTransientFailure) return null;
   await persistIdentityPoketraceCardId(deps.supabase, identity.id, "");
   return null;
 }

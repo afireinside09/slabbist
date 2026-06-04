@@ -109,3 +109,21 @@ Deno.test("total miss persists '' sentinel and returns null", async () => {
   assertEquals(id, null);
   assertEquals(persisted, "");
 });
+
+Deno.test("transient upstream failure returns null WITHOUT poisoning the negative cache", async () => {
+  let persistCalled = false;
+  const id = await resolvePoketraceCard(
+    {
+      supabase: fakeSupabase(() => { persistCalled = true; }),
+      client: fakeClient(),
+      now: () => 0,
+      // Provide a tcgplayer_product_id so Tier A issues a fetch (which 503s),
+      // and a search path that also 503s — every attempt is a transient failure.
+      findTcgProduct: async () => null,
+      fetchJsonImpl: async () => ({ status: 503, body: null }),
+    },
+    { ...baseIdentity, tcgplayer_product_id: "12345" },
+  );
+  assertEquals(id, null);
+  assertEquals(persistCalled, false);
+});
