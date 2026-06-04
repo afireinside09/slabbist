@@ -85,6 +85,7 @@ export interface PriceCompResponse {
   poketrace: PoketraceBlock | null;       // null when no graded tier data
   sold_listings: SoldListingWire[];       // [] off the Scale plan
   marketplace_url: string | null;         // ebay sold-results deep link
+  tcgplayer_product_id: string | null;    // raw-single id for the affiliate link
   fetched_at: string;
   cache_hit: boolean;
 }

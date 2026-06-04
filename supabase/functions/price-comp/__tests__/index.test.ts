@@ -182,7 +182,7 @@ Deno.test("(b) cache-hit returns cache_hit:true with block + sold listings, zero
       anomaly_flag: null,
     },
   ];
-  const identity = { ...baseIdentity, poketrace_card_id: "pt-uuid-1" };
+  const identity = { ...baseIdentity, poketrace_card_id: "pt-uuid-1", tcgplayer_product_id: "517812" };
   const fake = fakeSupabase({
     identity,
     market: { ...cachedMarketRow },
@@ -210,6 +210,7 @@ Deno.test("(b) cache-hit returns cache_hit:true with block + sold listings, zero
     const body = await res.json();
     assertEquals(res.status, 200);
     assertEquals(body.cache_hit, true);
+    assertEquals(body.tcgplayer_product_id, "517812");
     assert(body.poketrace !== null, "expected poketrace block");
     assertEquals(body.poketrace.avg_cents, 18500);
     assertEquals(body.poketrace.sale_count, 42);
@@ -312,6 +313,7 @@ Deno.test("(c) cold path: resolve UUID → fetch prices+history+listings → v3 
   const body = await res.json();
   assertEquals(res.status, 200);
   assertEquals(body.cache_hit, false);
+  assertEquals(body.tcgplayer_product_id, null);
   assert(body.poketrace !== null, "expected poketrace block");
   assertEquals(body.poketrace.avg_cents, 18500);
   assertEquals(body.poketrace.trend, "up");

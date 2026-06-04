@@ -50,6 +50,7 @@ function blockToResponse(
   soldListings: PriceCompResponse["sold_listings"],
   marketplaceUrl: string | null,
   cacheHit: boolean,
+  tcgplayerProductId: string | null,
 ): PriceCompResponse {
   return {
     grading_service: service,
@@ -58,6 +59,7 @@ function blockToResponse(
     poketrace: block,
     sold_listings: soldListings,
     marketplace_url: marketplaceUrl,
+    tcgplayer_product_id: tcgplayerProductId,
     fetched_at: new Date().toISOString(),
     cache_hit: cacheHit,
   };
@@ -173,7 +175,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
     );
     return json(
       200,
-      blockToResponse(body.grading_service, body.grade, block, sold, null, true),
+      blockToResponse(body.grading_service, body.grade, block, sold, null, true, identity.tcgplayer_product_id ?? null),
     );
   }
 
@@ -281,7 +283,7 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
 
   return json(
     200,
-    blockToResponse(body.grading_service, body.grade, block, sold, null, false),
+    blockToResponse(body.grading_service, body.grade, block, sold, null, false, identity.tcgplayer_product_id ?? null),
   );
 }
 
