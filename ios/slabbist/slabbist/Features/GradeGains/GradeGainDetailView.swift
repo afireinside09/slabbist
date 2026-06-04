@@ -33,6 +33,7 @@ struct GradeGainDetailView: View {
                     hero
                     breakdownCard
                     historyCard
+                    TCGPlayerLinkButton(productId: gain.productId, subId: "gradegain")
                     Spacer(minLength: Spacing.xxxl)
                 }
                 .padding(.horizontal, Spacing.xxl)
