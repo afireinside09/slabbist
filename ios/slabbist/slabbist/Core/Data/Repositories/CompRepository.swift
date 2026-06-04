@@ -21,6 +21,7 @@ final class CompRepository {
         let poketrace: PoketraceWire?
         let sold_listings: [SoldListingWire]
         let marketplace_url: String?
+        let tcgplayer_product_id: String?
         let fetched_at: Date
         let cache_hit: Bool
 
@@ -67,6 +68,7 @@ final class CompRepository {
         let poketrace: SourceComp?
         let soldListings: [SoldListing]
         let marketplaceURL: URL?
+        let tcgplayerProductId: Int?
         let fetchedAt: Date
         let cacheHit: Bool
 
@@ -150,6 +152,7 @@ final class CompRepository {
             poketrace: poketrace,
             soldListings: soldListings,
             marketplaceURL: wire.marketplace_url.flatMap(URL.init(string:)),
+            tcgplayerProductId: wire.tcgplayer_product_id.flatMap { Int($0) },
             fetchedAt: wire.fetched_at,
             cacheHit: wire.cache_hit
         )

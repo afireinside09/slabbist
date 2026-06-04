@@ -201,6 +201,34 @@ struct CompRepositoryTests {
         }
     }
 
+    // MARK: - tcgplayer_product_id
+
+    @Test("decodes tcgplayer_product_id string into Int; absent → nil")
+    func decodesTcgplayerProductId() throws {
+        let withId = #"""
+        {
+          "grading_service": "PSA", "grade": "10",
+          "headline_price_cents": null, "poketrace": null,
+          "sold_listings": [], "marketplace_url": null,
+          "tcgplayer_product_id": "517812",
+          "fetched_at": "2026-06-04T00:00:00Z", "cache_hit": false
+        }
+        """#
+        let a = try CompRepository.decode(data: Data(withId.utf8))
+        #expect(a.tcgplayerProductId == 517812)
+
+        let withoutId = #"""
+        {
+          "grading_service": "PSA", "grade": "10",
+          "headline_price_cents": null, "poketrace": null,
+          "sold_listings": [], "marketplace_url": null,
+          "fetched_at": "2026-06-04T00:00:00Z", "cache_hit": false
+        }
+        """#
+        let b = try CompRepository.decode(data: Data(withoutId.utf8))
+        #expect(b.tcgplayerProductId == nil)
+    }
+
     // MARK: - Decoding error on malformed input
 
     @Test("malformed JSON surfaces as .decoding error")

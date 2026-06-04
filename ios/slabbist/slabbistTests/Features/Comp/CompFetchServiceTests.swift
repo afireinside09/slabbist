@@ -70,6 +70,7 @@ struct CompFetchServicePersistTests {
             poketrace: pt,
             soldListings: soldListings,
             marketplaceURL: URL(string: "https://www.ebay.com/sch/i.html?_nkw=charizard+psa+10"),
+            tcgplayerProductId: nil,
             fetchedAt: now,
             cacheHit: false
         )
@@ -85,6 +86,7 @@ struct CompFetchServicePersistTests {
             poketrace: nil,
             soldListings: [],
             marketplaceURL: nil,
+            tcgplayerProductId: nil,
             fetchedAt: now,
             cacheHit: false
         )
@@ -167,6 +169,7 @@ struct CompFetchServicePersistTests {
                 )
             ],
             marketplaceURL: nil,
+            tcgplayerProductId: nil,
             fetchedAt: now,
             cacheHit: false
         )
