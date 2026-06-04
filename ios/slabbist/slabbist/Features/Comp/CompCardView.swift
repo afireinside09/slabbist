@@ -48,6 +48,12 @@ struct CompCardView: View {
                 )
                 .padding(.horizontal, Spacing.l)
                 .padding(.vertical, Spacing.md)
+                if let pid = snapshot?.tcgplayerProductId {
+                    SlabCardDivider()
+                    TCGPlayerLinkButton(productId: pid, subId: "graded")
+                        .padding(.horizontal, Spacing.l)
+                        .padding(.vertical, Spacing.md)
+                }
                 SlabCardDivider()
                 footerRow
                     .padding(.horizontal, Spacing.l)

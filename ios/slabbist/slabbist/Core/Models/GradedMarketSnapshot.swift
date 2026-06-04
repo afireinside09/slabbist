@@ -36,6 +36,11 @@ final class GradedMarketSnapshot {
     var ptSaleCount: Int?
     var poketraceCardId: String?
 
+    /// TCGplayer product id for the raw single backing this slab's identity,
+    /// echoed from `price-comp`. Drives the "View on TCGplayer" affiliate
+    /// button on the comp card. Nil when the identity has no TCGplayer mapping.
+    var tcgplayerProductId: Int?
+
     /// JSON-encoded `[String: Int64]` map of Poketrace's per-tier
     /// average prices in cents, keyed by snake_case tier ids
     /// ("loose"/"psa_7".."sgc_10"). Same string-encoded-blob convention
@@ -80,6 +85,7 @@ final class GradedMarketSnapshot {
         ptConfidence: String? = nil,
         ptSaleCount: Int? = nil,
         poketraceCardId: String? = nil,
+        tcgplayerProductId: Int? = nil,
         ptTierPricesJSON: String? = nil,
         priceHistoryJSON: String?,
         marketplaceURL: URL? = nil,
@@ -105,6 +111,7 @@ final class GradedMarketSnapshot {
         self.ptConfidence = ptConfidence
         self.ptSaleCount = ptSaleCount
         self.poketraceCardId = poketraceCardId
+        self.tcgplayerProductId = tcgplayerProductId
         self.ptTierPricesJSON = ptTierPricesJSON
         self.priceHistoryJSON = priceHistoryJSON
         self.marketplaceURL = marketplaceURL
