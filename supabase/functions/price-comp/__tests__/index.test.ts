@@ -306,6 +306,7 @@ Deno.test("(c) cold path: resolve UUID → fetch prices+history+listings → v3 
     poketraceBaseUrl: "https://api.poketrace.com/v1",
     poketraceApiKey: "test-key",
     ttlSeconds: 86400,
+    soldListingsEnabled: true,
     now: () => Date.now(),
     fetchImpl: stubFetch,
   });
@@ -347,6 +348,7 @@ Deno.test("(d) resolver miss → 404 PRODUCT_NOT_RESOLVED", async () => {
     poketraceBaseUrl: "https://api.poketrace.com/v1",
     poketraceApiKey: "test-key",
     ttlSeconds: 86400,
+    soldListingsEnabled: true,
     now: () => Date.now(),
     fetchImpl: stubFetch,
   });
@@ -422,6 +424,7 @@ Deno.test("(e) prices present + listings 403 → block returned, sold_listings:[
     poketraceBaseUrl: "https://api.poketrace.com/v1",
     poketraceApiKey: "test-key",
     ttlSeconds: 86400,
+    soldListingsEnabled: true,
     now: () => Date.now(),
     fetchImpl: stubFetch,
   });
@@ -504,6 +507,7 @@ Deno.test("(f) no tier aggregate but listings present → 200 poketrace:null + s
     poketraceBaseUrl: "https://api.poketrace.com/v1",
     poketraceApiKey: "test-key",
     ttlSeconds: 86400,
+    soldListingsEnabled: true,
     now: () => Date.now(),
     fetchImpl: stubFetch,
   });
@@ -516,4 +520,79 @@ Deno.test("(f) no tier aggregate but listings present → 200 poketrace:null + s
   // No market row persisted (no aggregate), but sold listings ARE persisted.
   assertEquals(fake._upsertedMarket(), null, "no market row without a tier aggregate");
   assert(fake._upsertedSales().length > 0, "sold listings must be persisted");
+});
+
+// ─── (g) sold listings gated off → /listings never called, sold_listings:[] ──
+//
+// Off the Poketrace Scale plan we run with soldListingsEnabled:false. The
+// handler MUST skip the listings endpoint entirely (it 403s there) while still
+// returning the price block — otherwise every comp makes a wasted failing call.
+
+Deno.test("(g) soldListingsEnabled off → no /listings call, sold_listings:[]", async () => {
+  const identity = { ...baseIdentity };
+  const fake = fakeSupabase({ identity, market: null, sales: [] });
+
+  const fetchedUrls: string[] = [];
+  const stubFetch: typeof fetch = (input, _init) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    fetchedUrls.push(url);
+    const u = new URL(url);
+
+    if (u.pathname.endsWith("/cards") && u.searchParams.get("search")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [{ id: "pt-uuid-g", name: "Charizard", cardNumber: "4/102", set: { name: "Base Set" } }],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (u.pathname.includes("/prices/") && u.pathname.includes("/history")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      }));
+    }
+    // A listings call here would be the bug this test guards against.
+    if (u.pathname.includes("/listings")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      }));
+    }
+    if (u.pathname.match(/\/cards\/[^/]+$/)) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: {
+          id: "pt-uuid-g",
+          prices: { ebay: { PSA_10: {
+            avg: 200.0, low: 150.0, high: 280.0,
+            avg1d: null, avg7d: 210.0, avg30d: 195.0,
+            median3d: null, median7d: 205.0, median30d: 190.0,
+            trend: "stable", confidence: "medium", saleCount: 20,
+          } } },
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response(JSON.stringify({ data: [] }), {
+      status: 200, headers: { "content-type": "application/json" },
+    }));
+  };
+
+  const req = makeRequest({
+    graded_card_identity_id: "id-1",
+    grading_service: "PSA",
+    grade: "10",
+  });
+  const res = await handle(req, {
+    supabase: fake,
+    poketraceBaseUrl: "https://api.poketrace.com/v1",
+    poketraceApiKey: "test-key",
+    ttlSeconds: 86400,
+    soldListingsEnabled: false,
+    now: () => Date.now(),
+    fetchImpl: stubFetch,
+  });
+  const body = await res.json();
+  assertEquals(res.status, 200);
+  assert(body.poketrace !== null, "price block should still be returned");
+  assertEquals(body.poketrace.avg_cents, 20000);
+  assertEquals(body.sold_listings, [], "sold_listings must be [] when gated off");
+  assert(
+    !fetchedUrls.some((u) => u.includes("/listings")),
+    "the /listings endpoint must NOT be called when soldListingsEnabled is off",
+  );
 });
