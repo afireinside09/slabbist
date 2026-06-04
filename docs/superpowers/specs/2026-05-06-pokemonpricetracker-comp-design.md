@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-06-04)** by [2026-06-04-poketrace-only-comp-design.md](2026-06-04-poketrace-only-comp-design.md) — PokemonPriceTracker has been removed; Poketrace is the sole graded-pricing provider.
+
 # Pokemon Price Tracker Comp — Design Spec
 
 **Sub-project:** #4 (Comp engine v1) — replatform

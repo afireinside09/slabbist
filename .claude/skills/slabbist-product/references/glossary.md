@@ -12,7 +12,7 @@ Domain vocabulary, grounded in how the specs use each term. Definitions are dura
 | **Comp** | The market valuation of a graded slab from a data source. Includes a headline price, per-grade ladder, and metadata. |
 | **Headline price** | The market price for the exact (grader, grade) of the slab in hand — the anchor for an offer. |
 | **Per-grade ladder** | The matrix of prices across Raw / lower grades / 10 for the card. Supports crack-and-resubmit ("what's the upside if I regrade?") reasoning. |
-| **Source** | The data feed behind a comp — e.g. `pokemonpricetracker`, `poketrace`. See `architecture-map.md`. |
+| **Source** | The data feed behind a comp — e.g. `poketrace`. See `architecture-map.md`. |
 | **Reconciled** | When multiple sources exist, the blended headline (e.g. average), with fallback to a single source if another fails. |
 | **Fanout** | Fetching multiple comp sources in parallel on one request, failures isolated per source. |
 | **Watchlist** | The curated subset of graded slabs the scraper tracks on a schedule. Not the whole catalog. |

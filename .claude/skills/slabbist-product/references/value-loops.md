@@ -16,7 +16,7 @@ Spec paths are relative to `docs/superpowers/specs/`.
 **Purpose.** When a slab is scanned, fan out to multiple comp sources in parallel and reconcile them into one number with supporting detail.
 **Why it matters.** The **defensible number**. Multiple independent sources build trust; the per-grade ladder supports crack-and-resubmit decisions; recent history shows whether a price is climbing or about to tank.
 **Output shape.** A reconciled headline price; per-source rows (price, range, trend, confidence); a togglable price history sparkline; a per-grade ladder (raw → top grade); a deep-link to verify against actual sales.
-**→ Specs:** `2026-05-06-pokemonpricetracker-comp-design.md`, `2026-05-08-poketrace-comp-design.md`, `2026-05-13-poketrace-first-class-fanout-design.md`, `2026-04-23-ebay-sold-listings-comp-design.md`, `2026-05-05-pricecharting-comp-design.md`
+**→ Specs:** `2026-06-04-poketrace-only-comp-design.md`, `2026-05-08-poketrace-comp-design.md`, `2026-05-13-poketrace-first-class-fanout-design.md`, `2026-04-23-ebay-sold-listings-comp-design.md`, `2026-05-05-pricecharting-comp-design.md`
 
 ## Grade gains / pre-grade estimator
 
