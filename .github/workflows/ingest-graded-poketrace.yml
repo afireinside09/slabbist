@@ -1,0 +1,23 @@
+name: Ingest graded (Poketrace comp)
+on:
+  schedule: [{ cron: "0 9 * * *" }]
+  workflow_dispatch:
+    inputs:
+      max_requests:
+        description: "Hard cap on Poketrace requests this run (10k/day plan limit)"
+        default: "9000"
+permissions: { contents: read }
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: scraper } }
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      POKETRACE_API_KEY: ${{ secrets.POKETRACE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run cli run graded poketrace-comp --max-requests ${{ github.event.inputs.max_requests || '9000' }} --daily-floor 200
