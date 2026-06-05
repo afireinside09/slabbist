@@ -11,11 +11,11 @@
  * .envrc as SUPABASE_SECRET_KEY, an sb_secret_… service-role-equivalent key):
  *   ./scripts/seed-cameos.ts        # inside a direnv-allowed shell
  *
- * Expected output:
+ * Expected output (counts verified against the current cameo-data/*.csv):
  *   Parsing 10 sheets ...
- *   Parsed 3214 subjects, 3811 cards
+ *   Parsed 1013 subjects, 3945 cards
  *   Cleared existing cameo data
- *   Inserted 3214 subjects, 3811 cards
+ *   Inserted 1013 subjects, 3945 cards
  *   ✓ Done
  */
 
@@ -110,6 +110,10 @@ const cardRows = allSubjects.flatMap((s, i) =>
 await rest("cameo_subjects?kind=in.(pokemon,trainer)", { method: "DELETE", headers: { Prefer: "return=minimal" } });
 console.log("Cleared existing cameo data");
 
+// Assumes (kind, name) is unique across the source data — the table's unique
+// constraint. Current CSVs have no collisions; if a future homonym is added,
+// its 500-row chunk insert fails and the rebuild aborts after the DELETE
+// (leaving the table empty). De-dupe subjectRows here if that ever happens.
 await chunkedInsert("cameo_subjects", subjectRows);
 await chunkedInsert("cameo_cards", cardRows);
 console.log(`Inserted ${subjectRows.length} subjects, ${cardRows.length} cards`);

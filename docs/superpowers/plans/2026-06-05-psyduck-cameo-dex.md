@@ -353,9 +353,9 @@ Create `scripts/seed-cameos.ts`:
  *
  * Expected output:
  *   Parsing 10 sheets ...
- *   Parsed 3214 subjects, 3811 cards
+ *   Parsed 1013 subjects, 3945 cards
  *   Cleared existing cameo data
- *   Inserted 3214 subjects, 3811 cards
+ *   Inserted 1013 subjects, 3945 cards
  *   ✓ Done
  */
 
@@ -475,7 +475,7 @@ curl -s -o /dev/null -D - "${auth[@]}" -H "Prefer: count=exact" \
   "$SUPABASE_URL/rest/v1/cameo_cards?select=id&limit=1" | grep -i content-range
 curl -s "${auth[@]}" "$SUPABASE_URL/rest/v1/cameo_subjects?name=eq.Pikachu&select=name,card_count"
 ```
-Expected: both `content-range` headers show non-zero totals (e.g. `0-0/3214`); the Pikachu query
+Expected: both `content-range` headers show non-zero totals (`…/1013` subjects, `…/3945` cards); the Pikachu query
 returns one row with a plausible `card_count`. Re-running `./scripts/seed-cameos.ts` leaves the
 totals unchanged (idempotent).
 
