@@ -5,32 +5,39 @@ struct RootTabView: View {
     @Environment(OutboxFailureBridge.self) private var failureBridge
     @Environment(TabRouter.self) private var router
     @State private var showFailuresSheet: Bool = false
+    @State private var showCameoDex: Bool = false
 
     var body: some View {
         @Bindable var router = router
-        VStack(spacing: 0) {
-            SyncStatusPill(onReviewFailures: { showFailuresSheet = true })
-            TabView(selection: $router.selectedTab) {
-                Tab("Lots", systemImage: "square.stack.3d.up", value: TabRouter.Tab.lots) {
-                    LotsListView()
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                SyncStatusPill(onReviewFailures: { showFailuresSheet = true })
+                TabView(selection: $router.selectedTab) {
+                    Tab("Lots", systemImage: "square.stack.3d.up", value: TabRouter.Tab.lots) {
+                        LotsListView()
+                    }
+                    Tab("Scan", systemImage: "viewfinder", value: TabRouter.Tab.scan) {
+                        ScanShortcutView()
+                    }
+                    Tab("Pre-grade", systemImage: "checkmark.seal", value: TabRouter.Tab.preGrade) {
+                        gradeTab
+                    }
+                    Tab("Movers", systemImage: "chart.line.uptrend.xyaxis", value: TabRouter.Tab.movers) {
+                        MoversListView()
+                    }
+                    Tab("Grade Gains", systemImage: "arrow.up.forward.square", value: TabRouter.Tab.gradeGains) {
+                        GradeGainsListView()
+                    }
                 }
-                Tab("Scan", systemImage: "viewfinder", value: TabRouter.Tab.scan) {
-                    ScanShortcutView()
-                }
-                Tab("Pre-grade", systemImage: "checkmark.seal", value: TabRouter.Tab.preGrade) {
-                    gradeTab
-                }
-                Tab("Movers", systemImage: "chart.line.uptrend.xyaxis", value: TabRouter.Tab.movers) {
-                    MoversListView()
-                }
-                Tab("Grade Gains", systemImage: "arrow.up.forward.square", value: TabRouter.Tab.gradeGains) {
-                    GradeGainsListView()
-                }
+                .tint(AppColor.gold)
+                .toolbarBackground(AppColor.ink, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+                .toolbarColorScheme(.dark, for: .tabBar)
             }
-            .tint(AppColor.gold)
-            .toolbarBackground(AppColor.ink, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
-            .toolbarColorScheme(.dark, for: .tabBar)
+            PsyduckPeekOverlay { showCameoDex = true }
+        }
+        .fullScreenCover(isPresented: $showCameoDex) {
+            CameoSecretView(onClose: { showCameoDex = false })
         }
         .sheet(isPresented: $showFailuresSheet) {
             OutboxFailuresView(
