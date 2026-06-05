@@ -4,18 +4,24 @@
  * seed-cameos.ts
  *
  * Purpose:
- *   Parse cameo-data/*.csv and rebuild public.cameo_subjects + public.cameo_cards.
- *   Idempotent: deletes all subjects (cards cascade) then bulk-inserts fresh rows.
+ *   Parse cameo-data/*.csv and upsert public.cameo_subjects + public.cameo_cards.
+ *   Rows carry deterministic UUIDv5 ids derived from their natural key, so a
+ *   re-seed updates content in place via merge-duplicates and PRESERVES the
+ *   hand-maintained cameo_cards.tcgplayer_product_id mapping (never in the payload).
  *
  * Usage (needs the secret key — bypasses RLS to write; exported by the repo's
  * .envrc as SUPABASE_SECRET_KEY, an sb_secret_… service-role-equivalent key):
- *   ./scripts/seed-cameos.ts        # inside a direnv-allowed shell
+ *   ./scripts/seed-cameos.ts                 # steady state: upsert only
+ *   CAMEO_REBUILD=1 ./scripts/seed-cameos.ts # one-time: clear first, then seed
+ *
+ * CAMEO_REBUILD=1 deletes all subjects (cards cascade) before seeding. Use it
+ * ONLY for the one-time transition off the old random-id rows (safe while every
+ * tcgplayer_product_id is still NULL) — never afterward, or you wipe mappings.
  *
  * Expected output (counts verified against the current cameo-data/*.csv):
  *   Parsing 10 sheets ...
  *   Parsed 1013 subjects, 3945 cards
- *   Cleared existing cameo data
- *   Inserted 1013 subjects, 3945 cards
+ *   Upserted 1013 subjects, 3945 cards
  *   ✓ Done
  */
 
