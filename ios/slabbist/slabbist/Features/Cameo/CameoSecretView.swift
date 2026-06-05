@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The hidden "Cameo Dex": a full-screen, tab-less cover reached only via the
+/// The hidden "Pokemon Cameos" page: a full-screen, tab-less cover reached only via the
 /// Psyduck easter egg. Search/browse every cameo subject; drill into one to see
 /// its cards. Dismisses via the X — there is intentionally no tab bar.
 struct CameoSecretView: View {
@@ -15,7 +15,7 @@ struct CameoSecretView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.s) {
-                    KickerLabel("Cameo Dex")
+                    KickerLabel("Pokemon Cameos")
                         .padding(.horizontal, Spacing.m)
                         .padding(.top, Spacing.s)
 
@@ -49,7 +49,7 @@ struct CameoSecretView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { onClose() } label: { Image(systemName: "xmark") }
                         .tint(AppColor.gold)
-                        .accessibilityLabel("Close Cameo Dex")
+                        .accessibilityLabel("Close Pokemon Cameos")
                 }
             }
         }
