@@ -35,6 +35,10 @@ import { generate as uuidv5 } from "https://deno.land/std@0.224.0/uuid/v5.ts";
 
 // Fixed namespace so the same natural key always yields the same UUID across
 // re-seeds. This is what makes the upsert (and thus mapping preservation) work.
+// DO NOT EDIT — changing this rotates every id and orphans every manual
+// tcgplayer_product_id mapping. The natural key also includes the normalized
+// card_name/set_name/card_number/notes, so a parser change to those fields
+// re-keys the affected cards (and, for duplicate-key cards, their CSV row order).
 const CAMEO_NS = "7c3a1f64-2b9e-4d8a-9c01-5e6f8a2b3c4d";
 const enc = new TextEncoder();
 

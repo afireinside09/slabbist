@@ -51,6 +51,7 @@ struct CameoSubjectDetailView: View {
         .navigationDestination(for: CameoCardDTO.self) { card in
             CameoCardDetailView(card: card)
         }
+        .refreshable { await load() }
         .task { await load() }
     }
 

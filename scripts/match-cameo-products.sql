@@ -2,11 +2,19 @@
 --
 -- Fills cameo_cards.tcgplayer_product_id ONLY where currently NULL, so it never
 -- clobbers manual corrections. Conservative: assigns a product only when exactly
--- one tcg_products row matches a card on (normalized card number AND normalized
--- name AND fuzzy set name). Ambiguous (>1 candidate) or no candidate → left NULL.
+-- one tcg_products row matches a card on (English category AND normalized card
+-- number AND normalized name AND fuzzy set name). Ambiguous (>1 candidate) or no
+-- candidate → left NULL.
+--
+-- Scoped to English Pokémon (category_id = 3). The catalog is ~half Japanese
+-- (category_id = 85); without this filter a card could map to a Japanese product
+-- — a wrong-language image + affiliate link that renders as if correct.
 --
 -- Run:  psql "$DATABASE_URL" -f scripts/match-cameo-products.sql
--- Idempotent: re-running only fills newly-NULL rows.
+-- Re-runnable: only fills currently-NULL rows. Note the *result* for a given NULL
+-- row depends on the current tcg_products catalog (a future import can flip a
+-- card from ambiguous to single-match or vice-versa), so this is "fill the gaps
+-- with today's catalog", not a pure function of the cameo data.
 
 \timing on
 
@@ -19,9 +27,11 @@ with candidates as (
   from public.cameo_cards c
   join public.tcg_products p
     on  c.tcgplayer_product_id is null
-    -- card number: digits only, must be present on both and equal
-    and nullif(regexp_replace(coalesce(c.card_number, ''), '\D', '', 'g'), '') =
-        nullif(regexp_replace(coalesce(p.card_number, ''), '\D', '', 'g'), '')
+    and p.category_id = 3   -- English Pokémon only (85 = Japanese)
+    -- card number: digits only, must be present on BOTH sides and equal
+    and c.card_number is not null and p.card_number is not null
+    and nullif(regexp_replace(c.card_number, '\D', '', 'g'), '') =
+        nullif(regexp_replace(p.card_number, '\D', '', 'g'), '')
     -- name: normalized substring match either direction
     and (
       lower(regexp_replace(c.card_name, '[^a-z0-9]', '', 'gi')) =
