@@ -6,9 +6,7 @@ export interface CompProduct { productId: number; resolvedAt: string | null }
 export interface CompUpsertRow {
   product_id: number;
   poketrace_card_id: string;
-  psa10_price_cents: number | null;
-  pt_trend: string | null;
-  pt_confidence: string | null;
+  psa10_price_cents: number;
   pt_sale_count: number | null;
   resolved_at: string;
 }
@@ -23,8 +21,9 @@ export interface BackfillDeps {
 }
 
 export interface BackfillResult {
-  covered: number;       // wrote a real comp (uuid + maybe price)
-  noMatch: number;       // wrote the '' sentinel
+  covered: number;       // wrote a real comp (uuid + PSA 10 price)
+  noMatch: number;       // search found no card — nothing written
+  noPrice: number;       // matched a card but it has no PSA 10 price — nothing written
   transient: number;     // skipped, will retry next run
   skippedFresh: number;  // < 7d old, untouched
   requests: number;
@@ -33,8 +32,12 @@ export interface BackfillResult {
 
 const SEVEN_DAYS = 7 * 86_400_000;
 
+// We only persist rows that carry a usable PSA 10 price. No-match and
+// matched-but-no-price products write nothing — keeping tcg_grade_comp to the
+// rows the Grade Gains page actually reads. The trade-off is that those
+// products are re-resolved each run (they are no longer negatively cached).
 export async function backfillProducts(products: CompProduct[], deps: BackfillDeps): Promise<BackfillResult> {
-  const r: BackfillResult = { covered: 0, noMatch: 0, transient: 0, skippedFresh: 0, requests: 0, stoppedOnBudget: false };
+  const r: BackfillResult = { covered: 0, noMatch: 0, noPrice: 0, transient: 0, skippedFresh: 0, requests: 0, stoppedOnBudget: false };
   const nowMs = deps.now();
   for (const p of products) {
     if (p.resolvedAt && nowMs - Date.parse(p.resolvedAt) < SEVEN_DAYS) { r.skippedFresh++; continue; }
@@ -42,23 +45,20 @@ export async function backfillProducts(products: CompProduct[], deps: BackfillDe
 
     const s = await deps.search(p.productId);
     r.requests++;
-    if (s.cardId === undefined) { r.transient++; }       // transient — write nothing
-    else if (s.cardId === null) {                         // confirmed no match — sentinel
-      await deps.upsert({
-        product_id: p.productId, poketrace_card_id: "", psa10_price_cents: null,
-        pt_trend: null, pt_confidence: null, pt_sale_count: null,
-        resolved_at: new Date(nowMs).toISOString(),
-      });
-      r.noMatch++;
-    } else {                                              // match — fetch PSA 10
+    if (s.cardId === undefined) { r.transient++; }        // transient — write nothing
+    else if (s.cardId === null) { r.noMatch++; }          // confirmed no match — write nothing
+    else {                                                // match — fetch PSA 10
       const d = await deps.detail(s.cardId);
       r.requests++;
-      await deps.upsert({
-        product_id: p.productId, poketrace_card_id: s.cardId, psa10_price_cents: d.psa10PriceCents,
-        pt_trend: d.ptTrend, pt_confidence: d.ptConfidence, pt_sale_count: d.ptSaleCount,
-        resolved_at: new Date(nowMs).toISOString(),
-      });
-      r.covered++;
+      if (d.psa10PriceCents !== null) {                   // only persist priced comps
+        await deps.upsert({
+          product_id: p.productId, poketrace_card_id: s.cardId, psa10_price_cents: d.psa10PriceCents,
+          pt_sale_count: d.ptSaleCount, resolved_at: new Date(nowMs).toISOString(),
+        });
+        r.covered++;
+      } else {
+        r.noPrice++;
+      }
       if (d.dailyRemaining !== null && d.dailyRemaining < deps.dailyFloor) { r.stoppedOnBudget = true; break; }
     }
     if (s.dailyRemaining !== null && s.dailyRemaining < deps.dailyFloor) { r.stoppedOnBudget = true; break; }
