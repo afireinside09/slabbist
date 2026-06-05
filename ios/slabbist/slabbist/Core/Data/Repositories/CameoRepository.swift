@@ -38,7 +38,8 @@ nonisolated struct CameoRepository: Sendable {
     /// Every card (incl. reprints) for one subject, grouped by generation then set.
     func cards(forSubject id: UUID) async throws -> [CameoCardDTO] {
         do {
-            return try await cards.query().select()
+            return try await cards.query()
+                .select("*, tcg_products(product_id, image_url)")
                 .eq("subject_id", value: id.uuidString)
                 .order("generation", ascending: true)
                 .order("set_name", ascending: true)
