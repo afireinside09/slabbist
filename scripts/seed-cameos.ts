@@ -116,24 +116,33 @@ const subjectRows = await Promise.all(allSubjects.map(async (s) => ({
   card_count: s.cards.length,
 })));
 
-const cardRowsNested = await Promise.all(allSubjects.map(async (s, i) => {
-  const sid = subjectRows[i].id;
-  return Promise.all(s.cards.map(async (c) => {
-    const key = cardKey(s.kind, s.name, c.cardName, c.setName, c.cardNumber || "", c.generation, c.notes || "");
-    return {
-      id: await cardId(key),
-      subject_id: sid,
-      card_name: c.cardName,
-      set_name: c.setName,
-      card_number: c.cardNumber || null,
-      notes: c.notes || null,
-      generation: c.generation,
-      // NOTE: tcgplayer_product_id intentionally omitted — upsert leaves the
-      // user's manual mapping untouched.
-    };
-  }));
-}));
-const cardRows = cardRowsNested.flat();
+// Disambiguate genuinely-distinct cards that share an identical natural key —
+// e.g. Pikachu's "No.2/No.3/No.4 Trainer" World Championship promos have several
+// printings with the same name/set/number/notes but are different cards. Append a
+// stable per-key occurrence index; the first occurrence keeps the bare key, so
+// the common (unique) case is unaffected. Order follows the deterministic CSV
+// parse, so ids stay stable across re-seeds.
+const occ = new Map<string, number>();
+const cardSpecs = allSubjects.flatMap((s, i) =>
+  s.cards.map((c) => {
+    const base = cardKey(s.kind, s.name, c.cardName, c.setName, c.cardNumber || "", c.generation, c.notes || "");
+    const n = occ.get(base) ?? 0;
+    occ.set(base, n + 1);
+    return { key: n === 0 ? base : `${base}|occ${n}`, subjectId: subjectRows[i].id, card: c };
+  })
+);
+
+const cardRows = await Promise.all(cardSpecs.map(async (spec) => ({
+  id: await cardId(spec.key),
+  subject_id: spec.subjectId,
+  card_name: spec.card.cardName,
+  set_name: spec.card.setName,
+  card_number: spec.card.cardNumber || null,
+  notes: spec.card.notes || null,
+  generation: spec.card.generation,
+  // NOTE: tcgplayer_product_id intentionally omitted — upsert leaves the
+  // user's manual mapping untouched.
+})));
 
 // Fail loud if the natural key collides (would silently merge two cards).
 const seen = new Set<string>();
