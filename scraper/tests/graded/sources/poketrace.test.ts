@@ -40,15 +40,17 @@ describe("searchCardId", () => {
 });
 
 describe("fetchPsa10", () => {
-  it("extracts PSA_10 avg as cents plus trend/confidence/saleCount", async () => {
+  it("extracts PSA_10 avg as cents plus saleCount (ignores trend/confidence)", async () => {
     const c = clientWith(() => ({
       status: 200,
+      // trend/confidence are present in the response but intentionally not parsed —
+      // Poketrace v1 doesn't reliably supply them, so we don't persist them.
       json: { data: { prices: { ebay: { PSA_10: { avg: 50.5, trend: "up", confidence: "high", saleCount: 12 } } } } },
       daily: "800",
     }));
     const r = await fetchPsa10(c, "uuid-1");
     expect(r).toEqual({
-      psa10PriceCents: 5050, ptTrend: "up", ptConfidence: "high", ptSaleCount: 12, dailyRemaining: 800,
+      psa10PriceCents: 5050, ptSaleCount: 12, dailyRemaining: 800,
     });
   });
 

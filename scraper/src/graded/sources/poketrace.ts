@@ -15,14 +15,9 @@ export interface SearchResult { cardId: string | null | undefined; dailyRemainin
 
 export interface Psa10Result {
   psa10PriceCents: number | null;
-  ptTrend: "up" | "down" | "stable" | null;
-  ptConfidence: "high" | "medium" | "low" | null;
   ptSaleCount: number | null;
   dailyRemaining: number | null;
 }
-
-const TREND = new Set(["up", "down", "stable"]);
-const CONF = new Set(["high", "medium", "low"]);
 
 async function get(c: PoketraceClient, path: string): Promise<{ status: number; body: any; daily: number | null }> {
   const fetchImpl = c.fetchImpl ?? fetch;
@@ -62,7 +57,7 @@ function dollarsToCents(v: unknown): number | null {
 
 export async function fetchPsa10(c: PoketraceClient, cardId: string): Promise<Psa10Result> {
   const { status, body, daily } = await get(c, `/cards/${encodeURIComponent(cardId)}`);
-  const empty: Psa10Result = { psa10PriceCents: null, ptTrend: null, ptConfidence: null, ptSaleCount: null, dailyRemaining: daily };
+  const empty: Psa10Result = { psa10PriceCents: null, ptSaleCount: null, dailyRemaining: daily };
   if (status !== 200 || !body?.data?.prices) return empty;
   const prices: Record<string, Record<string, any>> = body.data.prices;
   for (const src of Object.keys(prices)) {
@@ -70,8 +65,6 @@ export async function fetchPsa10(c: PoketraceClient, cardId: string): Promise<Ps
     if (tp) {
       return {
         psa10PriceCents: dollarsToCents(tp.avg),
-        ptTrend: typeof tp.trend === "string" && TREND.has(tp.trend) ? tp.trend : null,
-        ptConfidence: typeof tp.confidence === "string" && CONF.has(tp.confidence) ? tp.confidence : null,
         ptSaleCount: typeof tp.saleCount === "number" && Number.isFinite(tp.saleCount) ? tp.saleCount : null,
         dailyRemaining: daily,
       };

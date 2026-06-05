@@ -12,8 +12,6 @@ nonisolated struct GradeGainDTO: Codable, Sendable, Identifiable, Equatable, Has
     let rawPriceCents: Int
     let psa10PriceCents: Int
     let spreadCents: Int
-    let ptTrend: String?
-    let ptConfidence: String?
     let ptSaleCount: Int?
 
     var id: Int { productId }
@@ -32,8 +30,6 @@ nonisolated struct GradeGainDTO: Codable, Sendable, Identifiable, Equatable, Has
         case rawPriceCents = "raw_price_cents"
         case psa10PriceCents = "psa10_price_cents"
         case spreadCents = "spread_cents"
-        case ptTrend = "pt_trend"
-        case ptConfidence = "pt_confidence"
         case ptSaleCount = "pt_sale_count"
     }
 }

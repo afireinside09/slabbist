@@ -8,7 +8,7 @@ final class GradeGainViewModelTests: XCTestCase {
     private func row(_ id: Int, raw: Int, psa10: Int) -> GradeGainDTO {
         GradeGainDTO(productId: id, productName: "C\(id)", groupName: "S", imageUrl: nil,
                      subTypeName: "Holofoil", rawPriceCents: raw, psa10PriceCents: psa10,
-                     spreadCents: psa10 - raw, ptTrend: nil, ptConfidence: nil, ptSaleCount: nil)
+                     spreadCents: psa10 - raw, ptSaleCount: nil)
     }
 
     struct FakeRepo: GradeGainRepository {

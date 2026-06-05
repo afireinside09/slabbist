@@ -41,13 +41,18 @@ struct CompCardView: View {
                         .padding(.horizontal, Spacing.l)
                         .padding(.vertical, Spacing.md)
                 }
-                SlabCardDivider()
-                CompSoldListingsView(
-                    soldListings: snapshot?.soldListings ?? [],
-                    marketplaceURL: snapshot?.marketplaceURL
-                )
-                .padding(.horizontal, Spacing.l)
-                .padding(.vertical, Spacing.md)
+                // Sold (eBay) listings are a Poketrace Scale-plan feature; off
+                // that plan the array is always empty, so hide the section
+                // entirely rather than show a permanently-empty placeholder.
+                if let soldListings = snapshot?.soldListings, !soldListings.isEmpty {
+                    SlabCardDivider()
+                    CompSoldListingsView(
+                        soldListings: soldListings,
+                        marketplaceURL: snapshot?.marketplaceURL
+                    )
+                    .padding(.horizontal, Spacing.l)
+                    .padding(.vertical, Spacing.md)
+                }
                 if let pid = snapshot?.tcgplayerProductId {
                     SlabCardDivider()
                     TCGPlayerLinkButton(productId: pid, subId: "graded")

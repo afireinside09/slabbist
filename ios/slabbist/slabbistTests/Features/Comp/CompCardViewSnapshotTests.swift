@@ -237,7 +237,7 @@ struct CompCardViewSnapshotTests {
 
     // MARK: - 2. Poketrace, no sold listings (non-Scale plan degrade)
 
-    @Test("Poketrace PSA 9 — no sold listings — compact empty state")
+    @Test("Poketrace PSA 9 — no sold listings — section hidden (non-Scale degrade)")
     func poketraceNoSoldListings_psa9() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)
@@ -332,7 +332,7 @@ struct CompCardViewSnapshotTests {
 
     // MARK: - 5. No snapshot
 
-    @Test("No snapshot — hero shows '—', sold listings shows empty state")
+    @Test("No snapshot — hero shows '—', no sold-listings section")
     func noSnapshot() throws {
         let container = try Self.makeContainer()
         let context = ModelContext(container)

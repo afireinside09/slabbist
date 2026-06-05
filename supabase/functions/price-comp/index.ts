@@ -39,6 +39,11 @@ export interface HandleDeps {
   poketraceApiKey: string | null;
   ttlSeconds: number;
   now: () => number;
+  /**
+   * Sold (eBay) listings are a Poketrace Scale-plan endpoint. Off Scale the
+   * call 403s, so we skip it entirely unless this is true. Defaults to off.
+   */
+  soldListingsEnabled?: boolean;
   /** Optional fetch override for testing. Injected into the PoketraceClientOptions. */
   fetchImpl?: typeof fetch;
 }
@@ -204,13 +209,15 @@ export async function handle(req: Request, deps: HandleDeps): Promise<Response> 
 
   // 4. Parallel fetch: prices + history + listings.
   //    Skip listings for TAG — Poketrace's grader enum has no TAG entry.
+  //    Skip entirely off the Scale plan (soldListingsEnabled) — the endpoint
+  //    403s there, so calling it just adds a failing request per comp.
   const tierKey = poketraceTierKey(body.grading_service, body.grade);
   const grader = body.grading_service === "TAG" ? null : body.grading_service;
 
   const [pricesR, historyR, listingsR] = await Promise.allSettled([
     fetchPoketracePrices(client, cardId, tierKey),
     fetchPoketraceHistory(client, cardId, tierKey),
-    grader
+    grader && deps.soldListingsEnabled
       ? fetchPoketraceListings(client, cardId, grader, body.grade)
       : Promise.resolve({ status: 200, listings: [] }),
   ]);
@@ -312,6 +319,7 @@ if (import.meta.main) Deno.serve(async (req) => {
     poketraceBaseUrl: "https://api.poketrace.com/v1",
     poketraceApiKey,
     ttlSeconds: Number(env("POKETRACE_FRESHNESS_TTL_SECONDS", "86400")),
+    soldListingsEnabled: env("POKETRACE_SOLD_LISTINGS_ENABLED", "false") === "true",
     now: () => Date.now(),
   });
 });

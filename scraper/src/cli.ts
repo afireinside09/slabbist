@@ -92,7 +92,7 @@ run.command("graded")
           log,
         });
         log.info("poketrace-comp done", { runId: res.runId, covered: res.covered, noMatch: res.noMatch,
-          transient: res.transient, skippedFresh: res.skippedFresh, requests: res.requests, stoppedOnBudget: res.stoppedOnBudget });
+          noPrice: res.noPrice, transient: res.transient, skippedFresh: res.skippedFresh, requests: res.requests, stoppedOnBudget: res.stoppedOnBudget });
       } catch (e) {
         log.error("poketrace-comp failed", { error: String((e as Error).message ?? e) });
         process.exit(1);
