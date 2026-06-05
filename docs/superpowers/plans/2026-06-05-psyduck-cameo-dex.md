@@ -130,10 +130,26 @@ Run: `supabase db push`
 Expected: applies `20260605140000_cameo_dex.sql` with no error.
 (If it errors "relation already exists", reconcile the ledger per the project rule — `INSERT INTO supabase_migrations.schema_migrations` — rather than re-running DDL.)
 
-- [ ] **Step 4: Run the RLS test to verify it passes**
+- [ ] **Step 4: Verify RLS functionally over REST (no DATABASE_URL in this env)**
 
-Run: `psql "$DATABASE_URL" -f supabase/tests/rls_cameo.sql`
-Expected: `ok 1..4`, all four assertions pass, ends with `rollback`.
+The repo's `.envrc` exports no direct Postgres connection string, so the pgTAP file
+(`rls_cameo.sql`) is committed as a CI/documentation artifact but is verified here
+**functionally over PostgREST** with the anon (publishable) key. In a direnv-allowed shell:
+
+```bash
+eval "$(direnv export bash)"
+# anon SELECT must succeed (200)
+curl -s -o /dev/null -w "select=%{http_code}\n" \
+  "$SUPABASE_URL/rest/v1/cameo_subjects?select=id&limit=1" \
+  -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+# anon INSERT must be denied (401/403)
+curl -s -o /dev/null -w "insert=%{http_code}\n" -X POST \
+  "$SUPABASE_URL/rest/v1/cameo_subjects" \
+  -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
+  -H "Content-Type: application/json" -d '{"kind":"pokemon","name":"RLS Probe"}'
+```
+Expected: `select=200` and `insert=401` (or `403`). Anyone with a `DATABASE_URL` can
+additionally run `psql "$DATABASE_URL" -f supabase/tests/rls_cameo.sql` → `ok 1..4`.
 
 - [ ] **Step 5: Commit**
 
@@ -331,8 +347,9 @@ Create `scripts/seed-cameos.ts`:
  *   Parse cameo-data/*.csv and rebuild public.cameo_subjects + public.cameo_cards.
  *   Idempotent: deletes all subjects (cards cascade) then bulk-inserts fresh rows.
  *
- * Usage (needs the service-role key — bypasses RLS to write):
- *   SUPABASE_SERVICE_ROLE_KEY=... ./scripts/seed-cameos.ts
+ * Usage (needs the secret key — bypasses RLS to write; exported by the repo's
+ * .envrc as SUPABASE_SECRET_KEY, an sb_secret_… service-role-equivalent key):
+ *   ./scripts/seed-cameos.ts        # inside a direnv-allowed shell
  *
  * Expected output:
  *   Parsing 10 sheets ...
@@ -346,9 +363,9 @@ import { parse as parseCsv } from "https://deno.land/std@0.224.0/csv/mod.ts";
 import { parseCameoSheet, type ParsedSubject } from "./cameo_parse.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "https://ksildxueezkvrwryybln.supabase.co";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-if (!SERVICE_KEY) {
-  console.error("SUPABASE_SERVICE_ROLE_KEY is required (writes bypass RLS).");
+const SECRET_KEY = Deno.env.get("SUPABASE_SECRET_KEY");
+if (!SECRET_KEY) {
+  console.error("SUPABASE_SECRET_KEY is required (writes bypass RLS). Run inside a direnv-allowed shell.");
   Deno.exit(1);
 }
 
@@ -373,8 +390,8 @@ async function loadSheet(file: string): Promise<string[][]> {
 }
 
 const headers = {
-  apikey: SERVICE_KEY!,
-  Authorization: `Bearer ${SERVICE_KEY}`,
+  apikey: SECRET_KEY!,
+  Authorization: `Bearer ${SECRET_KEY}`,
   "Content-Type": "application/json",
 };
 
@@ -445,14 +462,22 @@ Run (from repo root, inside a direnv shell that exports `SUPABASE_SERVICE_ROLE_K
 `./scripts/seed-cameos.ts`
 Expected: prints `Parsed N subjects, M cards`, `Cleared existing cameo data`, `Inserted N subjects, M cards`, `✓ Done`, exit 0.
 
-- [ ] **Step 3: Spot-check the data landed**
+- [ ] **Step 3: Spot-check the data landed (REST, no DATABASE_URL in this env)**
 
-Run:
+Run in a direnv-allowed shell:
 ```bash
-psql "$DATABASE_URL" -c "select count(*) from cameo_subjects; select count(*) from cameo_cards;"
-psql "$DATABASE_URL" -c "select name, card_count from cameo_subjects where name = 'Pikachu';"
+eval "$(direnv export bash)"
+auth=(-H "apikey: $SUPABASE_SECRET_KEY" -H "Authorization: Bearer $SUPABASE_SECRET_KEY")
+# Totals come back in the Content-Range response header when Prefer: count=exact.
+curl -s -o /dev/null -D - "${auth[@]}" -H "Prefer: count=exact" \
+  "$SUPABASE_URL/rest/v1/cameo_subjects?select=id&limit=1" | grep -i content-range
+curl -s -o /dev/null -D - "${auth[@]}" -H "Prefer: count=exact" \
+  "$SUPABASE_URL/rest/v1/cameo_cards?select=id&limit=1" | grep -i content-range
+curl -s "${auth[@]}" "$SUPABASE_URL/rest/v1/cameo_subjects?name=eq.Pikachu&select=name,card_count"
 ```
-Expected: non-zero counts; `Pikachu` present with a plausible `card_count`. Re-running the script leaves counts unchanged (idempotent).
+Expected: both `content-range` headers show non-zero totals (e.g. `0-0/3214`); the Pikachu query
+returns one row with a plausible `card_count`. Re-running `./scripts/seed-cameos.ts` leaves the
+totals unchanged (idempotent).
 
 - [ ] **Step 4: Commit**
 
@@ -1241,9 +1266,13 @@ Expected: `** TEST SUCCEEDED **` — including `TCGPlayerAffiliateLinkTests` (6)
 Run:
 ```bash
 deno test scripts/cameo_parse.test.ts
-psql "$DATABASE_URL" -f supabase/tests/rls_cameo.sql
+# Re-confirm RLS functionally (same REST probe as Task 1 Step 4)
+eval "$(direnv export bash)"
+curl -s -o /dev/null -w "anon select=%{http_code}\n" \
+  "$SUPABASE_URL/rest/v1/cameo_subjects?select=id&limit=1" \
+  -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
 ```
-Expected: Deno `ok | 2 passed`; pgTAP `ok 1..4`.
+Expected: Deno `ok | 2 passed`; `anon select=200`.
 
 - [ ] **Step 3: Final commit (if any lint/format drift)**
 
