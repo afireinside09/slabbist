@@ -22,6 +22,26 @@
 import { parse as parseCsv } from "https://deno.land/std@0.224.0/csv/mod.ts";
 import { parseCameoSheet, type ParsedSubject } from "./cameo_parse.ts";
 
+// std@0.224.0 signature: generate(namespace: string, data: Uint8Array): Promise<string>.
+// (The object form `{ value, namespace }` is the newer JSR @std/uuid API — do NOT
+// use it here; this script pins deno.land/std@0.224.0.)
+import { generate as uuidv5 } from "https://deno.land/std@0.224.0/uuid/v5.ts";
+
+// Fixed namespace so the same natural key always yields the same UUID across
+// re-seeds. This is what makes the upsert (and thus mapping preservation) work.
+const CAMEO_NS = "7c3a1f64-2b9e-4d8a-9c01-5e6f8a2b3c4d";
+const enc = new TextEncoder();
+
+const subjectId = (kind: string, name: string) =>
+  uuidv5(CAMEO_NS, enc.encode(`subject|${kind}|${name}`));
+
+const cardKey = (
+  kind: string, name: string,
+  cardName: string, setName: string, cardNumber: string, generation: string, notes: string,
+) => `card|${kind}|${name}|${cardName}|${setName}|${cardNumber}|${generation}|${notes}`;
+
+const cardId = (key: string) => uuidv5(CAMEO_NS, enc.encode(key));
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "https://ksildxueezkvrwryybln.supabase.co";
 const SECRET_KEY = Deno.env.get("SUPABASE_SECRET_KEY");
 if (!SECRET_KEY) {
@@ -63,12 +83,14 @@ async function rest(path: string, init: RequestInit) {
   return res;
 }
 
-async function chunkedInsert(table: string, rows: unknown[]) {
+async function chunkedUpsert(table: string, rows: unknown[]) {
   const SIZE = 500;
   for (let i = 0; i < rows.length; i += SIZE) {
     await rest(table, {
       method: "POST",
-      headers: { Prefer: "return=minimal" },
+      // merge-duplicates → INSERT ... ON CONFLICT (pk) DO UPDATE SET <payload cols>.
+      // Columns absent from the payload (tcgplayer_product_id) are left as-is.
+      headers: { Prefer: "return=minimal,resolution=merge-duplicates" },
       body: JSON.stringify(rows.slice(i, i + SIZE)),
     });
   }
@@ -84,37 +106,57 @@ for (const sheet of SHEETS) {
 const totalCards = allSubjects.reduce((n, s) => n + s.cards.length, 0);
 console.log(`Parsed ${allSubjects.length} subjects, ${totalCards} cards`);
 
-// ── Build insert payloads (client-generated UUIDs link cards → subjects) ──────
-const subjectRows = allSubjects.map((s) => ({
-  id: crypto.randomUUID(),
+// ── Build upsert payloads (deterministic UUIDs link cards → subjects) ─────────
+const subjectRows = await Promise.all(allSubjects.map(async (s) => ({
+  id: await subjectId(s.kind, s.name),
   kind: s.kind,
   ndex: s.ndex,
   region: s.region,
   name: s.name,
   card_count: s.cards.length,
+})));
+
+const cardRowsNested = await Promise.all(allSubjects.map(async (s, i) => {
+  const sid = subjectRows[i].id;
+  return Promise.all(s.cards.map(async (c) => {
+    const key = cardKey(s.kind, s.name, c.cardName, c.setName, c.cardNumber || "", c.generation, c.notes || "");
+    return {
+      id: await cardId(key),
+      subject_id: sid,
+      card_name: c.cardName,
+      set_name: c.setName,
+      card_number: c.cardNumber || null,
+      notes: c.notes || null,
+      generation: c.generation,
+      // NOTE: tcgplayer_product_id intentionally omitted — upsert leaves the
+      // user's manual mapping untouched.
+    };
+  }));
 }));
-const cardRows = allSubjects.flatMap((s, i) =>
-  s.cards.map((c) => ({
-    subject_id: subjectRows[i].id,
-    card_name: c.cardName,
-    set_name: c.setName,
-    card_number: c.cardNumber || null,
-    notes: c.notes || null,
-    generation: c.generation,
-  }))
-);
+const cardRows = cardRowsNested.flat();
 
-// ── Rebuild ───────────────────────────────────────────────────────────────────
-// Delete every subject (cards cascade via FK). PostgREST requires a filter on
-// DELETE; `kind` is non-null on every row, so this matches all.
-await rest("cameo_subjects?kind=in.(pokemon,trainer)", { method: "DELETE", headers: { Prefer: "return=minimal" } });
-console.log("Cleared existing cameo data");
+// Fail loud if the natural key collides (would silently merge two cards).
+const seen = new Set<string>();
+const dupes = cardRows.filter((r) => seen.size === seen.add(r.id).size);
+if (dupes.length > 0) {
+  console.error(`✗ ${dupes.length} cards share a deterministic id (natural-key collision).`);
+  console.error("  Add a discriminator to cardKey() before re-running.");
+  Deno.exit(1);
+}
 
-// Assumes (kind, name) is unique across the source data — the table's unique
-// constraint. Current CSVs have no collisions; if a future homonym is added,
-// its 500-row chunk insert fails and the rebuild aborts after the DELETE
-// (leaving the table empty). De-dupe subjectRows here if that ever happens.
-await chunkedInsert("cameo_subjects", subjectRows);
-await chunkedInsert("cameo_cards", cardRows);
-console.log(`Inserted ${subjectRows.length} subjects, ${cardRows.length} cards`);
+// ── Upsert ───────────────────────────────────────────────────────────────────
+// Steady state: upsert by deterministic id. Content columns refresh; the
+// tcgplayer_product_id mapping is preserved (not in the payload).
+//
+// One-time transition: existing rows were seeded with RANDOM ids, so the first
+// deterministic run would duplicate them. Run once with CAMEO_REBUILD=1 to clear
+// the old rows first (safe — tcgplayer_product_id is entirely NULL until then).
+if (Deno.env.get("CAMEO_REBUILD") === "1") {
+  await rest("cameo_subjects?kind=in.(pokemon,trainer)", { method: "DELETE", headers: { Prefer: "return=minimal" } });
+  console.log("CAMEO_REBUILD=1 → cleared existing cameo data");
+}
+
+await chunkedUpsert("cameo_subjects", subjectRows);
+await chunkedUpsert("cameo_cards", cardRows);
+console.log(`Upserted ${subjectRows.length} subjects, ${cardRows.length} cards`);
 console.log("✓ Done");
