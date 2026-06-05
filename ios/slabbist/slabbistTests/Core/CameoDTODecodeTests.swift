@@ -34,4 +34,26 @@ struct CameoDTODecodeTests {
         #expect(rows[0].cardNumber == nil)
         #expect(rows[0].notes == nil)
     }
+
+    // Why: the card list/detail render image + product affiliate link straight
+    // from the PostgREST embed `tcg_products(product_id, image_url)`, which comes
+    // back as a nested object for mapped rows and null for unmapped rows. Both
+    // shapes must decode or cards silently lose their image/link.
+    @Test("card decodes embedded tcg_products (mapped) and null (unmapped)")
+    func cardEmbeddedProduct() throws {
+        let json = """
+        [
+          {"id":"44444444-4444-4444-4444-444444444444","subject_id":"22222222-2222-2222-2222-222222222222",
+           "card_name":"Pikachu","set_name":"Base Set","card_number":"58","notes":null,"generation":"Gen 1",
+           "tcg_products":{"product_id":42445,"image_url":"https://img/42445.jpg"}},
+          {"id":"55555555-5555-5555-5555-555555555555","subject_id":"22222222-2222-2222-2222-222222222222",
+           "card_name":"Pokémon March","set_name":"Neo Genesis","card_number":null,"notes":null,"generation":"Gen 2",
+           "tcg_products":null}
+        ]
+        """.data(using: .utf8)!
+        let rows = try JSONDecoder().decode([CameoCardDTO].self, from: json)
+        #expect(rows[0].tcgProduct?.productId == 42445)
+        #expect(rows[0].tcgProduct?.imageURL == "https://img/42445.jpg")
+        #expect(rows[1].tcgProduct == nil)
+    }
 }
