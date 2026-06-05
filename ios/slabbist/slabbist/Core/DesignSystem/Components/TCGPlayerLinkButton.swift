@@ -10,15 +10,22 @@ struct TCGPlayerLinkButton: View {
 
     var body: some View {
         if let url = TCGPlayerAffiliateLink.link(productId: productId, subId: subId) {
-            Link(destination: url) {
-                HStack(spacing: Spacing.xs) {
-                    Text("View on TCGplayer")
-                    Image(systemName: "arrow.up.right")
+            VStack(spacing: Spacing.xs) {
+                Link(destination: url) {
+                    HStack(spacing: Spacing.xs) {
+                        Text("View on TCGplayer")
+                        Image(systemName: "arrow.up.right")
+                    }
                 }
+                .buttonStyle(TCGPlayerLinkButtonStyle())
+                .accessibilityLabel("View on TCGplayer")
+                .accessibilityHint("Opens this card's page on TCGplayer")
+
+                Text("Affiliate link — Slabbist may earn a commission.")
+                    .font(SlabFont.sans(size: 11))
+                    .foregroundStyle(AppColor.dim)
+                    .accessibilityLabel("Affiliate link disclosure. Slabbist may earn a commission.")
             }
-            .buttonStyle(TCGPlayerLinkButtonStyle())
-            .accessibilityLabel("View on TCGplayer")
-            .accessibilityHint("Opens this card's page on TCGplayer")
         }
     }
 }
