@@ -6,45 +6,45 @@ import { FinalCta } from '@/components/marketing/final-cta';
 export const metadata: Metadata = {
   title: 'Slabbist for collectors',
   description:
-    'Buy cert-verified slabs and list your own with zero seller fees. 1% buyer fee at checkout, compared to 20% elsewhere.',
+    'Pre-grade your own cards, watch market movers, and comp any slab against real sales today. A fair marketplace with a 1% buyer fee is on the way.',
 };
 
 const POINTS: AudiencePoint[] = [
   {
-    icon: 'shield',
-    title: 'Every listing cert-verified',
+    icon: 'gauge',
+    title: 'Pre-grade your own cards',
     blurb:
-      'Every slab is cross-checked with the grader DB before it goes live. No mismatched certs, no swapped slabs, no surprises.',
-  },
-  {
-    icon: 'lock',
-    title: 'Escrow and an inspection window',
-    blurb:
-      'Your money is held until the card arrives and you have had time to inspect it. Return it if the slab does not match the listing.',
-  },
-  {
-    icon: 'tag',
-    title: 'Zero seller fees',
-    blurb:
-      'No listing, closing, or commission fees. A 1% buyer fee applies only at checkout. Sellers net the sale price, after payment processing.',
-  },
-  {
-    icon: 'users',
-    title: 'Reputation that follows you',
-    blurb:
-      'Import your eBay and PWCC feedback so a strong seller history is not wiped out when you move marketplaces.',
+      'Estimate a card’s PSA-equivalent grade and centering before you spend on a submission. Available today.',
   },
   {
     icon: 'chart',
-    title: 'Price history on every card',
+    title: 'Market movers and real comps',
     blurb:
-      'The same comp engine that stores use. See the last 90 days of sales on the exact card you are eyeing before you tap buy.',
+      'The same comp engine and gainers/losers stores use. See the last 30 days on the exact card you are eyeing. Available today.',
   },
   {
-    icon: 'mail',
-    title: 'ID + cert verification up front',
+    icon: 'zap',
+    title: 'Spot the grade-gain plays',
     blurb:
-      'New sellers verify identity and the first few certs before they can go live. Trust is earned, not assumed.',
+      'Find the raw cards worth grading, ranked by upside to a PSA 10 net of the fee. Available today.',
+  },
+  {
+    icon: 'lock',
+    title: 'Escrow + inspection window (planned)',
+    blurb:
+      'The coming marketplace will hold your money until the card arrives and you have had time to inspect it.',
+  },
+  {
+    icon: 'tag',
+    title: 'Zero seller fees (planned)',
+    blurb:
+      'No listing or commission fees. A 1% buyer fee will apply only at checkout; sellers net the sale price after payment processing.',
+  },
+  {
+    icon: 'shield',
+    title: 'Cert-verified listings (planned)',
+    blurb:
+      'Every slab will be cross-checked with the grader database before it goes live — no mismatched certs, no swapped slabs.',
   },
 ];
 
@@ -53,13 +53,13 @@ export default function ForCollectorsPage() {
     <PageShell>
       <PageHero
         eyebrow="For collectors"
-        title="A marketplace that doesn't punish selling."
-        italicize="doesn't punish"
-        subtitle="Buy cert-verified slabs. List your own with zero seller fees. A 1% buyer fee applies only at checkout — compared to 20% you pay elsewhere."
+        title="Grade smarter today. Sell fairer tomorrow."
+        italicize="fairer"
+        subtitle="Pre-grade your own cards, watch the movers, and comp any slab against real sales right now. A marketplace that doesn't punish selling — 1% buyer fee, zero seller fees — is on the way."
       />
       <AudienceBody
         pain="You love the hobby but hate the tax. A 13% final-value fee, 3% payment processing, and a promoted-listing fee on top means a $500 slab nets you $420 if you are lucky."
-        shift="List for free. Sellers net the sale price after payment processing. Buyers pay a 1% fee at checkout for escrow, inspection, and cert verification."
+        shift="Use Slabbist today to grade, comp, and track the market. When the marketplace opens, list for free and keep what selling elsewhere takes from you."
         points={POINTS}
         ctaLabel="Join the collector waitlist"
         waitlistAudience="collector"
