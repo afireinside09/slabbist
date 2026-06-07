@@ -39,15 +39,16 @@ export default function PressPage() {
           <Card
             label="Boilerplate"
             lines={[
-              'Slabbist is an iOS app that lets Pokémon hobby stores, show vendors, and collectors bulk-scan graded slabs and return real comps from recent sales. Founded in 2025 and based in the Pacific Northwest.',
+              'Slabbist is an iOS app for Pokémon hobby stores and show vendors. It bulk-scans graded slabs and returns real comps from recent sales, estimates the grade of raw cards on-device, surfaces market movers and raw-to-graded arbitrage, and turns a stack into a priced offer. Founded in 2025 and based in the Pacific Northwest.',
             ]}
           />
           <Card
             label="Stats"
             lines={[
-              '30 slabs per minute in the bulk queue',
-              '14 seconds from scan to offer',
-              '5 graders supported: PSA, BGS, CGC, SGC, TAG',
+              'Bulk cert scanning for PSA, BGS, CGC, SGC, and TAG',
+              'On-device grade estimates with centering, corners, edges, surface',
+              'Movers and grade-gain arbitrage by set and price tier',
+              'Offline-first — works when the venue Wi-Fi quits',
               'Free on iOS',
             ]}
           />

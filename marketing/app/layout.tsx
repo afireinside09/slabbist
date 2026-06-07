@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Slabbist · Price a stack of slabs faster than you can count them",
   description:
-    "Slabbist turns your iPhone into a bulk scanner for graded Pokémon. Real comps from recent eBay sales, offer sheets in a tap, free on iOS.",
+    "Slabbist turns your iPhone into a bulk scanner for graded Pokémon — real comps from recent sales, on-device grade estimates, market movers, and grade-gain arbitrage. Offer sheets in a tap, free on iOS.",
 };
 
 export default function RootLayout({
