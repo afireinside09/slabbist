@@ -28,7 +28,7 @@ export default function AboutPage() {
         <p>
           Slabbist is the tool we wanted on that counter. A scanner that reads every grader. A
           comp engine that shows you a real median of real sales. A buy flow that applies your
-          margin rule and prints an offer before the seller finishes their coffee.
+          margin rule and builds an offer before the seller finishes their coffee.
         </p>
 
         <h2>What we believe</h2>
@@ -38,9 +38,9 @@ export default function AboutPage() {
           price.
         </p>
         <p>
-          <strong>The buy price is not a UI toggle.</strong> Role-based visibility is enforced in
-          the database. An associate cannot leak the margin because the margin never left the
-          server for them.
+          <strong>Your numbers stay in your store.</strong> Row-level security isolates every
+          store&apos;s comps, costs, and margins in the database. Your pricing never leaks into
+          another shop&apos;s app.
         </p>
         <p>
           <strong>Free on iOS, forever.</strong> Stores, sellers, and buyers do not pay a seat fee

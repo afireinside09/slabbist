@@ -3,7 +3,7 @@ import type { SVGProps } from 'react';
 export type IconName =
   | 'scan' | 'bolt' | 'check' | 'check-c' | 'arrow' | 'chart' | 'shield' | 'users'
   | 'lock' | 'mail' | 'eye' | 'x' | 'menu' | 'github' | 'sparkle' | 'layers'
-  | 'tag' | 'store' | 'zap' | 'receipt' | 'signature' | 'card' | 'reload' | 'flag'
+  | 'tag' | 'store' | 'zap' | 'receipt' | 'card' | 'reload' | 'flag'
   | 'gauge' | 'crosshair';
 
 type Props = {
@@ -66,8 +66,6 @@ export function Icon({ name, size = 20, color = 'currentColor', sw = 1.6, ...res
       return <svg {...common}><path d="m4 14 8-12v10h8l-8 12v-10z"/></svg>;
     case 'receipt':
       return <svg {...common}><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>;
-    case 'signature':
-      return <svg {...common}><path d="M3 18c4 0 5-3 6-6s2-6 4-6 3 3 1 6-3 5 0 5 4-4 4-4M3 22h18"/></svg>;
     case 'card':
       return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>;
     case 'reload':

@@ -8,7 +8,7 @@ const STEPS = [
   { n: '02', t: 'Sweep the stack', b: 'Scan each slab in hand, or set the phone on a stand and feed them through. The cert reads as the frame locks.' },
   { n: '03', t: 'Queue runs quiet', b: 'Comps resolve in the background while you keep scanning. Slow ones show a small pending mark. No spinner, no blocking.' },
   { n: '04', t: 'Review the lot', b: 'Ready, pending, and issues grouped on one screen. Tap any comp to open the actual eBay solds behind it.' },
-  { n: '05', t: 'Offer sheet', b: 'Apply your margin rule, attach a vendor, and print or email the sheet. Capture a signature on an iPad if the buy needs one.' },
+  { n: '05', t: 'Offer sheet', b: 'Apply your margin ladder, attach a vendor, and present the offer. Mark it paid and the lot drops into your transaction ledger, frozen and audit-safe.' },
 ];
 
 export function Workflow() {

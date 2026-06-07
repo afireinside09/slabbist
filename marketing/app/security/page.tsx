@@ -20,9 +20,9 @@ const PILLARS: Pillar[] = [
   },
   {
     icon: 'shield',
-    title: 'Role enforcement in the database',
+    title: 'Tenant isolation in the database',
     blurb:
-      'Row-level security in Postgres means an associate can never read a column their role does not own. The API never returns what the database refuses to serve.',
+      'Row-level security in Postgres scopes every row to your store. Another store — or a stray query — can never read data that is not yours; the API never returns what the database refuses to serve.',
   },
   {
     icon: 'users',
@@ -40,7 +40,7 @@ const PILLARS: Pillar[] = [
     icon: 'eye',
     title: 'Audit logging',
     blurb:
-      'Every margin rule change, export, and role change is logged with actor, time, and IP. Logs are retained for 12 months minimum.',
+      'Sensitive account and data changes are logged with actor, time, and IP. Logs are retained for 12 months minimum.',
   },
   {
     icon: 'flag',
@@ -55,9 +55,9 @@ export default function SecurityPage() {
     <PageShell>
       <PageHero
         eyebrow="Security"
-        title="Your buy price never leaves its lane."
+        title="Your store's data never leaves your store."
         italicize="never leaves"
-        subtitle="Slabbist was built around a single idea: the buy number belongs to the owner, not the associate. Everything else follows from that."
+        subtitle="Slabbist was built around a single idea: your store's data is yours alone, isolated from every other store in the database. Everything else follows from that."
       />
 
       <section
