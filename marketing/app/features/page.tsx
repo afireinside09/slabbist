@@ -8,7 +8,7 @@ import { FinalCta } from '@/components/marketing/final-cta';
 export const metadata: Metadata = {
   title: 'Features · Slabbist',
   description:
-    'Everything Slabbist does for card shops, show vendors, and collectors. Bulk scanning, cert OCR, a comp engine trained on real sales, and role-based margin rules.',
+    'Everything Slabbist does for card shops and show vendors. Bulk cert scanning, comps from real sales, on-device grade estimates, market movers, grade-gain arbitrage, and a margin ladder that prices every slab.',
 };
 
 type FeatureCard = {
@@ -73,55 +73,97 @@ const COMP_ENGINE: FeatureCard[] = [
 
 const COUNTER: FeatureCard[] = [
   {
-    icon: 'shield',
-    title: 'Role-based visibility',
-    blurb:
-      'Owners see comp, cost, and margin. Associates see the buy number only. Enforced at the database — not just hidden in the UI.',
-  },
-  {
     icon: 'tag',
-    title: 'Margin rules you actually understand',
+    title: 'A margin ladder you actually understand',
     blurb:
-      'Per-grader, per-set, and per-price-band modifiers. Preview the buy number before you commit, and keep a history of every rule change.',
+      'Set buy percentages by price tier once. Every slab is priced against its comp automatically, and you can override any single buy price by hand. The ladder is snapshotted onto the offer the moment you present it.',
   },
   {
     icon: 'receipt',
-    title: 'Offer sheets in a tap',
+    title: 'Offer sheet, ready to present',
     blurb:
-      'Apply your margin, attach a vendor, and print or email a one-page offer. The line items match what you scanned, so nothing gets retyped.',
+      'Roll a lot into one offer: total, per-slab line items, and the payment method and reference. Mark it paid and it drops into your transaction ledger, frozen and audit-safe.',
   },
   {
-    icon: 'signature',
-    title: 'On-device signature capture',
+    icon: 'users',
+    title: 'Vendors on file',
     blurb:
-      'Flip the iPad and capture a seller signature the moment they accept. The signed PDF lives with the lot so you can retrieve it at any point.',
+      'Keep a registry of who you buy from — phone, email, Instagram, notes. Attach a vendor to a lot in two taps; archived vendors stay readable in history.',
+  },
+  {
+    icon: 'reload',
+    title: 'Lot workflow that tracks itself',
+    blurb:
+      'Drafting, priced, presented, accepted, paid, or voided — every lot carries its state, and paid lots lock so a closed buy cannot be edited out from under you.',
   },
 ];
 
 const BACK_OFFICE: FeatureCard[] = [
   {
-    icon: 'users',
-    title: 'Vendor database',
+    icon: 'receipt',
+    title: 'Transaction ledger',
     blurb:
-      'Track who sold you what, at which price, with what grade mix. Lots are searchable by vendor, event, or date range.',
+      'Every paid lot becomes an immutable record — vendor, total, payment method, timestamp. Void with a reason if you have to; the audit trail stays intact.',
+  },
+  {
+    icon: 'reload',
+    title: 'Offline-first by design',
+    blurb:
+      'Scans, edits, prices, and offers are written locally first and synced in the background through an outbox. A failed write surfaces in a sheet you can retry — nothing is lost when the venue Wi-Fi quits.',
+  },
+  {
+    icon: 'gauge',
+    title: 'Grading history',
+    blurb:
+      'Every pre-grade estimate is saved with its photos, sub-grades, and reasoning. Star the keepers and filter your collection down to them.',
   },
   {
     icon: 'store',
-    title: 'Multi-location ready',
+    title: 'Built multi-tenant',
     blurb:
-      'Run it at one counter or ten. Role and visibility rules follow the user, not the device.',
+      'Your store’s data is scoped to your store and nobody else’s, enforced server-side. Run the buy desk knowing your numbers stay yours.',
+  },
+];
+
+const PREGRADE: FeatureCard[] = [
+  {
+    icon: 'gauge',
+    title: 'PSA-equivalent grade estimate',
+    blurb:
+      'Frame a raw card and Slabbist returns a composite grade with centering, corners, edges, and surface sub-grades — plus a confidence read so you know how far to trust it.',
   },
   {
-    icon: 'lock',
-    title: 'Buy price never leaves the role',
+    icon: 'crosshair',
+    title: 'Centering tool that snaps to the edges',
     blurb:
-      'The buy number is resolved server-side and only returned to users whose role permits it. A screenshot cannot leak what the API never sent.',
+      'Drag the guides or tap an inner edge to snap them, and read the exact L/R and T/B ratios. Settle a borderline centering call before you commit a dollar.',
+  },
+  {
+    icon: 'card',
+    title: 'Front and back, kept on file',
+    blurb:
+      'Each estimate stores both photos and the reasoning behind the grade, so you can revisit why a card scored the way it did.',
+  },
+];
+
+const MARKET: FeatureCard[] = [
+  {
+    icon: 'chart',
+    title: 'Movers by set and tier',
+    blurb:
+      'Top gainers and losers for any set and price band, English or Japanese, each with a 30-day trend. See what is heating up before you make the offer.',
   },
   {
     icon: 'zap',
-    title: 'Exports that work with your books',
+    title: 'Grade gains arbitrage',
     blurb:
-      'CSV and PDF exports for offer sheets, buy history, and margin reports. Import into QuickBooks, Square, or whatever your accountant expects.',
+      'Raw cards ranked by their upside to a PSA 10, net of the grading fee. Dial the fee to your submission tier and the profit recalculates on the spot.',
+  },
+  {
+    icon: 'sparkle',
+    title: 'Comps with the receipts',
+    blurb:
+      'Headline price, range, sale count, trend, and a per-grade ladder — with the recent eBay solds behind every number and a TCGplayer link when there is one.',
   },
 ];
 
@@ -132,7 +174,7 @@ export default function FeaturesPage() {
         eyebrow="Features"
         title="Everything the counter needs. Nothing it doesn't."
         italicize="counter"
-        subtitle="Slabbist is purpose-built for the moment a stack of slabs hits your counter. Here is every piece that gets it priced, offered, and closed."
+        subtitle="Slabbist is purpose-built for the moment a stack of slabs hits your counter. Here is every piece that gets it scanned, graded, priced, offered, and closed."
       />
 
       <Section
@@ -152,9 +194,23 @@ export default function FeaturesPage() {
       />
 
       <Section
+        id="pre-grade"
+        eyebrow="Pre-grade"
+        title="Grade the card before you buy it."
+        cards={PREGRADE}
+      />
+
+      <Section
+        id="market"
+        eyebrow="Market intel"
+        title="Know where the market is going."
+        cards={MARKET}
+      />
+
+      <Section
         id="counter"
         eyebrow="At the counter"
-        title="A buy that does not leak."
+        title="From stack to signed-off offer."
         cards={COUNTER}
       />
 
@@ -292,11 +348,11 @@ function Section({
 
 function IntegrationsSection() {
   const rows: { name: string; what: string }[] = [
-    { name: 'eBay', what: 'Sold listings feed the comp engine. Affiliate links on every comp tap.' },
-    { name: 'TCGplayer', what: 'Raw card pricing and affiliate links for non-graded comps.' },
-    { name: 'PSA / BGS / CGC / SGC / TAG', what: 'Cert lookups, population reports, and serial validation.' },
-    { name: 'Square & Shopify', what: 'Push priced lots into your POS or online store in one click. (Beta cohort.)' },
-    { name: 'QuickBooks', what: 'CSV exports mapped to your chart of accounts for easy import.' },
+    { name: 'eBay', what: 'Recent sold listings feed the comp engine, with affiliate links on every comp tap.' },
+    { name: 'TCGplayer', what: 'Raw card pricing and product links for non-graded comps.' },
+    { name: 'PSA', what: 'Cert lookups and card identity resolution for graded slabs.' },
+    { name: 'PSA / BGS / CGC / SGC / TAG', what: 'Cert OCR reads the label and grade off every major grader.' },
+    { name: 'POS & accounting (planned)', what: 'Square, Shopify, and QuickBooks exports are on the roadmap, not shipping yet.' },
   ];
 
   return (
@@ -331,7 +387,7 @@ function IntegrationsSection() {
             maxWidth: 680,
           }}
         >
-          The tools you already use, already wired up.
+          The tools you already use — with more on the way.
         </h2>
 
         <div
