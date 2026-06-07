@@ -243,6 +243,35 @@ struct OutboxDrainerTests {
         #expect(f["buy_price_overridden"] == .bool(false))
     }
 
+    @Test("updateScanComp: patches comp_snapshot + comp_snapshot_at")
+    @MainActor
+    func dispatchesUpdateScanComp() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueUpdateScanComp(id: scanId, snapshot: #"{"source":"poketrace"}"#)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.patchCalls.count == 1)
+        #expect(h.fakeScans.patchCalls[0].id == scanId)
+        #expect(h.fakeScans.patchCalls[0].fields["comp_snapshot"] == .string(#"{"source":"poketrace"}"#))
+        #expect(h.fakeScans.patchCalls[0].fields["comp_snapshot_at"] != nil)
+        let count = await h.outboxCount()
+        #expect(count == 0)
+    }
+
+    @Test("updateScanComp: nil snapshot writes .null")
+    @MainActor
+    func dispatchesUpdateScanCompNil() async throws {
+        let h = Harness()
+        let scanId = UUID()
+        try await h.enqueueUpdateScanComp(id: scanId, snapshot: nil)
+        await h.drainer.kickAndWait()
+        await h.waitForIdle()
+
+        #expect(h.fakeScans.patchCalls[0].fields["comp_snapshot"] == .null)
+    }
+
     @Test("dispatches recomputeLotOffer by invoking the Edge Function")
     @MainActor
     func dispatchesRecomputeLotOffer() async throws {
