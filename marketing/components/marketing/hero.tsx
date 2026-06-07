@@ -18,9 +18,9 @@ const CAPABILITIES: Capability[] = [
     body: 'Graded prices are medians of recent eBay sold listings. Raw prices come from TCGplayer. Every number links back to the sales behind it, with a confidence score and 7, 30, and 90 day velocity.',
   },
   {
-    icon: 'shield',
-    title: 'Runs anywhere you buy',
-    body: 'Use it at the shop counter, the show booth, or on the road. The queue keeps working when venue Wi-Fi drops, and comps fill in when it returns. Buy prices stay locked to owners and hidden from associates.',
+    icon: 'gauge',
+    title: 'Grade, comp, and know the market',
+    body: 'Estimate a raw card’s grade before you buy, comp graded slabs against real sales, and watch which cards are climbing. The buy desk and the market intel live in one app.',
   },
 ];
 
@@ -149,7 +149,7 @@ export function Hero() {
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
         >
-          Slabbist turns your iPhone into a bulk scanner for graded Pokémon. Real comps from recent sales. Offer sheets in a tap. Works at your counter and on the show floor.
+          Slabbist turns your iPhone into a bulk scanner for graded Pokémon — real comps from recent sales, a grade estimate on any raw card, and market movers at a glance. Offer sheets in a tap, on your counter or the show floor.
         </p>
 
         <div
