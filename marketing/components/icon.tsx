@@ -3,7 +3,8 @@ import type { SVGProps } from 'react';
 export type IconName =
   | 'scan' | 'bolt' | 'check' | 'check-c' | 'arrow' | 'chart' | 'shield' | 'users'
   | 'lock' | 'mail' | 'eye' | 'x' | 'menu' | 'github' | 'sparkle' | 'layers'
-  | 'tag' | 'store' | 'zap' | 'receipt' | 'signature' | 'card' | 'reload' | 'flag';
+  | 'tag' | 'store' | 'zap' | 'receipt' | 'signature' | 'card' | 'reload' | 'flag'
+  | 'gauge' | 'crosshair';
 
 type Props = {
   name: IconName;
@@ -73,6 +74,10 @@ export function Icon({ name, size = 20, color = 'currentColor', sw = 1.6, ...res
       return <svg {...common}><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 2v6h-6"/></svg>;
     case 'flag':
       return <svg {...common}><path d="M4 22V4c6-3 8 3 16 0v10c-8 3-10-3-16 0"/></svg>;
+    case 'gauge':
+      return <svg {...common}><path d="M5 17a9 9 0 1 1 14 0"/><path d="M12 15l4.5-4"/><circle cx="12" cy="15" r="1.1"/></svg>;
+    case 'crosshair':
+      return <svg {...common}><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>;
     default:
       return null;
   }
