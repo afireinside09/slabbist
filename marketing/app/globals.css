@@ -141,6 +141,7 @@ button:focus-visible, a:focus-visible {
   .slab-modal-inner { padding: 24px !important; }
   .slab-modal-scroll { max-height: calc(100dvh - 40px) !important; overflow-y: auto !important; }
   .slab-feature-panel { position: static !important; }
+  .slab-intel-row { grid-template-columns: 1fr !important; direction: ltr !important; }
 }
 
 @media (max-width: 420px) {
