@@ -64,10 +64,10 @@ const COMP_ENGINE: FeatureCard[] = [
       'Slabbist tells you how reliable each comp is. Thin comp counts, wide spreads, and stale data all lower the confidence score so you know when to lean in — and when not to.',
   },
   {
-    icon: 'flag',
-    title: 'Event-aware modifiers',
+    icon: 'layers',
+    title: 'Per-grade price ladder',
     blurb:
-      'Spiking on release weekend? Bleeding in a correction? Event mode applies a time-boxed modifier so your lot pricing reflects what the market is doing right now.',
+      'See the going rate across the whole grade ladder — PSA 7 through 10, plus CGC, BGS, and SGC 10 — so a missing comp at one grade falls back to the nearest grade with real sales.',
   },
 ];
 
