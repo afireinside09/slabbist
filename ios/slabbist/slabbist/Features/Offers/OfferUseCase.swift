@@ -273,9 +273,19 @@ final class OfferUseCase {
     }
 
     /// Move a priced lot into the `presented` state — the moment the
-    /// vendor sees the number.
+    /// vendor sees the number. Freezes the comp behind each scan onto the
+    /// scan (local + outbox) so the offer's justification is retrievable
+    /// later, even after the live comp cache refreshes.
     func sendToOffer(_ lot: Lot) throws {
         try transition(lot, to: .presented)
+        let now = Date()
+        let lotId = lot.id
+        let scans = try context.fetch(
+            FetchDescriptor<Scan>(predicate: #Predicate<Scan> { $0.lotId == lotId })
+        )
+        for scan in scans {
+            try freezeCompSnapshot(for: scan, at: now)
+        }
         try context.save()
         kicker.kick()
     }
@@ -386,6 +396,34 @@ final class OfferUseCase {
             updated_at: ISO8601DateFormatter.shared.string(from: scan.updatedAt)
         )
         context.insert(try OutboxItem.pending(.updateScanBuyPrice, payload))
+    }
+
+    /// Serialize the scan's current local `GradedMarketSnapshot` (matched
+    /// on identity + grader + grade) into an immutable blob, store it on
+    /// the scan, and enqueue the patch. No-op when the scan has no resolved
+    /// identity/grade or no local snapshot — there is no comp to freeze.
+    private func freezeCompSnapshot(for scan: Scan, at now: Date) throws {
+        guard let identityId = scan.gradedCardIdentityId, let grade = scan.grade else { return }
+        let service = scan.grader.rawValue
+        var descriptor = FetchDescriptor<GradedMarketSnapshot>(
+            predicate: #Predicate<GradedMarketSnapshot> { s in
+                s.identityId == identityId && s.gradingService == service && s.grade == grade
+            }
+        )
+        descriptor.fetchLimit = 1
+        guard let snapshot = try context.fetch(descriptor).first,
+              let json = CompSnapshotWire.encode(from: snapshot) else { return }
+
+        scan.compSnapshotJSON = json
+        scan.compSnapshotAt = now
+        scan.updatedAt = now
+        let payload = OutboxPayloads.UpdateScanComp(
+            id: scan.id.uuidString,
+            comp_snapshot: json,
+            comp_snapshot_at: ISO8601DateFormatter.shared.string(from: now),
+            updated_at: ISO8601DateFormatter.shared.string(from: now)
+        )
+        context.insert(try OutboxItem.pending(.updateScanComp, payload))
     }
 
     private func recompute(lot lotId: UUID) throws {

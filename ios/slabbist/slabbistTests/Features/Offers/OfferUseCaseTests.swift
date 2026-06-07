@@ -123,6 +123,46 @@ struct OfferUseCaseTests {
         #expect(lot.marginPctSnapshot == nil)
     }
 
+    @Test func sendToOfferFreezesCompSnapshotOntoScans() throws {
+        let (repo, context, lot, scan) = makeContext()
+        let identity = UUID()
+        scan.gradedCardIdentityId = identity
+        scan.grade = "10"
+        let snap = GradedMarketSnapshot(
+            identityId: identity,
+            gradingService: "PSA",
+            grade: "10",
+            source: "poketrace",
+            headlinePriceCents: 125_00,
+            priceHistoryJSON: nil,
+            fetchedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            cacheHit: false
+        )
+        context.insert(snap)
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        try? context.save()
+
+        try repo.sendToOffer(lot)
+
+        #expect(lot.lotOfferState == LotOfferState.presented.rawValue)
+        #expect(scan.compSnapshotAt != nil)
+        let wire = CompSnapshotWire.decode(scan.compSnapshotJSON)
+        #expect(wire?.headlinePriceCents == 125_00)
+        #expect(wire?.source == "poketrace")
+    }
+
+    @Test func sendToOfferLeavesScansWithoutCompUntouched() throws {
+        let (repo, context, lot, scan) = makeContext()
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        try? context.save()
+
+        try repo.sendToOffer(lot)
+
+        #expect(lot.lotOfferState == LotOfferState.presented.rawValue)
+        #expect(scan.compSnapshotJSON == nil)
+        #expect(scan.compSnapshotAt == nil)
+    }
+
     @Test func bounceBackReturnsPresentedToPriced() throws {
         let (repo, _, lot, _) = makeContext()
         lot.lotOfferState = LotOfferState.presented.rawValue
