@@ -203,7 +203,7 @@ private struct EbayProductListingRow: View {
                         image.resizable().scaledToFit()
                     case .empty, .failure:
                         Image(systemName: "photo")
-                            .font(SlabFont.sans(size: 16))
+                            .font(SlabFont.sans(size: 28))
                             .foregroundStyle(AppColor.dim)
                     @unknown default:
                         EmptyView()
@@ -211,7 +211,7 @@ private struct EbayProductListingRow: View {
                 }
             }
         }
-        .frame(width: 56, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+        .frame(width: 120, height: 168)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
     }
 }

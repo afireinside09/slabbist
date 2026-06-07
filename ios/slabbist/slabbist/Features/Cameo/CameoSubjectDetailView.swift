@@ -26,6 +26,7 @@ struct CameoSubjectDetailView: View {
                                 thumbnail(for: card)
                                 VStack(alignment: .leading, spacing: Spacing.xs) {
                                     Text(card.cardName).slabRowTitle()
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text("\(card.setName)\(card.cardNumber.map { " · #\($0)" } ?? "")")
                                         .font(SlabFont.mono(size: 13))
                                         .foregroundStyle(AppColor.dim)
@@ -57,7 +58,7 @@ struct CameoSubjectDetailView: View {
 
     @ViewBuilder
     private func thumbnail(for card: CameoCardDTO) -> some View {
-        let size = CGSize(width: 48, height: 67) // ~card aspect
+        let size = CGSize(width: 120, height: 168) // ~card aspect, matches other list views
         if let urlString = card.tcgProduct?.imageURL, let url = URL(string: urlString) {
             AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.18))) { phase in
                 if let image = phase.image {
@@ -67,7 +68,7 @@ struct CameoSubjectDetailView: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
         } else {
             thumbnailPlaceholder
                 .frame(width: size.width, height: size.height)
@@ -75,11 +76,11 @@ struct CameoSubjectDetailView: View {
     }
 
     private var thumbnailPlaceholder: some View {
-        RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
             .fill(AppColor.ink)
             .overlay(
                 Image(systemName: "photo")
-                    .font(.system(size: 16))
+                    .font(.system(size: 28))
                     .foregroundStyle(AppColor.dim)
             )
     }

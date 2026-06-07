@@ -6,8 +6,8 @@ struct GradeHistoryRow: View {
     var body: some View {
         HStack(spacing: Spacing.m) {
             AsyncGradePhoto(path: estimate.frontThumbPath)
-                .frame(width: 44, height: 62)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+                .frame(width: 120, height: 168)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                     Text("PSA")

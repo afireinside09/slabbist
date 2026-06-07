@@ -255,8 +255,8 @@ actor OutboxDrainer: ModelActor {
             for item in batch {
                 await dispatchItem(item)
                 publishStatus()
-                if pausedForAuth { break }
-            }
+                            if pausedForAuth { break }
+                        }
         }
     }
 

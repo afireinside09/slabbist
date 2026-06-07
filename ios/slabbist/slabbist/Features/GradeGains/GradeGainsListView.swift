@@ -430,20 +430,24 @@ private struct GradeGainRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .center, spacing: Spacing.m) {
-                Text(String(format: "%02d", rank))
-                    .font(SlabFont.mono(size: 12, weight: .medium))
-                    .foregroundStyle(AppColor.dim)
-                    .frame(width: 22, alignment: .leading)
-
+            HStack(alignment: .top, spacing: Spacing.m) {
                 thumbnail
 
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    HStack(spacing: Spacing.xs) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    HStack(spacing: Spacing.s) {
+                        Text(String(format: "%02d", rank))
+                            .font(SlabFont.mono(size: 12, weight: .medium))
+                            .foregroundStyle(AppColor.dim)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(SlabFont.sans(size: 11, weight: .semibold))
+                            .foregroundStyle(AppColor.dim)
+                    }
+
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Text(gain.productName)
                             .slabRowTitle()
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
                         if let badge = MoversFormat.variantBadge(gain.subTypeName) {
                             Text(badge)
                                 .font(SlabFont.mono(size: 10, weight: .medium))
@@ -466,22 +470,16 @@ private struct GradeGainRow: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(GradeGainFormat.money(gain.profitCents(feeCents: feeCents)))
+                            .font(SlabFont.mono(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColor.gold)
+                        Text(spreadLabel)
+                            .font(SlabFont.mono(size: 11))
+                            .foregroundStyle(AppColor.dim)
+                    }
+                    .padding(.top, Spacing.xxs)
                 }
-
-                Spacer(minLength: Spacing.s)
-
-                VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                    Text(GradeGainFormat.money(gain.profitCents(feeCents: feeCents)))
-                        .font(SlabFont.mono(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColor.gold)
-                    Text(spreadLabel)
-                        .font(SlabFont.mono(size: 11))
-                        .foregroundStyle(AppColor.dim)
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(SlabFont.sans(size: 11, weight: .semibold))
-                    .foregroundStyle(AppColor.dim)
             }
             .padding(.horizontal, Spacing.l)
             .padding(.vertical, Spacing.md)
@@ -495,7 +493,7 @@ private struct GradeGainRow: View {
 
     private var thumbnail: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                 .fill(AppColor.elev2)
             if let urlString = gain.imageUrl, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
@@ -504,7 +502,7 @@ private struct GradeGainRow: View {
                         image.resizable().scaledToFit()
                     case .empty, .failure:
                         Image(systemName: "photo")
-                            .font(SlabFont.sans(size: 14))
+                            .font(SlabFont.sans(size: 28))
                             .foregroundStyle(AppColor.dim)
                     @unknown default:
                         EmptyView()
@@ -512,12 +510,12 @@ private struct GradeGainRow: View {
                 }
             } else {
                 Image(systemName: "photo")
-                    .font(SlabFont.sans(size: 14))
+                    .font(SlabFont.sans(size: 28))
                     .foregroundStyle(AppColor.dim)
             }
         }
-        .frame(width: 40, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+        .frame(width: 120, height: 168)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
         .accessibilityHidden(true)
     }
 
@@ -544,34 +542,38 @@ private struct GradeGainSkeletonRows: View {
         VStack(spacing: 0) {
             ForEach(0..<count, id: \.self) { index in
                 if index > 0 { SlabCardDivider() }
-                HStack(spacing: Spacing.m) {
-                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                HStack(alignment: .top, spacing: Spacing.m) {
+                    RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                         .fill(AppColor.elev2)
-                        .frame(width: 22, height: 10)
+                        .frame(width: 120, height: 168)
 
-                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
-                        .fill(AppColor.elev2)
-                        .frame(width: 40, height: 56)
-
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        HStack(spacing: Spacing.s) {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(AppColor.elev2)
+                                .frame(width: 22, height: 10)
+                            Spacer(minLength: 0)
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(AppColor.elev2)
+                                .frame(width: 8, height: 12)
+                        }
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(AppColor.elev2)
-                            .frame(height: 12)
+                            .frame(height: 13)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(AppColor.elev2)
+                            .frame(width: 150, height: 13)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(AppColor.elev2)
                             .frame(width: 96, height: 8)
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 6) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(AppColor.elev2)
-                            .frame(width: 56, height: 12)
+                            .frame(width: 90, height: 14)
+                            .padding(.top, Spacing.xxs)
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(AppColor.elev2)
-                            .frame(width: 80, height: 10)
+                            .frame(width: 120, height: 9)
                     }
                 }
                 .padding(.horizontal, Spacing.l)
