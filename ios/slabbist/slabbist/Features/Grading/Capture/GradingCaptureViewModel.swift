@@ -7,7 +7,12 @@ import UIKit
 final class GradingCaptureViewModel {
     enum Phase: Equatable {
         case front
+        /// Front still captured; user is fine-tuning the centering guides
+        /// before it's recorded. The image + seed guides live in
+        /// `pendingAdjust*`.
+        case adjustFront
         case back
+        case adjustBack
         case uploading
         case analyzing
         case done(estimateId: UUID)
@@ -48,6 +53,11 @@ final class GradingCaptureViewModel {
     private var frontCentering: CenteringRatios?
     private var backImage: UIImage?
     private var backCentering: CenteringRatios?
+
+    /// The still + Vision-seeded guides handed to the centering editor while
+    /// in an `.adjust*` phase. Cleared once the user confirms (or retakes).
+    private(set) var pendingAdjustImage: UIImage?
+    private(set) var pendingAdjustGuides: CenteringGuides?
     /// Captured on the first valid `runAnalysis` call so `retry()` can
     /// re-invoke with the same arg. Set ONLY after the photo guard
     /// passes — a guard-failing call (no images captured yet) must not
@@ -69,6 +79,47 @@ final class GradingCaptureViewModel {
     func recordBack(image: UIImage, centering: CenteringRatios) {
         backImage = image
         backCentering = centering
+    }
+
+    /// Park a freshly-captured still and its Vision-seeded guides, and enter
+    /// the centering-adjust step. The centering the user dials in there is
+    /// what gets recorded — replacing the old auto-measured-only path.
+    func beginAdjust(image: UIImage, guides: CenteringGuides) {
+        pendingAdjustImage = image
+        pendingAdjustGuides = guides
+        switch phase {
+        case .front: phase = .adjustFront
+        case .back: phase = .adjustBack
+        default: break
+        }
+    }
+
+    /// Commit the user-corrected front centering and advance to back capture.
+    func confirmFront(centering: CenteringRatios) {
+        guard let image = pendingAdjustImage else { return }
+        pendingAdjustImage = nil
+        pendingAdjustGuides = nil
+        recordFront(image: image, centering: centering)
+    }
+
+    /// Commit the user-corrected back centering. The caller kicks analysis
+    /// (through the cancellable Task) once this returns.
+    func confirmBack(centering: CenteringRatios) {
+        guard let image = pendingAdjustImage else { return }
+        pendingAdjustImage = nil
+        pendingAdjustGuides = nil
+        recordBack(image: image, centering: centering)
+    }
+
+    /// Discard the parked still and return to re-capturing the same side.
+    func cancelAdjust() {
+        pendingAdjustImage = nil
+        pendingAdjustGuides = nil
+        switch phase {
+        case .adjustFront: phase = .front
+        case .adjustBack: phase = .back
+        default: break
+        }
     }
 
     func runAnalysis(includeOtherGraders: Bool) async throws {

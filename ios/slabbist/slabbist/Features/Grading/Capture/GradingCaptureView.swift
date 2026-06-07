@@ -41,12 +41,25 @@ struct GradingCaptureView: View {
         }
     }
 
+    /// True while the full-screen centering editor is up. The camera is
+    /// paused and its content hidden behind the (opaque) editor.
+    private var isAdjusting: Bool {
+        switch viewModel.phase {
+        case .adjustFront, .adjustBack: return true
+        default: return false
+        }
+    }
+
+    /// Camera should be paused whenever a full-screen layer covers it —
+    /// the analysis overlay or the centering editor.
+    private var cameraPaused: Bool { overlayPhase || isAdjusting }
+
     var body: some View {
         ZStack {
             cameraContent
-                .accessibilityHidden(overlayPhase)
+                .accessibilityHidden(cameraPaused)
             CardOutlineOverlay(aligned: chipMessage == nil)
-                .accessibilityHidden(overlayPhase)
+                .accessibilityHidden(cameraPaused)
             VStack {
                 Spacer()
                 QualityChip(message: chipMessage)
@@ -54,7 +67,7 @@ struct GradingCaptureView: View {
                 captureButton
                     .padding(.bottom, Spacing.xxxl)
             }
-            .accessibilityHidden(overlayPhase)
+            .accessibilityHidden(cameraPaused)
         }
         .overlay {
             AnalysisOverlay(
@@ -67,6 +80,21 @@ struct GradingCaptureView: View {
                     dismiss()
                 }
             )
+        }
+        .overlay {
+            if isAdjusting,
+               let image = viewModel.pendingAdjustImage,
+               let guides = viewModel.pendingAdjustGuides {
+                CenteringEditorView(
+                    image: image,
+                    guides: guides,
+                    title: viewModel.phase == .adjustFront ? "Front centering" : "Back centering",
+                    confirmLabel: "Use this centering",
+                    onConfirm: { ratios in confirmAdjustedCentering(ratios) },
+                    onCancel: { viewModel.cancelAdjust() }
+                )
+                .transition(.opacity)
+            }
         }
         .task {
             await session.requestAuthorization()
@@ -102,14 +130,13 @@ struct GradingCaptureView: View {
             liveAnalyzer = analyzer
             session.setOnSampleBuffer { analyzer.handle($0) }
         }
-        .onChange(of: overlayPhase) { _, isOverlay in
-            // Pause the AV session while the overlay is up; restart
-            // when the user returns to capture phase (e.g. they Cancel
-            // and the host pops them back, or they retry through to
-            // .done which dismisses). The existing onDisappear handles
-            // the sheet-leaving case — this only manages the in-sheet
-            // overlay window. (P0.1)
-            if isOverlay {
+        .onChange(of: cameraPaused) { _, paused in
+            // Pause the AV session while a full-screen layer (analysis
+            // overlay or the centering editor) is up; restart when the
+            // user returns to a capture phase. The existing onDisappear
+            // handles the sheet-leaving case — this only manages the
+            // in-sheet overlay window. (P0.1)
+            if paused {
                 session.stop()
             } else if session.authorization == .authorized {
                 session.start()
@@ -257,32 +284,46 @@ struct GradingCaptureView: View {
                 size: CGSize(width: image.size.width * image.scale,
                              height: image.size.height * image.scale)
             )
-            let psaRatios = CenteringMeasurement.measure(cardRect: det.boundingBox, in: imageRect)
-            let centering = CenteringRatios(
-                left: psaRatios.left,
-                right: psaRatios.right,
-                top: psaRatios.top,
-                bottom: psaRatios.bottom
-            )
-            switch viewModel.phase {
-            case .front:
-                viewModel.recordFront(image: image, centering: centering)
-            case .back:
-                viewModel.recordBack(image: image, centering: centering)
-                // Route through the cancellable Task handle so a Cancel
-                // tap during the initial analyze can interrupt the
-                // upload too (not just retries). `runAnalysis` writes
-                // viewModel.lastError on throw — no need for a view
-                // mirror. (P0.2 + P1.7)
-                let includeFlag = includeOtherGraders
-                startAnalysisTask {
-                    try await viewModel.runAnalysis(includeOtherGraders: includeFlag)
-                }
-            default:
-                break
-            }
+            // Seed the eight guides from Vision (outer card edge) + the
+            // inner-frame heuristic, then hand the still to the centering
+            // editor. The centering the user dials in there — not the raw
+            // auto-measurement — is what feeds the estimate.
+            let guides = seedGuides(cardRect: det.boundingBox, imageRect: imageRect)
+            viewModel.beginAdjust(image: image, guides: guides)
         } catch {
             qualityMessage = "Capture failed. Try again."
+        }
+    }
+
+    /// Build normalized 8-guide seeds: outer lines on the Vision card rect,
+    /// inner lines from `InnerFrameDetector`'s border heuristic.
+    private func seedGuides(cardRect: CGRect, imageRect: CGRect) -> CenteringGuides {
+        let w = imageRect.width, h = imageRect.height
+        guard w > 0, h > 0 else { return .centeredDefault }
+        let outer = CenteringGuides(
+            outerLeft: cardRect.minX / w, innerLeft: cardRect.minX / w,
+            innerRight: cardRect.maxX / w, outerRight: cardRect.maxX / w,
+            outerTop: cardRect.minY / h, innerTop: cardRect.minY / h,
+            innerBottom: cardRect.maxY / h, outerBottom: cardRect.maxY / h
+        )
+        return InnerFrameDetector.bestGuess(outer: outer)
+    }
+
+    /// Commit the centering the user confirmed in the editor. On the front
+    /// we advance to back capture; on the back we kick the (cancellable)
+    /// analysis just as the old auto-measured path did.
+    private func confirmAdjustedCentering(_ ratios: CenteringRatios) {
+        switch viewModel.phase {
+        case .adjustFront:
+            viewModel.confirmFront(centering: ratios)
+        case .adjustBack:
+            viewModel.confirmBack(centering: ratios)
+            let includeFlag = includeOtherGraders
+            startAnalysisTask {
+                try await viewModel.runAnalysis(includeOtherGraders: includeFlag)
+            }
+        default:
+            break
         }
     }
 }

@@ -13,10 +13,12 @@ struct GradeHistoryView: View {
     private enum ActiveSheet: Identifiable {
         case capture
         case report(GradeEstimateDTO)
+        case measureCentering
         var id: String {
             switch self {
             case .capture:            return "capture"
             case let .report(estimate): return "report-\(estimate.id.uuidString)"
+            case .measureCentering:   return "measure-centering"
             }
         }
     }
@@ -80,6 +82,14 @@ struct GradeHistoryView: View {
                     }
                     .accessibilityLabel("Grade a card")
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        activeSheet = .measureCentering
+                    } label: {
+                        Image(systemName: "ruler")
+                    }
+                    .accessibilityLabel("Measure centering")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     SettingsGearButton()
                 }
@@ -114,6 +124,8 @@ struct GradeHistoryView: View {
                                 }
                             }
                     }
+                case .measureCentering:
+                    StandaloneCenteringView()
                 }
             }
         }

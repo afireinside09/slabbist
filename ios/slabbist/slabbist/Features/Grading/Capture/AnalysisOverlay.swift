@@ -29,7 +29,7 @@ struct AnalysisOverlay: View {
 
     var body: some View {
         switch phase {
-        case .front, .back, .done:
+        case .front, .adjustFront, .back, .adjustBack, .done:
             EmptyView()
         case .uploading, .analyzing, .failed:
             ZStack {
