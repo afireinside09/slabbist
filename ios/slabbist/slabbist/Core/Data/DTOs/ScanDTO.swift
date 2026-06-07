@@ -22,6 +22,11 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
     /// Persisted so a refetch on a fresh device knows whether to recompute
     /// the value or keep the operator's manual entry.
     var buyPriceOverridden: Bool
+    /// Frozen comp blob (text) + its timestamp. Carried on the detail
+    /// projection only; the slim `ScanListItemDTO` deliberately omits it
+    /// (same reasoning as `ocr_raw_text` / `captured_photo_url`).
+    var compSnapshot: String?
+    var compSnapshotAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -40,6 +45,8 @@ nonisolated struct ScanDTO: Codable, Sendable, Identifiable, Equatable {
         case vendorAskCents = "vendor_ask_cents"
         case buyPriceCents = "buy_price_cents"
         case buyPriceOverridden = "buy_price_overridden"
+        case compSnapshot = "comp_snapshot"
+        case compSnapshotAt = "comp_snapshot_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

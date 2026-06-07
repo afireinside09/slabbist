@@ -165,6 +165,8 @@ struct ModelMappingTests {
             vendorAskCents: 5000,
             buyPriceCents: nil,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -196,6 +198,8 @@ struct ModelMappingTests {
             vendorAskCents: nil,
             buyPriceCents: 1500,
             buyPriceOverridden: true,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -227,6 +231,8 @@ struct ModelMappingTests {
             vendorAskCents: nil,
             buyPriceCents: nil,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(),
             updatedAt: Date()
         )

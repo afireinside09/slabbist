@@ -926,6 +926,8 @@ nonisolated extension ScanDTO {
             vendorAskCents: nil,
             buyPriceCents: nil,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: iso.date(from: p.created_at) ?? Date(),
             updatedAt: iso.date(from: p.updated_at) ?? Date()
         )

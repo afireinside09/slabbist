@@ -111,6 +111,8 @@ struct DTOCodingTests {
             vendorAskCents: 50_00,
             buyPriceCents: 30_00,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
