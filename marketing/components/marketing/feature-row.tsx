@@ -26,10 +26,10 @@ const FEATS: Feat[] = [
       'Every price is a median of recent eBay sold listings, with a confidence score and 7, 30, and 90 day velocity. Tap any comp to open the actual sales behind it.',
   },
   {
-    icon: 'shield',
-    title: 'Buy price only for staff',
+    icon: 'tag',
+    title: 'Your margin ladder does the math',
     blurb:
-      'Owners see comp, cost, and margin. Associates see the buy number and nothing else. The rule is enforced in the database, so a screenshot cannot leak it.',
+      'Set buy percentages by price tier once — pay 70% under $25, 75% over it, whatever your shop runs. Every slab gets priced against its comp automatically, and the ladder is locked into the offer the moment you present it.',
   },
 ];
 
@@ -741,6 +741,12 @@ function CompPanel() {
 }
 
 function MarginRulesPanel() {
+  const tiers: [string, string][] = [
+    ['$0 – $25', '70%'],
+    ['$25 – $50', '75%'],
+    ['$50 – $200', '80%'],
+    ['$200+', '85%'],
+  ];
   return (
     <div
       style={{
@@ -760,171 +766,48 @@ function MarginRulesPanel() {
           fontWeight: 500,
         }}
       >
-        Margin rules · active
+        Margin ladder · active
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+        {tiers.map(([range, pct], i) => (
+          <div
+            key={range}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: i === 1 ? SLAB.elev2 : 'transparent',
+              border: '1px solid ' + (i === 1 ? SLAB.hairStrong : SLAB.hair),
+            }}
+          >
+            <span style={{ fontFamily: SLAB.mono, fontSize: 13, color: SLAB.text }}>{range}</span>
+            <span style={{ fontFamily: SLAB.mono, fontSize: 13, color: SLAB.gold, fontWeight: 600 }}>
+              pay {pct}
+            </span>
+          </div>
+        ))}
       </div>
 
       <div
         style={{
-          marginBottom: 20,
+          marginTop: 'auto',
           padding: 16,
           borderRadius: 14,
           background: 'linear-gradient(145deg, oklch(0.22 0.06 78), oklch(0.14 0.03 78))',
           border: '1px solid oklch(0.82 0.13 78 / 0.27)',
         }}
       >
-        <div
-          style={{
-            fontSize: 11,
-            letterSpacing: 1.5,
-            textTransform: 'uppercase',
-            color: SLAB.gold,
-            marginBottom: 6,
-            fontWeight: 600,
-          }}
-        >
-          Event mode · active
+        <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: SLAB.gold, fontWeight: 600, marginBottom: 8 }}>
+          This slab
         </div>
-        <div style={{ fontSize: 13, color: SLAB.text, marginBottom: 8 }}>
-          Prismatic Evolutions release weekend
+        <div style={{ fontFamily: SLAB.mono, fontSize: 13, color: SLAB.muted, lineHeight: 1.7 }}>
+          <div>comp: <span style={{ color: SLAB.text }}>$42</span></div>
+          <div>tier: <span style={{ color: SLAB.text }}>$25 – $50 · 75%</span></div>
+          <div>buy: <span style={{ color: SLAB.text }}>$31</span></div>
         </div>
-        <div style={{ fontSize: 11, color: SLAB.muted }}>
-          Modern vintage modifier −5% until Monday 9am
-        </div>
-      </div>
-
-      <div
-        style={{
-          fontSize: 11,
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
-          color: SLAB.dim,
-          marginBottom: 12,
-          fontWeight: 500,
-        }}
-      >
-        What each role sees
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div
-          style={{
-            padding: 14,
-            borderRadius: 12,
-            background: SLAB.elev2,
-            border: '1px solid ' + SLAB.hair,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-            <div
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: SLAB.gold,
-                color: SLAB.ink,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                fontWeight: 700,
-              }}
-            >
-              O
-            </div>
-            <span
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                fontWeight: 600,
-              }}
-            >
-              Owner
-            </span>
-          </div>
-          <div style={{ fontFamily: SLAB.mono, fontSize: 10, color: SLAB.muted, lineHeight: 1.6 }}>
-            <div>
-              comp: <span style={{ color: SLAB.text }}>$842</span>
-            </div>
-            <div>
-              cost: <span style={{ color: SLAB.text }}>$506</span>
-            </div>
-            <div>
-              marg: <span style={{ color: SLAB.pos }}>40%</span>
-            </div>
-            <div>
-              buy: <span style={{ color: SLAB.text }}>$506</span>
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            padding: 14,
-            borderRadius: 12,
-            background: SLAB.elev2,
-            border: '1px solid ' + SLAB.hair,
-            opacity: 0.75,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-            <div
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: SLAB.elev,
-                color: SLAB.muted,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                fontWeight: 700,
-                border: '1px solid ' + SLAB.hair,
-              }}
-            >
-              A
-            </div>
-            <span
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                fontWeight: 600,
-              }}
-            >
-              Associate
-            </span>
-          </div>
-          <div style={{ fontFamily: SLAB.mono, fontSize: 10, color: SLAB.muted, lineHeight: 1.6 }}>
-            <div>
-              comp: <span style={{ color: SLAB.dim }}>— —</span>
-            </div>
-            <div>
-              cost: <span style={{ color: SLAB.dim }}>— —</span>
-            </div>
-            <div>
-              marg: <span style={{ color: SLAB.dim }}>— —</span>
-            </div>
-            <div>
-              buy: <span style={{ color: SLAB.text }}>$506</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop: 'auto',
-          paddingTop: 14,
-          fontSize: 11,
-          color: SLAB.dim,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <Icon name="lock" size={12} />
-        Enforced at the database, not just the UI.
       </div>
     </div>
   );
