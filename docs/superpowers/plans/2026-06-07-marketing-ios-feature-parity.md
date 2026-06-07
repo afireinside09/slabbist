@@ -813,6 +813,17 @@ export const metadata: Metadata = {
 };
 ```
 
+- [ ] **Step 1b (added during execution): Demote the `COMP_ENGINE` event-modifier overclaim.** The `COMP_ENGINE` array's 4th card (`flag` / "Event-aware modifiers") claims time-boxed margin modifiers, which Task 1 confirmed are NOT in the app. Replace it with a real comp feature:
+
+```tsx
+  {
+    icon: 'layers',
+    title: 'Per-grade price ladder',
+    blurb:
+      'See the going rate across the whole grade ladder — PSA 7 through 10, plus CGC, BGS, and SGC 10 — so a missing comp at one grade falls back to the nearest grade with real sales.',
+  },
+```
+
 - [ ] **Step 2: Rewrite the `COUNTER` array** (lines 74-99) — remove role-visibility, signature, and print/email; keep margin + the real offer sheet:
 
 ```tsx
