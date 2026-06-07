@@ -675,6 +675,18 @@ actor OutboxDrainer: ModelActor {
             }
             try await repositories.scans.patch(id: id, fields: fields)
 
+        case .updateScanComp:
+            let p = try decode(OutboxPayloads.UpdateScanComp.self, payload)
+            guard let id = UUID(uuidString: p.id) else {
+                throw OutboxBridgeError.malformedPayload(reason: "UpdateScanComp: invalid UUID")
+            }
+            var fields: [String: AnyJSON] = [
+                "comp_snapshot_at": .string(p.comp_snapshot_at),
+                "updated_at":       .string(p.updated_at)
+            ]
+            fields["comp_snapshot"] = p.comp_snapshot.map(AnyJSON.string) ?? .null
+            try await repositories.scans.patch(id: id, fields: fields)
+
         case .updateLotOffer:
             let p = try decode(OutboxPayloads.UpdateLotOffer.self, payload)
             guard let id = UUID(uuidString: p.id) else {
