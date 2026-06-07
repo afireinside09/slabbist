@@ -14,37 +14,37 @@ const POINTS: AudiencePoint[] = [
     icon: 'scan',
     title: 'Counter-grade capture',
     blurb:
-      'Set the phone on a stand or hold it. Either way, 30 slabs a minute without chasing focus between scans.',
+      'Set the phone on a stand or hold it. Either way, sweep a stack of slabs in one pass without chasing focus between scans.',
   },
   {
-    icon: 'shield',
-    title: 'Associates only see the buy',
+    icon: 'gauge',
+    title: 'Grade the walk-in before you offer',
     blurb:
-      'Your team can run the scanner on day one without ever seeing comp or margin. The rule is enforced at the database.',
+      'A seller drops a raw card on the counter? Pre-grade gives you a PSA-equivalent estimate and centering read before you put a number on it.',
+  },
+  {
+    icon: 'chart',
+    title: 'Comps you can show the seller',
+    blurb:
+      'Every price is built from recent sales, with range, trend, and the actual solds behind it. Buy with confidence on the climbers, skip the ones bleeding out.',
+  },
+  {
+    icon: 'tag',
+    title: 'Your margin ladder, applied automatically',
+    blurb:
+      'Set buy percentages by price tier once and every slab gets priced against its comp. Override any single buy by hand when you need to.',
   },
   {
     icon: 'receipt',
-    title: 'One-tap offer sheets',
+    title: 'Offer sheet to paid, in one flow',
     blurb:
-      'Apply your margin rule, attach the vendor, print or email the offer. If the seller accepts, capture their signature right there.',
+      'Roll the lot into an offer, attach the vendor, mark it paid. It drops into your transaction ledger, frozen and audit-safe.',
   },
   {
     icon: 'users',
     title: 'Vendor history at a glance',
     blurb:
-      'Who sold you what, at which price, in which grade mix. Search by vendor, event, or date range in two taps.',
-  },
-  {
-    icon: 'chart',
-    title: 'Velocity with the comp',
-    blurb:
-      '7, 30, and 90 day trend on every price. Buy with confidence on the climbers. Skip the ones bleeding out.',
-  },
-  {
-    icon: 'tag',
-    title: 'Margin rules you control',
-    blurb:
-      'Per-grader, per-set, per-price-band modifiers. Event mode for release weekends. Full audit trail on every rule change.',
+      'Who sold you what, in which grade mix. Keep a registry with notes and pull a vendor onto a lot in two taps.',
   },
 ];
 
@@ -59,7 +59,7 @@ export default function ForShopsPage() {
       />
       <AudienceBody
         pain="A walk-in drops a thirty-slab stack. Your associate is comping each slab on eBay and copy-pasting cert numbers into the PSA lookup to make sure they're real — while the seller waits. You end up low-balling the climbers and over-paying the dogs."
-        shift="Slabs scan, comps resolve, margin applies. The offer sheet prints before the seller finishes their coffee."
+        shift="Slabs scan, comps resolve, your margin applies, and the offer is ready to present before the seller finishes their coffee."
         points={POINTS}
         ctaLabel="Join the store waitlist"
         waitlistAudience="store"
