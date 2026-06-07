@@ -23,14 +23,27 @@ const TAG_STYLES: Record<Entry['tag'], { bg: string; fg: string; label: string }
 
 const ENTRIES: Entry[] = [
   {
-    date: '2026-04-18',
-    version: '0.9.0',
-    title: 'Bulk capture + offer sheets',
+    date: '2026-06-07',
+    version: '0.10.0',
+    title: 'Pre-grade, movers, and grade gains',
     tag: 'beta',
     bullets: [
-      'Bulk scan queue with 30 slabs/minute throughput on iPhone 14 and later.',
-      'Offer sheets now print or email directly from the lot view.',
-      'Signature-on-glass capture for buys closed on iPad.',
+      'Pre-grade: on-device PSA-equivalent grade estimates with centering, corners, edges, and surface sub-grades.',
+      'Centering tool with snap-to-edge guides and live L/R, T/B ratios.',
+      'Movers: top gainers and losers by set and price tier, English or Japanese.',
+      'Grade gains: raw-to-PSA-10 arbitrage with a live grading-fee stepper.',
+      'And a little something hidden. We are not going to tell you where.',
+    ],
+  },
+  {
+    date: '2026-04-18',
+    version: '0.9.0',
+    title: 'Lots, offers, and the transaction ledger',
+    tag: 'beta',
+    bullets: [
+      'Roll scans into a lot, present an offer, and mark it paid with a payment method and reference.',
+      'Paid lots freeze and drop into an immutable transaction ledger; void with a reason if you must.',
+      'Vendor registry with contact details and notes, attachable to any lot.',
     ],
   },
   {
@@ -39,31 +52,20 @@ const ENTRIES: Entry[] = [
     title: 'TAG grading support',
     tag: 'beta',
     bullets: [
-      'Added cert OCR and population lookups for TAG-graded slabs.',
-      'Confidence scoring now weighs comp volume and spread per grader.',
+      'Added cert OCR for TAG-graded slabs alongside PSA, BGS, CGC, and SGC.',
+      'Confidence scoring now weighs comp volume and spread per grade.',
       'Fixed a sync stall when a queued scan lacked a cert number.',
     ],
   },
   {
     date: '2026-03-10',
     version: '0.8.0',
-    title: 'Role-based buy visibility',
+    title: 'Margin ladder',
     tag: 'beta',
     bullets: [
-      'Associates now see only the buy number. Comp, cost, and margin are hidden.',
-      'Enforced in Postgres via RLS — the API never returns data your role cannot see.',
-      'Audit log for every margin rule change.',
-    ],
-  },
-  {
-    date: '2026-02-14',
-    version: '0.7.0',
-    title: 'Event-aware margin rules',
-    tag: 'preview',
-    bullets: [
-      'Time-boxed modifiers for release weekends and market corrections.',
-      'Preview the buy number before you commit a rule change.',
-      'Rule history visible on every lot.',
+      'Set buy percentages by price tier; the highest cleared tier prices each slab against its comp.',
+      'Override any single buy price by hand.',
+      'The ladder is snapshotted onto an offer the moment you present it.',
     ],
   },
   {
@@ -72,8 +74,8 @@ const ENTRIES: Entry[] = [
     title: 'Offline-first queue',
     tag: 'preview',
     bullets: [
-      'Scans, edits, and offers persist locally and sync on reconnect.',
-      'Reduced cold-start capture latency by 34%.',
+      'Scans, edits, and offers persist locally and sync on reconnect through an outbox.',
+      'Failed writes surface in a sheet you can retry or discard.',
     ],
   },
   {
@@ -82,8 +84,8 @@ const ENTRIES: Entry[] = [
     title: 'Comp engine v1',
     tag: 'internal',
     bullets: [
-      'Rolling median of eBay sold comps with outlier rejection.',
-      '7, 30, 90 day velocity per card.',
+      'Recent-sales pricing with range, sale count, trend, and a per-grade ladder.',
+      '30-day price history on every card.',
       'Tap any price to see the sales behind it.',
     ],
   },
