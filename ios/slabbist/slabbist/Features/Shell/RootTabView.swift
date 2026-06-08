@@ -6,6 +6,8 @@ struct RootTabView: View {
     @Environment(TabRouter.self) private var router
     @State private var showFailuresSheet: Bool = false
     @State private var showCameoDex: Bool = false
+    @State private var playCameoDiscovery: Bool = false
+    @AppStorage("cameoDexDiscovered") private var cameoDexDiscovered: Bool = false
 
     var body: some View {
         @Bindable var router = router
@@ -34,10 +36,14 @@ struct RootTabView: View {
                 .toolbarBackground(.visible, for: .tabBar)
                 .toolbarColorScheme(.dark, for: .tabBar)
             }
-            PsyduckPeekOverlay { showCameoDex = true }
+            PsyduckPeekOverlay {
+                playCameoDiscovery = !cameoDexDiscovered
+                cameoDexDiscovered = true
+                showCameoDex = true
+            }
         }
         .fullScreenCover(isPresented: $showCameoDex) {
-            CameoSecretView(onClose: { showCameoDex = false })
+            CameoSecretView(playDiscovery: playCameoDiscovery, onClose: { showCameoDex = false })
         }
         .sheet(isPresented: $showFailuresSheet) {
             OutboxFailuresView(

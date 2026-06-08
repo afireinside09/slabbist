@@ -49,19 +49,20 @@ Interface: `CameoDiscoveryShimmer(onComplete: () -> Void)`.
 
 **Wiring — `Features/Shell/RootTabView.swift`**
 
-- Add `@AppStorage("cameoDexDiscovered") private var cameoDexDiscovered = false`.
-- Add `@State private var showDiscoveryShimmer = false`.
-- Psyduck tap closure:
-  - if `cameoDexDiscovered` → `showCameoDex = true` (current behavior).
-  - else → `showDiscoveryShimmer = true`.
-- Add an `.overlay` that renders `CameoDiscoveryShimmer` while
-  `showDiscoveryShimmer` is true. Its `onComplete`:
-  1. `cameoDexDiscovered = true`
-  2. `showDiscoveryShimmer = false`
-  3. `showCameoDex = true`
+- Add `@AppStorage("cameoDexDiscovered") private var cameoDexDiscovered = false`
+  and `@State private var playCameoDiscovery = false`.
+- Psyduck tap closure: capture `playCameoDiscovery = !cameoDexDiscovered`, set
+  `cameoDexDiscovered = true`, then `showCameoDex = true`.
+- The existing single `.fullScreenCover(isPresented: $showCameoDex)` passes
+  `playDiscovery: playCameoDiscovery` into `CameoSecretView`.
 
-  The dex cover rises as the shimmer clears, reading as a dissolve into the dex.
-- The existing `.fullScreenCover(isPresented: $showCameoDex)` is unchanged.
+**Shimmer placement — inside the cover, not on the root.** `CameoSecretView`
+takes `var playDiscovery: Bool = false` and, on first appear, shows
+`CameoDiscoveryShimmer` as an `.overlay` (with `.transition(.opacity)`). The
+shimmer's `onComplete` removes the overlay inside `withAnimation(.easeOut)`, so
+the gold wash fades to reveal the dex *beneath it* — a true dissolve into the
+dex. This is simpler than a second overlay/presentation path on `RootTabView`
+and avoids the cover's slide-up briefly showing the prior screen.
 
 Result: first discovery = haptic + gold wash → dex. Every tap after = straight
 to the dex.

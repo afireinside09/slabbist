@@ -5,11 +5,14 @@ import SwiftUI
 /// its cards. Dismisses via the X — there is intentionally no tab bar.
 struct CameoSecretView: View {
     var repo: CameoRepository = CameoRepository()
+    /// True only on the very first discovery, so the shimmer plays once.
+    var playDiscovery: Bool = false
     let onClose: () -> Void
 
     @State private var query = ""
     @State private var subjects: [CameoSubjectDTO] = []
     @State private var isLoading = true
+    @State private var showShimmer = false
 
     var body: some View {
         NavigationStack {
@@ -56,6 +59,15 @@ struct CameoSecretView: View {
         // .task(id:) re-runs whenever query changes and cancels the prior
         // in-flight task automatically — no manual Task storage needed.
         .task(id: query) { await runSearch(query) }
+        .overlay {
+            if showShimmer {
+                CameoDiscoveryShimmer {
+                    withAnimation(.easeOut(duration: 0.35)) { showShimmer = false }
+                }
+                .transition(.opacity)
+            }
+        }
+        .onAppear { if playDiscovery { showShimmer = true } }
     }
 
     private func runSearch(_ text: String) async {
@@ -75,6 +87,7 @@ private struct CameoSubjectRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.s) {
+            thumbnail
             VStack(alignment: .leading, spacing: 2) {
                 Text(subject.name).slabRowTitle()
                 Text(subtitle)
@@ -89,6 +102,34 @@ private struct CameoSubjectRow: View {
         }
         .padding(.horizontal, Spacing.m)
         .padding(.vertical, Spacing.s)
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        Group {
+            if let url = cameoArtworkURL(ndex: subject.ndex) {
+                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.18))) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit()
+                    } else {
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: 44, height: 44)
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+            .fill(AppColor.surface)
+            .overlay(
+                Image(systemName: subject.kind == "trainer" ? "person.fill" : "photo")
+                    .font(.system(size: 18))
+                    .foregroundStyle(AppColor.dim)
+            )
     }
 
     private var subtitle: String {
