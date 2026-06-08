@@ -42,7 +42,7 @@ export default function PrivacyPage() {
         <h3>When you create a Slabbist account</h3>
         <ul>
           <li>Name, email, and password (hashed with Argon2id)</li>
-          <li>Store or role metadata (owner vs. associate)</li>
+          <li>Store membership and account metadata</li>
           <li>Scans, cert numbers, pricing, margin rules, offer sheets, and any other data you enter into the app</li>
           <li>Device type and OS version for crash diagnostics</li>
         </ul>
