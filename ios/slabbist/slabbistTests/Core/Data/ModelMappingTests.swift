@@ -165,6 +165,8 @@ struct ModelMappingTests {
             vendorAskCents: 5000,
             buyPriceCents: nil,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -196,6 +198,8 @@ struct ModelMappingTests {
             vendorAskCents: nil,
             buyPriceCents: 1500,
             buyPriceOverridden: true,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
         )
@@ -207,6 +211,43 @@ struct ModelMappingTests {
         let rebuilt = ScanDTO(model)
         #expect(rebuilt.buyPriceCents == 1500)
         #expect(rebuilt.buyPriceOverridden == true)
+        #expect(rebuilt == dto)
+    }
+
+    @Test("Scan round-trips frozen comp snapshot + timestamp")
+    func scanCompSnapshotRoundTrip() throws {
+        let dto = ScanDTO(
+            id: UUID(),
+            storeId: UUID(),
+            lotId: UUID(),
+            userId: UUID(),
+            grader: "PSA",
+            certNumber: "7",
+            grade: "10",
+            status: "validated",
+            ocrRawText: nil,
+            ocrConfidence: nil,
+            capturedPhotoURL: nil,
+            vendorAskCents: nil,
+            buyPriceCents: nil,
+            buyPriceOverridden: false,
+            compSnapshot: #"{"v":1}"#,
+            compSnapshotAt: Date(timeIntervalSince1970: 1_700_000_050),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
+        )
+
+        // DTO -> model: init(dto:) must carry both fields without dropping
+        // or cross-wiring them (the JSON blob and its timestamp are distinct
+        // types/values, so a swap would fail to compile or fail value checks).
+        let model = try Scan(dto: dto)
+        #expect(model.compSnapshotJSON == #"{"v":1}"#)
+        #expect(model.compSnapshotAt == Date(timeIntervalSince1970: 1_700_000_050))
+
+        // model -> DTO: init(_ model:) must round-trip them back intact.
+        let rebuilt = ScanDTO(model)
+        #expect(rebuilt.compSnapshot == #"{"v":1}"#)
+        #expect(rebuilt.compSnapshotAt == Date(timeIntervalSince1970: 1_700_000_050))
         #expect(rebuilt == dto)
     }
 
@@ -227,6 +268,8 @@ struct ModelMappingTests {
             vendorAskCents: nil,
             buyPriceCents: nil,
             buyPriceOverridden: false,
+            compSnapshot: nil,
+            compSnapshotAt: nil,
             createdAt: Date(),
             updatedAt: Date()
         )

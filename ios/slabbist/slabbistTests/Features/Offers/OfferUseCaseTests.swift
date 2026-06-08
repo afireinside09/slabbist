@@ -123,6 +123,116 @@ struct OfferUseCaseTests {
         #expect(lot.marginPctSnapshot == nil)
     }
 
+    @Test func sendToOfferFreezesCompSnapshotOntoScans() throws {
+        let (repo, context, lot, scan) = makeContext()
+        let identity = UUID()
+        scan.gradedCardIdentityId = identity
+        scan.grade = "10"
+        let snap = GradedMarketSnapshot(
+            identityId: identity,
+            gradingService: "PSA",
+            grade: "10",
+            source: "poketrace",
+            headlinePriceCents: 125_00,
+            priceHistoryJSON: nil,
+            fetchedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            cacheHit: false
+        )
+        context.insert(snap)
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        try? context.save()
+
+        try repo.sendToOffer(lot)
+
+        #expect(lot.lotOfferState == LotOfferState.presented.rawValue)
+        #expect(scan.compSnapshotAt != nil)
+        let wire = CompSnapshotWire.decode(scan.compSnapshotJSON)
+        #expect(wire?.headlinePriceCents == 125_00)
+        #expect(wire?.source == "poketrace")
+    }
+
+    @Test func sendToOfferLeavesScansWithoutCompUntouched() throws {
+        let (repo, context, lot, scan) = makeContext()
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        try? context.save()
+
+        try repo.sendToOffer(lot)
+
+        #expect(lot.lotOfferState == LotOfferState.presented.rawValue)
+        #expect(scan.compSnapshotJSON == nil)
+        #expect(scan.compSnapshotAt == nil)
+    }
+
+    @Test func sendToOfferFreezesOnlyScansWithMatchingSnapshot() throws {
+        let (repo, context, lot, scanA) = makeContext()
+        let identityA = UUID()
+        scanA.gradedCardIdentityId = identityA
+        scanA.grade = "10"
+        context.insert(GradedMarketSnapshot(
+            identityId: identityA,
+            gradingService: "PSA",
+            grade: "10",
+            source: "poketrace",
+            headlinePriceCents: 125_00,
+            priceHistoryJSON: nil,
+            fetchedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            cacheHit: false
+        ))
+
+        // Scan B shares the lot but its only snapshot mismatches on grade
+        // ("9" vs the scan's "10"), so the identity+grader+grade predicate
+        // must skip it — proving the match is exact, not identity-only.
+        let identityB = UUID()
+        let scanB = Scan(
+            id: UUID(),
+            storeId: lot.storeId,
+            lotId: lot.id,
+            userId: lot.createdByUserId,
+            grader: .PSA,
+            certNumber: "2",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        scanB.gradedCardIdentityId = identityB
+        scanB.grade = "10"
+        context.insert(scanB)
+        context.insert(GradedMarketSnapshot(
+            identityId: identityB,
+            gradingService: "PSA",
+            grade: "9",
+            source: "poketrace",
+            headlinePriceCents: 999_00,
+            priceHistoryJSON: nil,
+            fetchedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            cacheHit: false
+        ))
+
+        lot.lotOfferState = LotOfferState.priced.rawValue
+        try? context.save()
+
+        try repo.sendToOffer(lot)
+
+        // A froze from its matching snapshot.
+        #expect(scanA.compSnapshotJSON != nil)
+        #expect(scanA.compSnapshotAt != nil)
+        #expect(CompSnapshotWire.decode(scanA.compSnapshotJSON)?.headlinePriceCents == 125_00)
+
+        // B had no grade-matching snapshot, so nothing was frozen onto it.
+        #expect(scanB.compSnapshotJSON == nil)
+        #expect(scanB.compSnapshotAt == nil)
+
+        // Exactly one freeze patch hit the outbox, and it targets scan A.
+        let freezeItems = try context
+            .fetch(FetchDescriptor<OutboxItem>())
+            .filter { $0.kind == .updateScanComp }
+        #expect(freezeItems.count == 1)
+        let payload = try JSONDecoder().decode(
+            OutboxPayloads.UpdateScanComp.self,
+            from: freezeItems[0].payload
+        )
+        #expect(payload.id == scanA.id.uuidString)
+    }
+
     @Test func bounceBackReturnsPresentedToPriced() throws {
         let (repo, _, lot, _) = makeContext()
         lot.lotOfferState = LotOfferState.presented.rawValue

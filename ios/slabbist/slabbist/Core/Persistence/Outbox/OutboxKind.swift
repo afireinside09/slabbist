@@ -5,6 +5,7 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
     case updateScan
     case updateScanOffer
     case updateScanBuyPrice
+    case updateScanComp
     case deleteScan
     case insertLot
     case updateLotOffer
@@ -35,6 +36,7 @@ nonisolated enum OutboxKind: String, Codable, CaseIterable {
         case .updateScan:         return 10
         case .updateScanOffer:    return 10
         case .updateScanBuyPrice: return 10
+        case .updateScanComp:     return 10
         case .upsertVendor:       return 8
         case .archiveVendor:      return 8
         case .updateLotOffer:     return 7

@@ -146,6 +146,17 @@ nonisolated extension OutboxPayloads {
         let updated_at: String
     }
 
+    /// Patch payload that freezes the comp behind an offer onto a scan at
+    /// offer-send time. `comp_snapshot` is a JSON-string blob (text column,
+    /// not jsonb); `nil` clears it. `comp_snapshot_at` marks when the lot
+    /// was presented. Mirrors `scans.comp_snapshot` / `scans.comp_snapshot_at`.
+    struct UpdateScanComp: Codable {
+        let id: String
+        let comp_snapshot: String?
+        let comp_snapshot_at: String
+        let updated_at: String
+    }
+
     /// Trigger payload for `/transaction-commit`. The Edge Function snapshots
     /// the lot's scans into a `transactions` row + N `transaction_lines`,
     /// flips the lot to `paid`, and returns the inserted rows so the iOS

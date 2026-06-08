@@ -176,6 +176,7 @@ private struct FailureRowView: View {
         case .insertScan, .updateScan: return "Scan"
         case .updateScanOffer:         return "Scan offer"
         case .updateScanBuyPrice:      return "Scan buy price"
+        case .updateScanComp:          return "Scan comp"
         case .deleteScan:              return "Scan removal"
         case .insertLot:               return "Lot"
         case .updateLotOffer:          return "Lot offer"

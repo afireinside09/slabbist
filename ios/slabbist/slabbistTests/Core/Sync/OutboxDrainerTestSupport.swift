@@ -331,6 +331,29 @@ final class Harness {
         )
     }
 
+    func enqueueUpdateScanComp(
+        id: UUID,
+        snapshot: String?,
+        createdAt: Date? = nil
+    ) async throws {
+        let stamp = createdAt ?? clock.current()
+        let iso = ISO8601DateFormatter().string(from: stamp)
+        let dto = OutboxPayloads.UpdateScanComp(
+            id: id.uuidString,
+            comp_snapshot: snapshot,
+            comp_snapshot_at: iso,
+            updated_at: iso
+        )
+        let payload = try JSONEncoder().encode(dto)
+        try await drainer._testEnqueue(
+            id: UUID(),
+            kind: .updateScanComp,
+            payload: payload,
+            createdAt: stamp,
+            nextAttemptAt: stamp
+        )
+    }
+
     func enqueueCorruptItem(kind: OutboxKind, createdAt: Date? = nil) async throws {
         let stamp = createdAt ?? clock.current()
         let payload = Data("not json".utf8)

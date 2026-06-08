@@ -88,6 +88,16 @@ final class Scan {
     /// default → SwiftData lightweight migration leaves existing rows nil and
     /// the CompCardView caption falls back to "Poketrace".
     var reconciledSource: String?
+    /// The comp that justified the most recent offer-send for this scan,
+    /// serialized via `CompSnapshotWire` and frozen at `sendToOffer` time.
+    /// Persisted so the operator can later see the exact number/ladder/sold
+    /// comps behind an offer even after the live cache has refreshed.
+    /// Mirrors `scans.comp_snapshot`. Optional + no init default → SwiftData
+    /// lightweight migration leaves existing rows nil.
+    var compSnapshotJSON: String?
+    /// When `compSnapshotJSON` was frozen (the moment the lot was presented).
+    /// Mirrors `scans.comp_snapshot_at`.
+    var compSnapshotAt: Date?
     /// Why the most recent `cert-lookup` attempt didn't yield a validated
     /// identity. One of: `"not_found"` (PSA has no record of the cert),
     /// `"not_pokemon"` (cert resolved to a non-Pokemon product), or

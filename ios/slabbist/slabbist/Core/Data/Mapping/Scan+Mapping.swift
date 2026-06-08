@@ -17,6 +17,8 @@ extension ScanDTO {
             vendorAskCents: model.vendorAskCents,
             buyPriceCents: model.buyPriceCents,
             buyPriceOverridden: model.buyPriceOverridden,
+            compSnapshot: model.compSnapshotJSON,
+            compSnapshotAt: model.compSnapshotAt,
             createdAt: model.createdAt,
             updatedAt: model.updatedAt
         )
@@ -51,6 +53,8 @@ extension Scan {
         self.vendorAskCents = dto.vendorAskCents
         self.buyPriceCents = dto.buyPriceCents
         self.buyPriceOverridden = dto.buyPriceOverridden
+        self.compSnapshotJSON = dto.compSnapshot
+        self.compSnapshotAt = dto.compSnapshotAt
     }
 
     func apply(_ dto: ScanDTO) throws {
@@ -73,6 +77,8 @@ extension Scan {
         self.vendorAskCents = dto.vendorAskCents
         self.buyPriceCents = dto.buyPriceCents
         self.buyPriceOverridden = dto.buyPriceOverridden
+        self.compSnapshotJSON = dto.compSnapshot
+        self.compSnapshotAt = dto.compSnapshotAt
         self.createdAt = dto.createdAt
         self.updatedAt = dto.updatedAt
     }
