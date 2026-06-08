@@ -4,7 +4,7 @@ import { PageShell, PageHero } from '@/components/marketing/page-shell';
 
 export const metadata: Metadata = {
   title: 'Changelog · Slabbist',
-  description: 'Every release of Slabbist, what shipped, and what is in flight.',
+  description: 'Every Slabbist release — what shipped, what changed, and what is coming.',
 };
 
 type Entry = {
@@ -28,11 +28,11 @@ const ENTRIES: Entry[] = [
     title: 'Pre-grade, movers, and grade gains',
     tag: 'beta',
     bullets: [
-      'Pre-grade: on-device PSA-equivalent grade estimates with centering, corners, edges, and surface sub-grades.',
-      'Centering tool with snap-to-edge guides and live L/R, T/B ratios.',
+      'Pre-grade: estimate the PSA-equivalent grade on-device with centering, corners, edges, and surface sub-grades.',
+      'Centering tool with snap-to-edge guides and live left/right and top/bottom ratios.',
       'Movers: top gainers and losers by set and price tier, English or Japanese.',
-      'Grade gains: raw-to-PSA-10 arbitrage with a live grading-fee stepper.',
-      'And a little something hidden. We are not going to tell you where.',
+      'Grade gains: see how much profit you could make grading a raw card to PSA 10, with a live grading-fee stepper.',
+      'There is also something hidden in here. We are not going to tell you where.',
     ],
   },
   {
@@ -41,8 +41,8 @@ const ENTRIES: Entry[] = [
     title: 'Lots, offers, and the transaction ledger',
     tag: 'beta',
     bullets: [
-      'Roll scans into a lot, present an offer, and mark it paid with a payment method and reference.',
-      'Paid lots freeze and drop into an immutable transaction ledger; void with a reason if you must.',
+      'Group scans into a lot, present an offer, and mark it paid with a payment method and reference number.',
+      'Paid lots lock and move into a permanent transaction ledger. You can void one with a reason if you need to.',
       'Vendor registry with contact details and notes, attachable to any lot.',
     ],
   },
@@ -52,9 +52,9 @@ const ENTRIES: Entry[] = [
     title: 'TAG grading support',
     tag: 'beta',
     bullets: [
-      'Added cert OCR for TAG-graded slabs alongside PSA, BGS, CGC, and SGC.',
-      'Confidence scoring now weighs comp volume and spread per grade.',
-      'Fixed a sync stall when a queued scan lacked a cert number.',
+      'The camera now reads cert numbers on TAG-graded slabs alongside PSA, BGS, CGC, and SGC.',
+      'Confidence scoring now accounts for comp volume and price spread per grade.',
+      'Fixed a sync stall when a queued scan had no cert number.',
     ],
   },
   {
@@ -63,9 +63,9 @@ const ENTRIES: Entry[] = [
     title: 'Margin ladder',
     tag: 'beta',
     bullets: [
-      'Set buy percentages by price tier; the highest cleared tier prices each slab against its comp.',
+      'Set a buy percentage for each price tier. Each slab prices against its comp at the highest tier it clears.',
       'Override any single buy price by hand.',
-      'The ladder is snapshotted onto an offer the moment you present it.',
+      'The ladder locks onto an offer the moment you present it.',
     ],
   },
   {
@@ -74,8 +74,8 @@ const ENTRIES: Entry[] = [
     title: 'Offline-first queue',
     tag: 'preview',
     bullets: [
-      'Scans, edits, and offers persist locally and sync on reconnect through an outbox.',
-      'Failed writes surface in a sheet you can retry or discard.',
+      'Scans, edits, and offers save locally and sync when you reconnect.',
+      'Failed syncs surface in a sheet you can retry or discard.',
     ],
   },
   {
@@ -84,9 +84,9 @@ const ENTRIES: Entry[] = [
     title: 'Comp engine v1',
     tag: 'internal',
     bullets: [
-      'Recent-sales pricing with range, sale count, trend, and a per-grade ladder.',
+      'Prices from recent sales, with range, sale count, trend, and a per-grade breakdown.',
       '30-day price history on every card.',
-      'Tap any price to see the sales behind it.',
+      'Tap any price to see the individual sales behind it.',
     ],
   },
 ];
@@ -98,7 +98,7 @@ export default function ChangelogPage() {
         eyebrow="Changelog"
         title="What shipped, when it shipped, and what broke."
         italicize="broke"
-        subtitle="Slabbist is in closed beta with a handful of stores. This is everything that has gone out — the good, the fixed, and the in-flight."
+        subtitle="Slabbist is in closed beta with a handful of stores. Here is everything that has gone out — what is working, what got fixed, and what is still in flight."
       />
 
       <section

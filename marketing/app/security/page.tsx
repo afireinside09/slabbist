@@ -6,7 +6,7 @@ import { PageShell, PageHero, Prose } from '@/components/marketing/page-shell';
 export const metadata: Metadata = {
   title: 'Security · Slabbist',
   description:
-    'How Slabbist secures your data, our responsible disclosure policy, and how to report a vulnerability.',
+    'How Slabbist protects your data, how to report a vulnerability, and our responsible disclosure policy.',
 };
 
 type Pillar = { icon: IconName; title: string; blurb: string };
@@ -16,37 +16,37 @@ const PILLARS: Pillar[] = [
     icon: 'lock',
     title: 'Encrypted in transit and at rest',
     blurb:
-      'TLS 1.3 for every connection. AES-256 for data at rest in Postgres and object storage. Backups are encrypted with separate keys.',
+      'TLS 1.3 on every connection. AES-256 for data at rest in Postgres and object storage. Backups use separate encryption keys.',
   },
   {
     icon: 'shield',
-    title: 'Tenant isolation in the database',
+    title: 'Your store is isolated in the database',
     blurb:
-      'Row-level security in Postgres scopes every row to your store. Another store — or a stray query — can never read data that is not yours; the API never returns what the database refuses to serve.',
+      'Row-level security in Postgres ties every row to your store. A different store — or a stray query — cannot read your data. The API never returns what the database refuses to serve.',
   },
   {
     icon: 'users',
     title: 'Least-privilege access',
     blurb:
-      'Engineering access to production is gated through SSO + hardware MFA, time-boxed, and logged. There is no shared admin account.',
+      'Engineering access to production requires SSO and hardware MFA, is time-limited, and is logged. There is no shared admin account.',
   },
   {
     icon: 'reload',
     title: 'Tested backups',
     blurb:
-      'Point-in-time recovery up to 7 days. Monthly restore drills, tracked in a public-to-customers runbook.',
+      'Point-in-time recovery up to 7 days. We run monthly restore drills and track them in a runbook available to customers.',
   },
   {
     icon: 'eye',
     title: 'Audit logging',
     blurb:
-      'Sensitive account and data changes are logged with actor, time, and IP. Logs are retained for 12 months minimum.',
+      'Sensitive account and data changes are logged with the actor, time, and IP address. Logs are kept for at least 12 months.',
   },
   {
     icon: 'flag',
     title: 'Responsible disclosure',
     blurb:
-      'Reports to security@slabbist.com are acknowledged within one business day. Good-faith researchers are welcome — see the policy below.',
+      'Email security@slabbist.com. We acknowledge within one business day. Good-faith researchers are welcome — details below.',
   },
 ];
 
@@ -57,7 +57,7 @@ export default function SecurityPage() {
         eyebrow="Security"
         title="Your store's data never leaves your store."
         italicize="never leaves"
-        subtitle="Slabbist was built around a single idea: your store's data is yours alone, isolated from every other store in the database. Everything else follows from that."
+        subtitle="Your store's data is yours alone. The database keeps every store isolated. No other shop can see your comps, costs, or margins."
       />
 
       <section
@@ -104,35 +104,35 @@ export default function SecurityPage() {
         <h2>Reporting a vulnerability</h2>
         <p>
           Email <a href="mailto:security@slabbist.com">security@slabbist.com</a> with a
-          reproduction and the affected surface. If you need PGP, request our key in the first
-          message and we will send it before you share details.
+          description of what you found and how to reproduce it. If you need PGP, ask in your
+          first message and we will send the key before you share any details.
         </p>
         <p>
-          We acknowledge within one business day and aim to triage within three. We do not
-          currently run a paid bounty, but we will credit researchers who ask for public
-          acknowledgement once a fix ships.
+          We acknowledge within one business day and aim to triage within three. We do not run a
+          paid bounty program, but we will publicly credit researchers who ask for it once a fix
+          ships.
         </p>
 
-        <h3>Safe-harbor</h3>
+        <h3>Safe harbor</h3>
         <p>
-          Good-faith research on the Slabbist production services is not a violation of our
-          Terms. &quot;Good-faith&quot; means no data exfiltration beyond a minimum proof of
-          concept, no denial of service, no social engineering of our staff, and no accessing
-          other users&apos; data beyond your own accounts.
+          Good-faith research on Slabbist production services is not a Terms violation.
+          Good-faith means: no data taken beyond the minimum needed to prove the issue, no
+          denial-of-service testing, no social engineering our staff, and no reading other
+          users&apos; data outside your own accounts.
         </p>
 
         <h2>Subprocessors and infrastructure</h2>
         <p>
-          A current list is available on request. Key providers at the time of writing: Supabase
-          (Postgres + auth, US region), Cloudflare (edge network), Resend (transactional email),
-          Sentry (crash telemetry with PII redaction), Stripe and Persona (marketplace, future).
+          A current list is available on request. Key providers today: Supabase (Postgres and
+          auth, US region), Cloudflare (edge network), Resend (transactional email), Sentry
+          (crash reporting with PII redacted), Stripe and Persona (marketplace, planned).
         </p>
 
         <h2>Compliance roadmap</h2>
         <p>
-          We are working toward SOC 2 Type I in 2026, followed by Type II once we have twelve
-          months of production operations. GDPR and CCPA compliance is in place today. Customers
-          with specific requirements can ask for a current security questionnaire response.
+          We are working toward SOC 2 Type I in 2026, followed by Type II after twelve months
+          of production operations. GDPR and CCPA compliance is in place today. Customers with
+          specific requirements can request a current security questionnaire response.
         </p>
       </Prose>
     </PageShell>

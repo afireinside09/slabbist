@@ -6,7 +6,7 @@ import { FinalCta } from '@/components/marketing/final-cta';
 export const metadata: Metadata = {
   title: 'Slabbist for collectors',
   description:
-    'Pre-grade your own cards, watch market movers, and comp any slab against real sales today. A fair marketplace is on the way.',
+    'Pre-grade your own cards, track market movers, and comp any slab against real sales today. A collector marketplace is planned.',
 };
 
 const POINTS: AudiencePoint[] = [
@@ -14,37 +14,37 @@ const POINTS: AudiencePoint[] = [
     icon: 'gauge',
     title: 'Pre-grade your own cards',
     blurb:
-      'Estimate a card’s PSA-equivalent grade and centering before you spend on a submission. Available today.',
+      'Get a PSA-equivalent grade estimate and centering read before you spend on a submission. Available today.',
   },
   {
     icon: 'chart',
-    title: 'Market movers and real comps',
+    title: 'Real comps and market movers',
     blurb:
-      'The same comp engine and gainers/losers stores use. See the last 30 days on the exact card you are eyeing. Available today.',
+      'The same comp engine card shops use. See what the last 30 days of sales look like on the exact card you are eyeing. Available today.',
   },
   {
     icon: 'zap',
-    title: 'Spot the grade-gain plays',
+    title: 'Find the raw cards worth grading',
     blurb:
-      'Find the raw cards worth grading, ranked by upside to a PSA 10 net of the fee. Available today.',
+      'See which raw cards turn a profit after the grading fee, ranked by how much you make on a PSA 10. Available today.',
   },
   {
     icon: 'lock',
-    title: 'Escrow + inspection window (planned)',
+    title: 'Escrow and inspection window (planned)',
     blurb:
-      'The coming marketplace will hold your money until the card arrives and you have had time to inspect it.',
+      'The planned marketplace will hold payment until the card arrives and you have had time to inspect it.',
   },
   {
     icon: 'tag',
-    title: 'List for free (planned)',
+    title: 'List your slabs (planned)',
     blurb:
-      'List your cert-verified slabs to buyers when the marketplace opens, with escrow protecting every sale.',
+      'List your cert-verified slabs when the marketplace opens. Every sale covered by escrow.',
   },
   {
     icon: 'shield',
     title: 'Cert-verified listings (planned)',
     blurb:
-      'Every slab will be cross-checked with the grader database before it goes live — no mismatched certs, no swapped slabs.',
+      'Every slab will be checked against the grader database before it goes live. No mismatched certs, no swapped slabs.',
   },
 ];
 
@@ -55,13 +55,13 @@ export default function ForCollectorsPage() {
         eyebrow="For collectors"
         title="Grade smarter today. Sell fairer tomorrow."
         italicize="fairer"
-        subtitle="Pre-grade your own cards, watch the movers, and comp any slab against real sales right now. A marketplace that doesn't punish selling — list for free, with escrow and cert verification — is on the way."
+        subtitle="Pre-grade your own cards, watch the movers, and comp any slab against real sales right now. A marketplace with escrow and cert verification is planned."
       />
       <AudienceBody
-        pain="You love the hobby but hate the friction of selling: opaque platforms, swapped slabs, and no protection when a deal goes sideways."
-        shift="Use Slabbist today to grade, comp, and track the market. When the marketplace opens, list for free with escrow and cert verification on every sale."
+        pain="You love the hobby but hate selling: platforms that take a cut, swapped slabs, and no protection when a deal goes wrong."
+        shift="Use Slabbist today to grade, comp, and track the market. When the marketplace opens, list your slabs with escrow and cert verification on every sale."
         points={POINTS}
-        ctaLabel="Join the collector waitlist"
+        ctaLabel="Join the waitlist"
         waitlistAudience="collector"
       />
       <FinalCta />

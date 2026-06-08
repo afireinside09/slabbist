@@ -5,7 +5,7 @@ import { PageShell, PageHero } from '@/components/marketing/page-shell';
 
 export const metadata: Metadata = {
   title: 'Contact Slabbist',
-  description: 'Get in touch with Slabbist. Support, sales, press, and security contacts.',
+  description: 'Get in touch with Slabbist. Shops, press, and security contacts all in one place.',
 };
 
 type ContactLane = {
@@ -27,21 +27,21 @@ const LANES: ContactLane[] = [
     icon: 'users',
     label: 'Collector questions',
     blurb:
-      'Questions about the marketplace or seller verification? Drop us a line.',
+      'Questions about the collector marketplace or seller verification? Send us a note.',
     email: 'hello@slabbist.com',
   },
   {
     icon: 'flag',
     label: 'Press',
     blurb:
-      'Covering the hobby or the app? Boilerplate and stats live on the /press page. Otherwise:',
+      'Writing about the hobby or the app? Boilerplate and stats are on the press page. For everything else:',
     email: 'press@slabbist.com',
   },
   {
     icon: 'shield',
     label: 'Security & privacy',
     blurb:
-      'Found a vulnerability or have a responsible-disclosure question? PGP and details on our security page.',
+      'Found a vulnerability? PGP key and full details are on the security page.',
     email: 'security@slabbist.com',
   },
 ];
@@ -53,7 +53,7 @@ export default function ContactPage() {
         eyebrow="Contact"
         title="Get in touch. We actually read it."
         italicize="actually read it"
-        subtitle="Pick the lane that fits. For anything urgent, email hello@ and we will route it."
+        subtitle="Pick the right lane below. For anything else, email hello@ and we will get it to the right person."
       />
 
       <section

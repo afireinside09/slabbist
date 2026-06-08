@@ -201,7 +201,7 @@ export function AudienceBody({
               <Icon name="arrow" size={15} sw={2.2} />
             </button>
             <a
-              href="/features"
+              href="/#features"
               style={{
                 padding: '16px 28px',
                 borderRadius: 999,

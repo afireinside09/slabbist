@@ -47,7 +47,7 @@ export function FinalCta() {
             lineHeight: 1.55,
           }}
         >
-          Slabbist is rolling out to stores, sellers, and buyers in cohorts. Drop your email and we'll ping you the moment yours opens. No card, no setup call, no seat fees.
+          Slabbist is rolling out to stores and buyers in cohorts. Drop your email and we'll reach out when your spot opens. No payment card, no setup call, no seat fees.
         </p>
         <div className="slab-finalcta-row" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button

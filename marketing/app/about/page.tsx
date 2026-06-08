@@ -4,7 +4,7 @@ import { PageShell, PageHero, Prose } from '@/components/marketing/page-shell';
 export const metadata: Metadata = {
   title: 'About Slabbist',
   description:
-    'Slabbist is a Pacific-Northwest-built iOS app for Pokémon hobby stores and vendors. Here is why we built it and what we believe.',
+    'Slabbist is an iOS app for Pokémon hobby stores and show vendors. Scan graded slabs, get real comps, and build offers fast.',
 };
 
 export default function AboutPage() {
@@ -14,49 +14,44 @@ export default function AboutPage() {
         eyebrow="About"
         title="We built Slabbist on a card-shop counter."
         italicize="counter"
-        subtitle="Not in a conference room. Not in a deck. On a real counter, in a real shop, watching real buys go wrong."
+        subtitle="Not in a conference room. Not in a deck. On a real counter, in a real shop, watching real buys go sideways."
       />
       <Prose>
         <h2>Why we built it</h2>
         <p>
-          A seller walks into a card shop with a thirty-slab stack. The owner wants to buy. The
-          associate is stuck typing cert numbers into eBay one by one. The seller gets bored. The
-          owner lowballs the climbers and overpays the dogs. Everyone loses a little — the seller
-          on the sale, the shop on the margin, the hobby on another person who decides the counter
-          is not worth the trip.
+          A seller walks in with a thirty-slab stack. The shop wants to buy. Someone is stuck
+          typing cert numbers into eBay one at a time. The seller gets bored. The shop lowballs
+          the climbers and overpays the dogs. Nobody wins.
         </p>
         <p>
-          Slabbist is the tool we wanted on that counter. A scanner that reads every grader. A
-          comp engine that shows you a real median of real sales. A buy flow that applies your
-          margin rule and builds an offer before the seller finishes their coffee.
+          Slabbist is the tool we wanted on that counter. The camera reads the cert number.
+          The app pulls comps — what those slabs actually sold for — and applies your margin.
+          You have an offer before the seller loses patience.
         </p>
 
         <h2>What we believe</h2>
         <p>
-          <strong>Price transparency is non-negotiable.</strong> Every number in the app links to
-          the sales that produced it. If we cannot show you the comps, we will not show you the
-          price.
+          <strong>Show your work.</strong> Every price in the app links to the sales behind it.
+          If we cannot show you the comps, we will not show you the number.
         </p>
         <p>
-          <strong>Your numbers stay in your store.</strong> Row-level security isolates every
-          store&apos;s comps, costs, and margins in the database. Your pricing never leaks into
-          another shop&apos;s app.
+          <strong>Your data stays in your store.</strong> The database isolates every store's
+          comps, costs, and margins. Your pricing never shows up in another shop's app.
         </p>
         <p>
-          <strong>Free on iOS, forever.</strong> Stores, sellers, and buyers do not pay a seat fee
-          or a subscription. We earn affiliate commissions when you tap through to eBay or
-          TCGplayer and make a purchase on those platforms.
+          <strong>Free on iOS.</strong> No seat fee, no subscription. We earn affiliate
+          commissions when you tap through to eBay or TCGplayer and buy something there.
         </p>
 
         <h2>Where we are</h2>
         <p>
-          Slabbist is a Pacific-Northwest team that has worked in card shops, run show booths,
-          and shipped software for a living. We are in closed beta with a handful of stores and
-          will open to more cohorts through 2026. The iOS app launches publicly later this year.
+          We are a Pacific-Northwest team. We have worked in card shops, run show booths, and
+          shipped software. Slabbist is in closed beta with a handful of stores. We are opening
+          to more shops through 2026, with a public iOS launch later this year.
         </p>
         <p>
-          We are not affiliated with The Pokémon Company, PSA, BGS, CGC, SGC, or TAG. Slabbist is
-          a tool for people who love the hobby — built by people who love the hobby.
+          We are not affiliated with The Pokémon Company, PSA, BGS, CGC, SGC, or TAG.
+          Slabbist is a tool for people who love the hobby, built by people who love the hobby.
         </p>
 
         <h2>How to reach us</h2>

@@ -47,8 +47,8 @@ export function Pricing() {
             lineHeight: 1.6,
           }}
         >
-          Slabbist is free for stores, sellers, and buyers. We earn affiliate commissions when you
-          tap through to eBay or TCGplayer and make a purchase on those platforms.
+          Slabbist is free. We earn affiliate commissions when you tap through to eBay or TCGplayer
+          and buy something on those platforms. Nothing comes out of your pocket.
         </p>
         <div
           style={{
@@ -59,8 +59,8 @@ export function Pricing() {
             lineHeight: 1.65,
           }}
         >
-          No subscriptions. No seat fees. No paywalled features. If we ever need to charge for
-          something specific, we will say so up front, and it will still be optional.
+          No subscriptions. No seat fees. No locked features. If we ever charge for something
+          specific, we'll say so up front, and it will still be optional.
         </div>
       </div>
     </section>

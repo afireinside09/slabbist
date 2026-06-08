@@ -9,18 +9,18 @@ type Capability = { icon: IconName; title: string; body: string };
 const CAPABILITIES: Capability[] = [
   {
     icon: 'scan',
-    title: 'Slabs and raw, in one pass',
-    body: 'Cert OCR reads PSA, BGS, CGC, SGC, and TAG labels. For raw cards, pick the set and number and the app matches the rest. Shoot them one at a time, or stack a pile in frame.',
+    title: 'Slabs for comps, raw to pre-grade',
+    body: 'Scan a graded slab — the camera reads the cert number for PSA, BGS, CGC, SGC, and TAG — to pull its comp, one at a time or a whole stack. Scan a raw card instead to estimate its grade before you buy. Same camera, two different jobs.',
   },
   {
     icon: 'chart',
     title: 'Comps from real sales',
-    body: 'Graded prices are medians of recent eBay sold listings. Raw prices come from TCGplayer. Every number links back to the sales behind it, with a confidence score and 7, 30, and 90 day velocity.',
+    body: 'Graded prices are medians of recent eBay sold listings. Raw prices come from TCGplayer. Every number links back to the sales behind it, with a confidence score and 7-, 30-, and 90-day price change.',
   },
   {
     icon: 'gauge',
-    title: 'Grade, comp, and know the market',
-    body: 'Estimate a raw card’s grade before you buy, comp graded slabs against real sales, and watch which cards are climbing. The buy desk and the market intel live in one app.',
+    title: 'Grade it, comp it, track the market',
+    body: 'Estimate a raw card\'s grade before you buy, comp graded slabs against real sales, and watch which cards are climbing. The buy desk and the market intel live in one app.',
   },
 ];
 
@@ -149,7 +149,7 @@ export function Hero() {
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
         >
-          Scan a stack of graded slabs, get a defensible number from real sales, and hand the seller an offer before they leave the counter. Here's the whole flow.
+          Scan a stack of graded slabs, get a real price backed by real sales, and hand the seller an offer before they leave the counter. Here's the whole flow.
         </p>
 
         <div

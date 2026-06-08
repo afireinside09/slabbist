@@ -6,45 +6,45 @@ import { FinalCta } from '@/components/marketing/final-cta';
 export const metadata: Metadata = {
   title: 'Slabbist for show vendors',
   description:
-    'Price a show-floor showcase, run buylists in your booth, and close offers without leaving your table. Works offline when the venue Wi-Fi quits.',
+    'Price your showcase, run buylists in your booth, and close offers right from your phone. Works offline when venue Wi-Fi quits.',
 };
 
 const POINTS: AudiencePoint[] = [
   {
     icon: 'reload',
-    title: 'Offline queue',
+    title: 'Works when Wi-Fi drops',
     blurb:
-      'Conference-center Wi-Fi drops at 11am. Scans keep stacking locally and comps fill in the moment signal returns — through an outbox that retries on its own.',
+      'Conference Wi-Fi dies at 11am every show. Scans keep stacking locally and comps fill in the moment signal returns. Nothing gets lost.',
   },
   {
     icon: 'layers',
-    title: 'Showcase in one pass',
+    title: 'Price the showcase in one pass',
     blurb:
-      'Scan every slab in the case in minutes. Re-price the showcase on Sunday morning without redoing the work.',
+      'Scan every slab in the case in minutes. Re-price on Sunday morning without starting over.',
   },
   {
     icon: 'chart',
-    title: 'Movers before you buy',
+    title: 'See the movers before you buy',
     blurb:
-      'See the top gainers and losers for the set in front of you, by price tier, English or Japanese. Know what is climbing before you make the offer.',
+      'Top gainers and losers for the set in front of you, by price tier, English or Japanese. Know what is climbing before you make an offer.',
   },
   {
     icon: 'zap',
-    title: 'Grade gains on the floor',
+    title: 'Find the raw cards worth grading',
     blurb:
-      'Spot the raw cards worth sending to PSA — ranked by upside to a 10, net of the grading fee you actually pay.',
+      'See which raw cards turn a profit after the PSA grading fee. Ranked by how much you make on a PSA 10. Set your actual submission fee and the numbers update.',
   },
   {
     icon: 'receipt',
-    title: 'Buylist from your phone',
+    title: 'Buy from your phone',
     blurb:
-      'A vendor wants to sell you a PSA 10. Scan, apply the lot rule, present the offer. No laptop, no spreadsheet.',
+      'Someone wants to sell you a PSA 10. Scan it, apply your buy-price rules, present the offer. No laptop, no spreadsheet.',
   },
   {
     icon: 'gauge',
     title: 'Pre-grade a raw on the spot',
     blurb:
-      'Estimate a raw card’s grade and centering at the table, so a borderline buy is a decision, not a gamble.',
+      'Get a PSA-equivalent grade estimate and centering read at the table. Turn a borderline call into a real decision.',
   },
 ];
 
@@ -55,13 +55,13 @@ export default function ForVendorsPage() {
         eyebrow="For show vendors"
         title="Price the booth. Close the lot. Catch the flight."
         italicize="the lot"
-        subtitle="Slabbist is built for the show floor — bulk capture, offline-first sync, and offer sheets ready to present right from your phone."
+        subtitle="Slabbist is built for the show floor. Scan slabs in bulk, pull comps offline, and present an offer right from your phone."
       />
       <AudienceBody
-        pain="You fly into a weekend show with a case full of slabs, a buylist in your head, and a Wi-Fi network that dies every two hours. The numbers never quite agree with your books on Monday."
-        shift="One app runs the booth: pre-grading raws, pricing the case, reading the movers, and closing buylist offers — online or off."
+        pain="You fly into a weekend show with a case full of slabs, a buylist in your head, and a Wi-Fi network that dies every two hours. The numbers never quite match your books on Monday."
+        shift="One app runs the booth: pre-grading raws, pricing the case, checking the movers, and closing buys online or off."
         points={POINTS}
-        ctaLabel="Join the vendor waitlist"
+        ctaLabel="Join the waitlist"
         waitlistAudience="store"
       />
       <FinalCta />

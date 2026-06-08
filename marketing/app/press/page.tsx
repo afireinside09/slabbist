@@ -5,7 +5,7 @@ import { PageShell, PageHero } from '@/components/marketing/page-shell';
 export const metadata: Metadata = {
   title: 'Press · Slabbist',
   description:
-    'Press kit, boilerplate, and media contact for Slabbist, the iOS scanner for Pokémon hobby stores.',
+    'Press kit, boilerplate, and media contact for Slabbist — the iOS app for Pokémon hobby stores and show vendors.',
 };
 
 export default function PressPage() {
@@ -13,9 +13,9 @@ export default function PressPage() {
     <PageShell>
       <PageHero
         eyebrow="Press"
-        title="If you cover the hobby, we'd love to talk."
-        italicize="love to talk"
-        subtitle="Everything you need to write about Slabbist — the what, the who, the how, and where to reach us."
+        title="If you cover the hobby, reach out."
+        italicize="reach out"
+        subtitle="Everything you need to write about Slabbist — what it does, who built it, and how to contact us."
       />
 
       <section
@@ -39,15 +39,15 @@ export default function PressPage() {
           <Card
             label="Boilerplate"
             lines={[
-              'Slabbist is an iOS app for Pokémon hobby stores and show vendors. It bulk-scans graded slabs and returns real comps from recent sales, estimates the grade of raw cards on-device, surfaces market movers and raw-to-graded arbitrage, and turns a stack into a priced offer. Founded in 2025 and based in the Pacific Northwest.',
+              'Slabbist is an iOS app for Pokémon hobby stores and show vendors. It bulk-scans graded slabs and returns comps from recent sales. It estimates the grade of raw cards on-device, shows which slabs are moving and which grades are worth pursuing, and turns a stack into a priced offer. Founded in 2025. Based in the Pacific Northwest.',
             ]}
           />
           <Card
             label="Stats"
             lines={[
               'Bulk cert scanning for PSA, BGS, CGC, SGC, and TAG',
-              'On-device grade estimates with centering, corners, edges, surface',
-              'Movers and grade-gain arbitrage by set and price tier',
+              'On-device grade estimates: centering, corners, edges, surface',
+              'Market movers and grade-gain opportunities by set and price tier',
               'Offline-first — works when the venue Wi-Fi quits',
               'Free on iOS',
             ]}
@@ -72,27 +72,26 @@ export default function PressPage() {
               margin: '0 0 20px',
             }}
           >
-            On naming and disclaimers
+            Naming and disclaimers
           </h2>
           <p style={{ fontSize: 16, color: SLAB.muted, lineHeight: 1.7, marginBottom: 16 }}>
             Slabbist is an independent, third-party tool. We are not affiliated with The Pokémon
             Company International, Nintendo, PSA, BGS, CGC, SGC, or TAG. All trademarks belong to
-            their respective owners. If you need the disclaimer verbatim: <em>&quot;Slabbist is a
+            their respective owners. Verbatim disclaimer for print: <em>&quot;Slabbist is a
             third-party tool and is not affiliated with or endorsed by The Pokémon Company,
             Nintendo, or any grading company.&quot;</em>
           </p>
           <p style={{ fontSize: 16, color: SLAB.muted, lineHeight: 1.7 }}>
-            High-resolution logos, screenshots, and a short factsheet are available on request —
+            High-resolution logos, screenshots, and a short factsheet are available on request.{' '}
             <a
               href="mailto:press@slabbist.com"
               style={{
                 color: SLAB.gold,
                 textDecoration: 'underline',
                 textUnderlineOffset: 3,
-                marginLeft: 4,
               }}
             >
-              email press@slabbist.com
+              Email press@slabbist.com
             </a>
             .
           </p>

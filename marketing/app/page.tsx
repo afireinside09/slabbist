@@ -1,7 +1,7 @@
 import { Nav } from '@/components/marketing/nav';
 import { Hero } from '@/components/marketing/hero';
 import { FlowWalkthrough } from '@/components/marketing/flow-walkthrough';
-import { BeyondTheOffer } from '@/components/marketing/beyond-the-offer';
+import { FeatureSections } from '@/components/marketing/feature-sections';
 import { EasterEggTeaser } from '@/components/marketing/easter-egg-teaser';
 import { Pricing } from '@/components/marketing/pricing';
 import { FinalCta } from '@/components/marketing/final-cta';
@@ -13,7 +13,7 @@ export default function Home() {
       <Nav />
       <Hero />
       <FlowWalkthrough />
-      <BeyondTheOffer />
+      <FeatureSections />
       <EasterEggTeaser />
       <Pricing />
       <FinalCta />

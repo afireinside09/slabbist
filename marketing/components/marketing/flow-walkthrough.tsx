@@ -44,7 +44,7 @@ function SectionHeader() {
     <div style={{ marginBottom: 'clamp(40px, 5vw, 64px)', maxWidth: 620 }}>
       <div style={{ fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', color: SLAB.gold, marginBottom: 18, fontWeight: 500 }}>How it works</div>
       <h2 style={{ fontFamily: SLAB.serif, fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: 400, letterSpacing: -1.5, lineHeight: 1.05, margin: 0 }}>
-        Watch a stack turn into a paid offer.
+        From scan to paid offer, step by step.
       </h2>
     </div>
   );
@@ -118,7 +118,7 @@ export function FlowWalkthrough() {
       <div style={container}>
         <SectionHeader />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'start' }}>
-          <div style={{ position: 'sticky', top: 100, height: 'fit-content' }}>
+          <div style={{ position: 'sticky', top: 'max(24px, calc(50vh - 310px))', height: 'fit-content' }}>
             <Device>
               {FLOW_STEPS.map((s, i) => (
                 <div
@@ -138,7 +138,7 @@ export function FlowWalkthrough() {
                 ref={(el) => {
                   beatRefs.current[i] = el;
                 }}
-                style={{ minHeight: '78vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+                style={{ minHeight: 'min(62vh, 520px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
               >
                 <Beat step={s} active={active === i} />
               </div>
