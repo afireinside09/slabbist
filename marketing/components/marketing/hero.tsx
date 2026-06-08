@@ -149,7 +149,7 @@ export function Hero() {
             animation: 'sbmRise 0.8s 0.4s ease backwards',
           }}
         >
-          Slabbist turns your iPhone into a bulk scanner for graded Pokémon — real comps from recent sales, a grade estimate on any raw card, and market movers at a glance. Offer sheets in a tap, on your counter or the show floor.
+          Scan a stack of graded slabs, get a defensible number from real sales, and hand the seller an offer before they leave the counter. Here's the whole flow.
         </p>
 
         <div
