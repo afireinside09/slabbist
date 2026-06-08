@@ -10,7 +10,7 @@
   --slab-hair-strong: oklch(1 0 0 / 0.14);
   --slab-text: oklch(0.94 0.006 78);
   --slab-muted: oklch(0.94 0.006 78 / 0.58);
-  --slab-dim: oklch(0.94 0.006 78 / 0.36);
+  --slab-dim: oklch(0.94 0.006 78 / 0.50);
   --slab-gold: oklch(0.82 0.13 78);
   --slab-gold-dim: oklch(0.58 0.09 75);
   --slab-pos: oklch(0.78 0.14 155);
@@ -150,7 +150,7 @@ button:focus-visible, a:focus-visible {
 
 @keyframes sbmFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sbmRise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes sbmScanLine { 0% { top: 6%; } 50% { top: 90%; } 100% { top: 6%; } }
+@keyframes sbmScanLine { 0%, 100% { transform: translateY(15px); } 50% { transform: translateY(225px); } }
 @keyframes sbmPop { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes sbmSpin { to { transform: rotate(360deg); } }
 

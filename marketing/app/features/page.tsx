@@ -309,34 +309,14 @@ function Section({
                 gap: 16,
               }}
             >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: SLAB.elev2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: SLAB.gold,
-                }}
-              >
-                <Icon name={c.icon} size={18} sw={1.8} />
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: 17,
-                    fontWeight: 500,
-                    letterSpacing: -0.3,
-                    marginBottom: 8,
-                  }}
-                >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name={c.icon} size={17} sw={1.8} color={SLAB.gold} />
+                <div style={{ fontSize: 17, fontWeight: 500, letterSpacing: -0.3 }}>
                   {c.title}
                 </div>
-                <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>
-                  {c.blurb}
-                </div>
+              </div>
+              <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>
+                {c.blurb}
               </div>
             </div>
           ))}

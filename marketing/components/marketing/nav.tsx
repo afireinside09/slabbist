@@ -137,7 +137,7 @@ export function Nav() {
               href={l.href}
               className="slab-nav-link"
               style={{
-                padding: '12px 18px',
+                padding: '14px 18px',
                 fontSize: 14,
                 textDecoration: 'none',
                 borderRadius: 999,
@@ -286,6 +286,27 @@ export function Nav() {
               }}
             >
               Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                openAuth('waitlist');
+              }}
+              style={{
+                textAlign: 'center',
+                marginTop: 4,
+                padding: '14px 16px',
+                borderRadius: 14,
+                fontSize: 16,
+                fontWeight: 600,
+                color: SLAB.ink,
+                background: SLAB.gold,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Join waitlist
             </button>
           </div>
         </>

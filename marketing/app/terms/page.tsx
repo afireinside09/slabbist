@@ -50,12 +50,11 @@ export default function TermsPage() {
           engine. We will never identify you or your store in those aggregates.
         </p>
 
-        <h2>4. Pricing and fees</h2>
+        <h2>4. Pricing</h2>
         <p>
-          The Slabbist iOS app is free for stores, sellers, and buyers. We earn revenue from eBay
-          and TCGplayer affiliate commissions when you follow a comp link through to a sale. The
-          planned collector marketplace charges a 1% buyer fee at checkout. Sellers net the sale
-          price after payment processing.
+          The Slabbist iOS app is free for stores, sellers, and buyers, with no subscriptions or
+          seat fees. We earn revenue from eBay and TCGplayer affiliate commissions when you click
+          an affiliate link and make a purchase on those platforms.
         </p>
         <p>
           If we ever charge for a specific feature, we will say so in advance and make it

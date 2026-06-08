@@ -7,7 +7,7 @@ export const SLAB = {
   hairStrong: 'oklch(1 0 0 / 0.14)',
   text: 'oklch(0.94 0.006 78)',
   muted: 'oklch(0.94 0.006 78 / 0.58)',
-  dim: 'oklch(0.94 0.006 78 / 0.36)',
+  dim: 'oklch(0.94 0.006 78 / 0.50)',
   gold: 'oklch(0.82 0.13 78)',
   goldDim: 'oklch(0.58 0.09 75)',
   pos: 'oklch(0.78 0.14 155)',

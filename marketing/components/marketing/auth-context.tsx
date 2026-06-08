@@ -67,7 +67,7 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid ' + SLAB.hair,
   borderRadius: 12,
   color: SLAB.text,
-  fontSize: 14,
+  fontSize: 16,
   fontFamily: SLAB.sans,
   outline: 'none',
   transition: 'border-color 0.15s',
@@ -257,8 +257,8 @@ function AuthModal({
             top: 18,
             right: 18,
             zIndex: 2,
-            width: 34,
-            height: 34,
+            width: 40,
+            height: 40,
             borderRadius: 999,
             background: SLAB.elev2,
             border: '1px solid ' + SLAB.hair,
@@ -369,9 +369,13 @@ function AuthModal({
                   <Field label="Email" icon="mail">
                     <input
                       type="email"
+                      id="waitlist-email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
+                      autoComplete="email"
+                      aria-invalid={!!errorMsg}
+                      aria-describedby={errorMsg ? 'waitlist-error' : undefined}
                       placeholder="you@example.com"
                       style={inputStyle}
                     />
@@ -380,6 +384,7 @@ function AuthModal({
                   {errorMsg && (
                     <div
                       role="alert"
+                      id="waitlist-error"
                       style={{
                         fontSize: 12,
                         color: SLAB.neg,
@@ -397,6 +402,7 @@ function AuthModal({
                   <button
                     type="submit"
                     disabled={loading}
+                    aria-busy={loading}
                     style={{
                       marginTop: 4,
                       padding: '14px 18px',
@@ -480,6 +486,7 @@ function AuthModal({
                       value={storeName}
                       onChange={(e) => setStoreName(e.target.value)}
                       required
+                      autoComplete="organization"
                       placeholder="Third Street Cards"
                       style={inputStyle}
                     />
@@ -491,6 +498,7 @@ function AuthModal({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    autoComplete="email"
                     placeholder="you@store.com"
                     style={inputStyle}
                   />
@@ -503,6 +511,7 @@ function AuthModal({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                       placeholder={mode === 'signup' ? 'at least 10 characters' : '••••••••'}
                       style={inputStyle}
                       minLength={mode === 'signup' ? 10 : 1}
@@ -513,14 +522,18 @@ function AuthModal({
                       aria-label={showPw ? 'Hide password' : 'Show password'}
                       style={{
                         position: 'absolute',
-                        right: 12,
+                        right: 6,
                         top: '50%',
                         transform: 'translateY(-50%)',
                         background: 'transparent',
                         border: 'none',
                         color: SLAB.muted,
                         cursor: 'pointer',
-                        padding: 4,
+                        width: 40,
+                        height: 40,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
                       <Icon name="eye" size={15} />
@@ -550,6 +563,7 @@ function AuthModal({
                 <button
                   type="submit"
                   disabled={loading}
+                  aria-busy={loading}
                   style={{
                     marginTop: 8,
                     padding: '14px 18px',
@@ -592,11 +606,17 @@ function AuthModal({
                     }}
                   >
                     By creating a store you agree to our{' '}
-                    <a href="/terms" style={{ color: SLAB.muted }}>
+                    <a
+                      href="/terms"
+                      style={{ color: SLAB.muted, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
                       Terms
                     </a>{' '}
                     and{' '}
-                    <a href="/privacy" style={{ color: SLAB.muted }}>
+                    <a
+                      href="/privacy"
+                      style={{ color: SLAB.muted, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
                       Privacy Policy
                     </a>
                     .
@@ -794,7 +814,6 @@ function SuccessView({
           alignItems: 'center',
           justifyContent: 'center',
           color: SLAB.ink,
-          boxShadow: '0 0 40px oklch(0.82 0.13 78 / 0.40)',
           animation: 'sbmPop 0.5s ease',
         }}
       >

@@ -27,7 +27,7 @@ const LANES: ContactLane[] = [
     icon: 'users',
     label: 'Collector questions',
     blurb:
-      'Questions about the marketplace, buyer fee, or seller verification? Drop us a line.',
+      'Questions about the marketplace or seller verification? Drop us a line.',
     email: 'hello@slabbist.com',
   },
   {
@@ -91,33 +91,13 @@ export default function ContactPage() {
                 color: SLAB.text,
               }}
             >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: SLAB.elev2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: SLAB.gold,
-                }}
-              >
-                <Icon name={l.icon} size={18} sw={1.8} />
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: 17,
-                    fontWeight: 500,
-                    letterSpacing: -0.3,
-                    marginBottom: 8,
-                  }}
-                >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name={l.icon} size={17} sw={1.8} color={SLAB.gold} />
+                <div style={{ fontSize: 17, fontWeight: 500, letterSpacing: -0.3 }}>
                   {l.label}
                 </div>
-                <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>{l.blurb}</div>
               </div>
+              <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>{l.blurb}</div>
               <div
                 style={{
                   marginTop: 'auto',

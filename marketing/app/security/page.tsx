@@ -89,21 +89,10 @@ export default function SecurityPage() {
                   gap: 14,
                 }}
               >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: SLAB.elev2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: SLAB.gold,
-                  }}
-                >
-                  <Icon name={p.icon} size={18} sw={1.8} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Icon name={p.icon} size={17} sw={1.8} color={SLAB.gold} />
+                  <div style={{ fontSize: 17, fontWeight: 500, letterSpacing: -0.3 }}>{p.title}</div>
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 500, letterSpacing: -0.3 }}>{p.title}</div>
                 <div style={{ fontSize: 14, color: SLAB.muted, lineHeight: 1.55 }}>{p.blurb}</div>
               </div>
             ))}

@@ -257,7 +257,7 @@ export function Hero() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: SLAB.gold,
+                      color: SLAB.muted,
                       marginTop: 2,
                     }}
                   >
@@ -320,7 +320,7 @@ function PhoneHeroMock() {
         background: 'oklch(0.06 0.003 78)',
         padding: 10,
         boxShadow:
-          '0 50px 120px oklch(0 0 0 / 0.55), 0 0 0 1px oklch(0.16 0.005 78), 0 0 0 6px oklch(0.21 0.006 78)',
+          '0 30px 70px oklch(0 0 0 / 0.40), 0 0 0 1px oklch(0.16 0.005 78), 0 0 0 6px oklch(0.21 0.006 78)',
         transform: 'perspective(2200px) rotateY(-6deg)',
       }}
     >
@@ -393,11 +393,13 @@ function PhoneHeroMock() {
             <div
               style={{
                 position: 'absolute',
+                top: 0,
                 left: 8,
                 right: 8,
                 height: 2,
                 background: `linear-gradient(90deg, transparent, ${SLAB.gold}, transparent)`,
                 animation: 'sbmScanLine 2s linear infinite',
+                willChange: 'transform',
                 boxShadow: '0 0 14px oklch(0.82 0.13 78 / 0.8)',
               }}
             />

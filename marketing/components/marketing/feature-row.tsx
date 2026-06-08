@@ -187,16 +187,22 @@ export function FeatureRow() {
                     </div>
                     <div
                       style={{
-                        fontSize: 14,
-                        color: SLAB.muted,
-                        lineHeight: 1.55,
-                        maxHeight: active === i ? 160 : 0,
+                        display: 'grid',
+                        gridTemplateRows: active === i ? '1fr' : '0fr',
                         opacity: active === i ? 1 : 0,
-                        overflow: 'hidden',
-                        transition: 'max-height 0.35s ease, opacity 0.35s ease',
+                        transition: 'grid-template-rows 0.35s ease, opacity 0.35s ease',
                       }}
                     >
-                      {f.blurb}
+                      <div
+                        style={{
+                          overflow: 'hidden',
+                          fontSize: 14,
+                          color: SLAB.muted,
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {f.blurb}
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -382,7 +388,16 @@ function BulkQueuePanel() {
   const [n, setN] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setN((x) => (x < 12 ? x + 1 : 12)), 160);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setN(12);
+      return;
+    }
+    let x = 0;
+    const t = setInterval(() => {
+      x += 1;
+      setN(x);
+      if (x >= 12) clearInterval(t);
+    }, 160);
     return () => clearInterval(t);
   }, []);
 

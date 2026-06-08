@@ -195,7 +195,6 @@ export function AudienceBody({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                boxShadow: '0 20px 50px oklch(0.82 0.13 78 / 0.27)',
               }}
             >
               {ctaLabel}

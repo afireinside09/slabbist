@@ -64,8 +64,8 @@ export default function PrivacyPage() {
         <h2>4. Why we collect it</h2>
         <p>
           To run the service you asked us to run: reading certs, resolving comps, syncing your lot
-          across devices, and producing offer sheets. To spot abuse and fix bugs. To bill for the
-          1% buyer fee on marketplace transactions (when that ships).
+          across devices, and producing offer sheets. To spot abuse and fix bugs. To process
+          payments for the collector marketplace (when that ships).
         </p>
 
         <h2>5. Who we share it with</h2>

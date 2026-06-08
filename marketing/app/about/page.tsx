@@ -44,13 +44,8 @@ export default function AboutPage() {
         </p>
         <p>
           <strong>Free on iOS, forever.</strong> Stores, sellers, and buyers do not pay a seat fee
-          or a subscription. We make money from eBay and TCGplayer affiliate links when you
-          follow a comp through to a sale.
-        </p>
-        <p>
-          <strong>The hobby should keep more of its money.</strong> The planned collector
-          marketplace charges a 1% buyer fee at checkout — compared to the 20% sellers lose
-          elsewhere. Sellers net the sale price after payment processing. That is it.
+          or a subscription. We earn affiliate commissions when you tap through to eBay or
+          TCGplayer and make a purchase on those platforms.
         </p>
 
         <h2>Where we are</h2>
